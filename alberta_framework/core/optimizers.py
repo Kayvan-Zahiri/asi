@@ -970,7 +970,12 @@ class Autostep(Optimizer[AutostepState]):
         # Trace update: h_i = h_i*(1 - α_i*z_i²) + α_i*δ*z_i
         trace_decay = 1.0 - new_step_sizes * z_sq
         if error is not None:
-            new_traces = state.traces * trace_decay + new_step_sizes * error_scalar * z
+            # 0 * inf is NaN; a silent feature must not poison h.
+            trace_step = new_step_sizes * error_scalar * z
+            trace_step = jnp.where(
+                jnp.isnan(trace_step), jnp.zeros_like(trace_step), trace_step
+            )
+            new_traces = state.traces * trace_decay + trace_step
         else:
             new_traces = state.traces * trace_decay + new_step_sizes * z
 
@@ -1065,14 +1070,21 @@ class Autostep(Optimizer[AutostepState]):
         new_bias_step_size = jnp.clip(new_bias_step_size, 1e-8, 1.0)
 
         # Weight update with NEW alpha: α_i * δ * x_i
+        # 0 * inf is NaN; leave genuine infs (nonzero x, inf error) as inf.
         weight_delta = new_step_sizes * error_scalar * x
+        weight_delta = jnp.where(
+            jnp.isnan(weight_delta), jnp.zeros_like(weight_delta), weight_delta
+        )
 
         # Bias update: α_bias * δ
         bias_delta = new_bias_step_size * error_scalar
 
         # Trace update: h_i = h_i*(1 - α_i*x_i²) + α_i*δ*x_i
         trace_decay = 1.0 - new_step_sizes * x_sq
-        new_traces = state.traces * trace_decay + new_step_sizes * error_scalar * x
+        trace_step = new_step_sizes * error_scalar * x
+        new_traces = state.traces * trace_decay + jnp.where(
+            jnp.isnan(trace_step), jnp.zeros_like(trace_step), trace_step
+        )
 
         # Bias trace: h_bias = h_bias*(1 - α_bias) + α_bias*δ
         bias_trace_decay = 1.0 - new_bias_step_size

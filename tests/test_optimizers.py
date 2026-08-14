@@ -261,6 +261,44 @@ class TestAutostep:
         assert "max_step_size" in result.metrics
         assert "mean_normalizer" in result.metrics
 
+    def test_infinite_error_on_zero_feature_does_not_poison_traces(self):
+        """inf * x=0 is NaN; that channel's h-trace and weight delta stay 0."""
+        optimizer = Autostep(initial_step_size=0.01, meta_step_size=0.01)
+        state = optimizer.init(feature_dim=2)
+        observation = jnp.array([0.0, 1.0], dtype=jnp.float32)
+        poisoned = optimizer.update(
+            state, jnp.array(jnp.inf, dtype=jnp.float32), observation
+        )
+        assert bool(jnp.isfinite(poisoned.new_state.traces[0]))
+        assert bool(jnp.allclose(poisoned.new_state.traces[0], 0.0))
+        assert bool(jnp.isfinite(poisoned.weight_delta[0]))
+        assert bool(jnp.allclose(poisoned.weight_delta[0], 0.0))
+        assert bool(jnp.isinf(poisoned.new_state.traces[1]))
+        assert bool(jnp.isinf(poisoned.weight_delta[1]))
+        recovered = optimizer.update(
+            poisoned.new_state,
+            jnp.array(1.0, dtype=jnp.float32),
+            jnp.array([1.0, 0.0], dtype=jnp.float32),
+        )
+        assert bool(jnp.isfinite(recovered.new_state.traces[0]))
+        assert bool(jnp.isfinite(recovered.weight_delta[0]))
+
+    def test_update_from_gradient_infinite_error_on_zero_z_keeps_traces(self):
+        """inf * z=0 is NaN; that channel's h-trace must stay 0."""
+        optimizer = Autostep(initial_step_size=0.01, meta_step_size=0.01)
+        state = optimizer.init_for_shape((2,))
+        gradient = jnp.array([0.0, 1.0], dtype=jnp.float32)
+        _step, poisoned = optimizer.update_from_gradient(
+            state, gradient, error=jnp.array(jnp.inf)
+        )
+        assert bool(jnp.isfinite(poisoned.traces[0]))
+        assert bool(jnp.allclose(poisoned.traces[0], 0.0))
+        finite_step, recovered = optimizer.update_from_gradient(
+            poisoned, jnp.array([0.1, 0.1], dtype=jnp.float32), error=jnp.array(1.0)
+        )
+        chex.assert_tree_all_finite(finite_step)
+        assert bool(jnp.isfinite(recovered.traces[0]))
+
     def test_overshoot_prevention_bounds_effective_step_size(self):
         """M normalization should prevent sum(alpha_i * x_i^2) from exceeding 1."""
         # Use large step-sizes and large observations to trigger M > 1
