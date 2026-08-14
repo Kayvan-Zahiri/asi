@@ -48,6 +48,23 @@ class TestLMS:
 
         assert result.new_state.step_size == state.step_size
 
+    def test_infinite_error_on_zero_feature_does_not_poison_delta(self):
+        """inf * x=0 is NaN; that channel's LMS delta stays 0."""
+        optimizer = LMS(step_size=0.1)
+        state = optimizer.init(feature_dim=2)
+        observation = jnp.array([0.0, 1.0], dtype=jnp.float32)
+        poisoned = optimizer.update(
+            state, jnp.array(jnp.inf, dtype=jnp.float32), observation
+        )
+        assert bool(jnp.isfinite(poisoned.weight_delta[0]))
+        assert bool(jnp.allclose(poisoned.weight_delta[0], 0.0))
+        assert bool(jnp.isinf(poisoned.weight_delta[1]))
+        recovered = optimizer.update(
+            poisoned.new_state, jnp.array(1.0, dtype=jnp.float32), observation
+        )
+        assert bool(jnp.isfinite(recovered.weight_delta[0]))
+        assert bool(jnp.allclose(recovered.weight_delta[0], 0.0))
+
 
 class TestIDBD:
     """Tests for the IDBD optimizer."""

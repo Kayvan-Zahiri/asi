@@ -504,8 +504,11 @@ class LMS(Optimizer[LMSState]):
         alpha = state.step_size
         error_scalar = jnp.squeeze(error)
 
-        # Weight update: alpha * error * x
+        # Weight update: alpha * error * x. 0 * inf is NaN; genuine infs stay inf.
         weight_delta = alpha * error_scalar * observation
+        weight_delta = jnp.where(
+            jnp.isnan(weight_delta), jnp.zeros_like(weight_delta), weight_delta
+        )
 
         # Bias update: alpha * error
         bias_delta = alpha * error_scalar
