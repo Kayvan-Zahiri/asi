@@ -699,7 +699,10 @@ class IDBD(Optimizer[IDBDState]):
         # when error is None (trunk path), z is already loss gradient direction.
         decay = jnp.maximum(0.0, 1.0 - new_alphas * h_decay)
         if error is not None:
-            new_traces = state.traces * decay - new_alphas * jnp.squeeze(error) * z
+            # 0 * inf is NaN; a silent feature must not poison h.
+            h_step = new_alphas * jnp.squeeze(error) * z
+            h_step = jnp.where(jnp.isnan(h_step), jnp.zeros_like(h_step), h_step)
+            new_traces = state.traces * decay - h_step
         else:
             new_traces = state.traces * decay + new_alphas * z
 
@@ -762,12 +765,19 @@ class IDBD(Optimizer[IDBDState]):
         new_alphas = jnp.exp(new_log_step_sizes)
 
         # 3. Weight updates using NEW alpha: alpha_i * error * x_i
+        # 0 * inf is NaN; leave genuine infs (nonzero x, inf error) as inf.
         weight_delta = new_alphas * error_scalar * observation
+        weight_delta = jnp.where(
+            jnp.isnan(weight_delta), jnp.zeros_like(weight_delta), weight_delta
+        )
 
         # 4. Update traces using NEW alpha: h_i = h_i * decay + alpha_i * error * x_i
         # decay = max(0, 1 - alpha_i * x_i^2)
         decay = jnp.maximum(0.0, 1.0 - new_alphas * observation**2)
-        new_traces = state.traces * decay + new_alphas * error_scalar * observation
+        trace_step = new_alphas * error_scalar * observation
+        new_traces = state.traces * decay + jnp.where(
+            jnp.isnan(trace_step), jnp.zeros_like(trace_step), trace_step
+        )
 
         # Bias updates (same ordering: meta-update first, then new alpha).
         # Same guard: a non-finite correlation keeps the previous step-size.
