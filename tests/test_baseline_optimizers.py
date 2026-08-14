@@ -87,6 +87,27 @@ class TestAdaGain:
 
         assert recreated.to_config() == config
 
+    def test_infinite_error_does_not_poison_step_sizes(self):
+        """inf * h=0 is NaN; clip(NaN) used to poison every later gain."""
+        optimizer = AdaGain(initial_step_size=0.05, meta_step_size=0.001)
+        state = optimizer.init(feature_dim=2)
+        observation = jnp.array([0.0, 1.0], dtype=jnp.float32)
+        poisoned = optimizer.update(
+            state, jnp.array(jnp.inf, dtype=jnp.float32), observation
+        )
+        assert bool(jnp.all(jnp.isfinite(poisoned.new_state.step_sizes)))
+        chex.assert_trees_all_close(
+            poisoned.new_state.step_sizes, state.step_sizes
+        )
+        assert bool(jnp.isfinite(poisoned.new_state.bias_step_size))
+        assert bool(jnp.isfinite(poisoned.weight_delta[0]))
+        assert bool(jnp.allclose(poisoned.weight_delta[0], 0.0))
+        recovered = optimizer.update(
+            poisoned.new_state, jnp.array(1.0, dtype=jnp.float32), observation
+        )
+        assert bool(jnp.all(jnp.isfinite(recovered.new_state.step_sizes)))
+        assert bool(jnp.isfinite(recovered.weight_delta[0]))
+
 
 # =============================================================================
 # Adam
@@ -263,6 +284,25 @@ class TestAdam:
         assert isinstance(recreated, Adam)
         assert recreated.to_config()["weight_decay"] == pytest.approx(0.0)
 
+    def test_infinite_error_does_not_poison_moments(self):
+        """inf/inf in Adam's RMS denominator is NaN; hold m/v instead."""
+        optimizer = Adam(step_size=0.001)
+        state = optimizer.init(feature_dim=2)
+        observation = jnp.array([0.0, 1.0], dtype=jnp.float32)
+        poisoned = optimizer.update(
+            state, jnp.array(jnp.inf, dtype=jnp.float32), observation
+        )
+        assert bool(jnp.all(jnp.isfinite(poisoned.new_state.m)))
+        assert bool(jnp.all(jnp.isfinite(poisoned.new_state.v)))
+        assert bool(jnp.isfinite(poisoned.new_state.bias_m))
+        chex.assert_trees_all_close(poisoned.new_state.m, state.m)
+        chex.assert_trees_all_close(poisoned.weight_delta, jnp.zeros(2))
+        recovered = optimizer.update(
+            poisoned.new_state, jnp.array(1.0, dtype=jnp.float32), observation
+        )
+        assert bool(jnp.all(jnp.isfinite(recovered.new_state.m)))
+        assert bool(jnp.all(jnp.isfinite(recovered.weight_delta)))
+
 
 # =============================================================================
 # RMSprop
@@ -312,6 +352,23 @@ class TestRMSprop:
             chex.assert_shape(step, (8, 4))
             chex.assert_tree_all_finite(step)
             chex.assert_tree_all_finite(state)
+
+    def test_infinite_error_does_not_poison_second_moment(self):
+        """inf/inf in RMSprop's RMS denominator is NaN; hold v instead."""
+        optimizer = RMSprop(step_size=0.01)
+        state = optimizer.init(feature_dim=2)
+        observation = jnp.array([0.0, 1.0], dtype=jnp.float32)
+        poisoned = optimizer.update(
+            state, jnp.array(jnp.inf, dtype=jnp.float32), observation
+        )
+        assert bool(jnp.all(jnp.isfinite(poisoned.new_state.v)))
+        chex.assert_trees_all_close(poisoned.new_state.v, state.v)
+        chex.assert_trees_all_close(poisoned.weight_delta, jnp.zeros(2))
+        recovered = optimizer.update(
+            poisoned.new_state, jnp.array(1.0, dtype=jnp.float32), observation
+        )
+        assert bool(jnp.all(jnp.isfinite(recovered.new_state.v)))
+        assert bool(jnp.all(jnp.isfinite(recovered.weight_delta)))
 
     def test_to_from_config_roundtrip(self):
         """RMSprop config roundtrip should preserve all parameters."""
@@ -427,3 +484,18 @@ class TestNADALINE:
         result = optimizer.update(state, error, observation)
         # bias_delta = alpha * error
         assert float(result.bias_delta) == pytest.approx(0.05 * 0.7, abs=1e-6)
+
+    def test_infinite_error_on_zero_feature_does_not_poison_delta(self):
+        """inf * x=0 is NaN; that channel's NADALINE delta stays 0."""
+        optimizer = NADALINE(step_size=0.05)
+        state = optimizer.init(feature_dim=2)
+        observation = jnp.array([0.0, 1.0], dtype=jnp.float32)
+        poisoned = optimizer.update(
+            state, jnp.array(jnp.inf, dtype=jnp.float32), observation
+        )
+        assert bool(jnp.isfinite(poisoned.weight_delta[0]))
+        assert bool(jnp.allclose(poisoned.weight_delta[0], 0.0))
+        recovered = optimizer.update(
+            poisoned.new_state, jnp.array(1.0, dtype=jnp.float32), observation
+        )
+        assert bool(jnp.isfinite(recovered.weight_delta[0]))

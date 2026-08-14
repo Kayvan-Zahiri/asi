@@ -43,6 +43,12 @@ from jaxtyping import Float
 
 from alberta_framework.core.optimizers import Optimizer, OptimizerUpdate
 
+
+def _replace_nan_with_zero(value: Array) -> Array:
+    """Map ``0 * inf`` NaNs to 0 so genuine infs stay inf."""
+    return jnp.where(jnp.isnan(value), jnp.zeros_like(value), value)
+
+
 # =============================================================================
 # State dataclasses
 # =============================================================================
@@ -250,28 +256,37 @@ class AdaGain(Optimizer[Any]):
     ) -> OptimizerUpdate:
         """Compute one AdaGain linear update."""
         error_scalar = jnp.squeeze(error)
-        gradient = error_scalar * observation
+        gradient = _replace_nan_with_zero(error_scalar * observation)
         bias_gradient = error_scalar
 
         gain_correlation = gradient * state.gradient_trace
         bias_correlation = bias_gradient * state.bias_gradient_trace
 
-        new_step_sizes = state.step_sizes * jnp.exp(
-            state.meta_step_size * gain_correlation
+        # clip(NaN) is NaN: skip the meta-update when inf * h=0.
+        new_step_sizes = jnp.where(
+            jnp.isfinite(gain_correlation),
+            jnp.clip(
+                state.step_sizes * jnp.exp(state.meta_step_size * gain_correlation),
+                1e-8,
+                1.0,
+            ),
+            state.step_sizes,
         )
-        new_bias_step_size = state.bias_step_size * jnp.exp(
-            state.meta_step_size * bias_correlation
+        new_bias_step_size = jnp.where(
+            jnp.isfinite(bias_correlation),
+            jnp.clip(
+                state.bias_step_size * jnp.exp(state.meta_step_size * bias_correlation),
+                1e-8,
+                1.0,
+            ),
+            state.bias_step_size,
         )
-        new_step_sizes = jnp.clip(new_step_sizes, 1e-8, 1.0)
-        new_bias_step_size = jnp.clip(new_bias_step_size, 1e-8, 1.0)
 
-        weight_delta = new_step_sizes * gradient
+        weight_delta = _replace_nan_with_zero(new_step_sizes * gradient)
         bias_delta = new_bias_step_size * bias_gradient
 
         trace_mix = state.forgetting_rate
-        new_gradient_trace = (
-            (1.0 - trace_mix) * state.gradient_trace + trace_mix * gradient
-        )
+        new_gradient_trace = (1.0 - trace_mix) * state.gradient_trace + trace_mix * gradient
         new_bias_gradient_trace = (
             (1.0 - trace_mix) * state.bias_gradient_trace
             + trace_mix * bias_gradient
@@ -456,9 +471,9 @@ class Adam(Optimizer[Any]):
             raise ValueError("nonzero weight_decay requires passing param")
 
         if error is not None:
-            g = -jnp.squeeze(error) * gradient
+            g = _replace_nan_with_zero(-jnp.squeeze(error) * gradient)
         else:
-            g = gradient
+            g = _replace_nan_with_zero(gradient)
 
         new_t = state.t + 1.0
         new_m = state.beta1 * state.m + (1.0 - state.beta1) * g
@@ -470,6 +485,13 @@ class Adam(Optimizer[Any]):
         step = state.step_size * m_hat / (jnp.sqrt(v_hat) + state.eps)
         if self._weight_decay != 0.0 and param is not None:
             step = step + state.step_size * self._weight_decay * param
+
+        # inf/inf in the RMS denominator is NaN; hold that channel's moments.
+        channel_ok = jnp.isfinite(step) & jnp.isfinite(new_m) & jnp.isfinite(new_v)
+        step = jnp.where(channel_ok, step, jnp.zeros_like(step))
+        new_m = jnp.where(channel_ok, new_m, state.m)
+        new_v = jnp.where(channel_ok, new_v, state.v)
+        new_t = jnp.where(jnp.any(channel_ok), new_t, state.t)
 
         new_state = AdamParamState(
             m=new_m,
@@ -507,7 +529,7 @@ class Adam(Optimizer[Any]):
         """
         error_scalar = jnp.squeeze(error)
         # Loss gradient: -error * observation, -error
-        g = -error_scalar * observation
+        g = _replace_nan_with_zero(-error_scalar * observation)
         g_b = -error_scalar
 
         new_t = state.t + 1.0
@@ -526,6 +548,22 @@ class Adam(Optimizer[Any]):
         # w += weight_delta moves in the direction that reduces loss.
         weight_delta = -state.step_size * m_hat / (jnp.sqrt(v_hat) + state.eps)
         bias_delta = -state.step_size * bias_m_hat / (jnp.sqrt(bias_v_hat) + state.eps)
+
+        channel_ok = (
+            jnp.isfinite(weight_delta) & jnp.isfinite(new_m) & jnp.isfinite(new_v)
+        )
+        weight_delta = jnp.where(channel_ok, weight_delta, jnp.zeros_like(weight_delta))
+        new_m = jnp.where(channel_ok, new_m, state.m)
+        new_v = jnp.where(channel_ok, new_v, state.v)
+        bias_ok = (
+            jnp.isfinite(bias_delta)
+            & jnp.isfinite(new_bias_m)
+            & jnp.isfinite(new_bias_v)
+        )
+        bias_delta = jnp.where(bias_ok, bias_delta, jnp.zeros_like(bias_delta))
+        new_bias_m = jnp.where(bias_ok, new_bias_m, state.bias_m)
+        new_bias_v = jnp.where(bias_ok, new_bias_v, state.bias_v)
+        new_t = jnp.where(jnp.any(channel_ok) | bias_ok, new_t, state.t)
 
         new_state = AdamState(
             m=new_m,
@@ -654,12 +692,15 @@ class RMSprop(Optimizer[Any]):
             ``(step, new_state)`` -- step has the same shape as gradient
         """
         if error is not None:
-            g = -jnp.squeeze(error) * gradient
+            g = _replace_nan_with_zero(-jnp.squeeze(error) * gradient)
         else:
-            g = gradient
+            g = _replace_nan_with_zero(gradient)
 
         new_v = state.decay * state.v + (1.0 - state.decay) * g**2
         step = state.step_size * g / (jnp.sqrt(new_v) + state.eps)
+        channel_ok = jnp.isfinite(step) & jnp.isfinite(new_v)
+        step = jnp.where(channel_ok, step, jnp.zeros_like(step))
+        new_v = jnp.where(channel_ok, new_v, state.v)
 
         new_state = RMSpropParamState(
             v=new_v,
@@ -692,7 +733,7 @@ class RMSprop(Optimizer[Any]):
             ``OptimizerUpdate`` with weight and bias deltas and updated state
         """
         error_scalar = jnp.squeeze(error)
-        g = -error_scalar * observation
+        g = _replace_nan_with_zero(-error_scalar * observation)
         g_b = -error_scalar
 
         new_v = state.decay * state.v + (1.0 - state.decay) * g**2
@@ -700,6 +741,12 @@ class RMSprop(Optimizer[Any]):
 
         weight_delta = -state.step_size * g / (jnp.sqrt(new_v) + state.eps)
         bias_delta = -state.step_size * g_b / (jnp.sqrt(new_bias_v) + state.eps)
+        channel_ok = jnp.isfinite(weight_delta) & jnp.isfinite(new_v)
+        weight_delta = jnp.where(channel_ok, weight_delta, jnp.zeros_like(weight_delta))
+        new_v = jnp.where(channel_ok, new_v, state.v)
+        bias_ok = jnp.isfinite(bias_delta) & jnp.isfinite(new_bias_v)
+        bias_delta = jnp.where(bias_ok, bias_delta, jnp.zeros_like(bias_delta))
+        new_bias_v = jnp.where(bias_ok, new_bias_v, state.bias_v)
 
         new_state = RMSpropState(
             v=new_v,
@@ -813,7 +860,9 @@ class NADALINE(Optimizer[Any]):
         )
 
         denom = jnp.maximum(state.eps, new_second_moment)
-        weight_delta = state.step_size * error_scalar * observation / denom
+        weight_delta = _replace_nan_with_zero(
+            state.step_size * error_scalar * observation / denom
+        )
 
         # Bias uses plain LMS -- no normalization (x_b == 1).
         bias_delta = state.step_size * error_scalar
