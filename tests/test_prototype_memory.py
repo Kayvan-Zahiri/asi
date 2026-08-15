@@ -4,6 +4,7 @@
 import chex
 import jax
 import jax.numpy as jnp
+import pytest
 
 from alberta_framework.core.prototype_memory import (
     PrototypeMemoryConfig,
@@ -35,6 +36,34 @@ def test_empty_memory_predicts_uniformly() -> None:
     prediction = learner.predict(state, jnp.asarray([1.0, -1.0], dtype=jnp.float32))
 
     chex.assert_trees_all_close(prediction, jnp.full((4,), 0.25, dtype=jnp.float32))
+
+
+def test_infinite_observation_predicts_uniformly() -> None:
+    """Inf observation makes all-active logits -inf, then softmax is inf-inf NaN."""
+    learner = PrototypeMemoryLearner(
+        PrototypeMemoryConfig(feature_dim=2, n_classes=3, slots_per_class=2)
+    )
+    state = learner.init()
+    target = jnp.asarray([1.0, 0.0, 0.0], dtype=jnp.float32)
+    state = learner.update(
+        state, jnp.asarray([0.25, 0.75], dtype=jnp.float32), target
+    ).state
+    obs = jnp.asarray([jnp.inf, 0.0], dtype=jnp.float32)
+
+    logits = learner.class_logits(state, obs)
+    assert not bool(jnp.all(jnp.isfinite(logits)))
+    prediction = learner.predict(state, obs)
+
+    chex.assert_tree_all_finite(prediction)
+    chex.assert_trees_all_close(prediction, jnp.full((3,), 1.0 / 3.0, dtype=jnp.float32))
+    assert float(jnp.sum(prediction)) == pytest.approx(1.0)
+
+
+def test_config_rejects_nonfinite_bandwidth() -> None:
+    with pytest.raises(ValueError, match="bandwidth"):
+        PrototypeMemoryLearner(
+            PrototypeMemoryConfig(feature_dim=2, n_classes=2, bandwidth=float("inf"))
+        )
 
 
 def test_repeated_update_moves_prediction_to_target_class() -> None:

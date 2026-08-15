@@ -18,6 +18,7 @@ the packaged Step 2 retained-view memory
 from __future__ import annotations
 
 import functools
+import math
 from typing import Any, cast
 
 import chex
@@ -119,11 +120,11 @@ def _validate_config(config: PrototypeMemoryConfig) -> None:
         raise ValueError("n_classes must be at least 2")
     if config.slots_per_class < 1:
         raise ValueError("slots_per_class must be positive")
-    if not 0.0 < config.update_rate <= 1.0:
+    if not 0.0 < config.update_rate <= 1.0 or not math.isfinite(config.update_rate):
         raise ValueError("update_rate must be in (0, 1]")
-    if config.novelty_threshold < 0.0:
+    if config.novelty_threshold < 0.0 or not math.isfinite(config.novelty_threshold):
         raise ValueError("novelty_threshold must be non-negative")
-    if config.bandwidth <= 0.0:
+    if config.bandwidth <= 0.0 or not math.isfinite(config.bandwidth):
         raise ValueError("bandwidth must be positive")
 
 
@@ -202,7 +203,14 @@ class PrototypeMemoryLearner:
         observation: Float[Array, " feature_dim"],
     ) -> Float[Array, " n_classes"]:
         """Return class probabilities for one observation."""
-        return _softmax(self.class_logits(state, observation))
+        logits = self.class_logits(state, observation)
+        probabilities = _softmax(logits)
+        n_classes = logits.shape[0]
+        uniform = jnp.full_like(probabilities, 1.0 / n_classes)
+        # Inf observation makes distances inf and class_logits NaN. Softmax
+        # of those logits is NaN (including -inf - -inf). Fall back to the
+        # empty-memory uniform instead of a non-finite simplex.
+        return jnp.where(jnp.all(jnp.isfinite(logits)), probabilities, uniform)
 
     @staticmethod
     def valid_one_hot_target(target: Array) -> Array:
