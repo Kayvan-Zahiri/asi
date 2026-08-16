@@ -36,10 +36,11 @@ import functools
 import hashlib
 import json
 import math
+import operator
 from collections.abc import Mapping
 from dataclasses import asdict, dataclass
 from numbers import Real
-from typing import Any, Literal, cast
+from typing import Any, Literal, SupportsIndex, cast
 
 import chex
 import jax
@@ -63,6 +64,32 @@ LONG_TERM_STRATUM = 1
 
 _INT32_MAX = 2_147_483_647
 _UINT32_MAX = 4_294_967_295
+_ACTUAL_INT_TYPES = frozenset(
+    {
+        int,
+        np.int8,
+        np.int16,
+        np.int32,
+        np.int64,
+        np.uint8,
+        np.uint16,
+        np.uint32,
+        np.uint64,
+        np.longlong,
+        np.ulonglong,
+    }
+)
+
+
+def _validate_positive_int(
+    name: str, value: object, *, minimum: int = 1, maximum: int = _INT32_MAX
+) -> int:
+    if type(value) not in _ACTUAL_INT_TYPES:
+        raise ValueError(f"{name} must be an integer in [{minimum}, {maximum}]")
+    canonical = operator.index(cast(SupportsIndex, value))
+    if not minimum <= canonical <= maximum:
+        raise ValueError(f"{name} must be an integer in [{minimum}, {maximum}]")
+    return canonical
 
 
 @dataclass(frozen=True)
@@ -131,6 +158,7 @@ class DualReplayConfig:
                 name,
                 _require_float32_real(name, getattr(self, name), strictly_positive=False),
             )
+        _validate_config(self)
 
     @property
     def long_term_capacity(self) -> int:
@@ -476,14 +504,6 @@ def _require_float32_real(
     return cast(float, value) if narrowed == renarrowed else narrowed
 
 
-def _validate_positive_int(name: str, value: object) -> int:
-    if isinstance(value, bool) or not isinstance(value, int):
-        raise ValueError(f"{name} must be an integer")
-    if value < 1:
-        raise ValueError(f"{name} must be positive")
-    return value
-
-
 def _validate_config(config: DualReplayConfig) -> None:
     for name in (
         "total_capacity",
@@ -493,9 +513,8 @@ def _validate_config(config: DualReplayConfig) -> None:
         "short_term_sample_size",
         "long_term_sample_size",
     ):
-        _validate_positive_int(name, getattr(config, name))
-    if config.total_capacity > _INT32_MAX:
-        raise ValueError("total_capacity exceeds int32 indexing")
+        canonical = _validate_positive_int(name, getattr(config, name))
+        object.__setattr__(config, name, canonical)
     if config.short_term_capacity >= config.total_capacity:
         raise ValueError("short_term_capacity must leave at least one long-term slot")
     if config.short_term_sample_size > config.short_term_capacity:
@@ -506,12 +525,10 @@ def _validate_config(config: DualReplayConfig) -> None:
         raise ValueError("long_term_policy must be 'reservoir' or 'calibrated'")
     if config.aleatoric_control not in {"veto", "downweight"}:
         raise ValueError("aleatoric_control must be 'veto' or 'downweight'")
-    if isinstance(config.max_representation_lag, bool) or not isinstance(
-        config.max_representation_lag, int
-    ):
-        raise ValueError("max_representation_lag must be an integer")
-    if config.max_representation_lag < 0:
-        raise ValueError("max_representation_lag must be non-negative")
+    max_lag = _validate_positive_int(
+        "max_representation_lag", config.max_representation_lag, minimum=0
+    )
+    object.__setattr__(config, "max_representation_lag", max_lag)
 
     with np.errstate(over="ignore"):
         weight_sum = float(
@@ -521,13 +538,16 @@ def _validate_config(config: DualReplayConfig) -> None:
         )
     if not math.isfinite(weight_sum):
         raise ValueError(
-            "surprise_weight, coverage_weight, and progress_weight must have a "
-            "finite float32 sum"
+            "surprise_weight, coverage_weight, and progress_weight must have a finite float32 sum"
         )
     if config.max_persistent_bytes is not None:
-        _validate_positive_int("max_persistent_bytes", config.max_persistent_bytes)
-        if config.max_persistent_bytes > _UINT32_MAX:
-            raise ValueError("max_persistent_bytes exceeds uint32 accounting")
+        max_bytes = _validate_positive_int(
+            "max_persistent_bytes",
+            config.max_persistent_bytes,
+            minimum=1,
+            maximum=_UINT32_MAX,
+        )
+        object.__setattr__(config, "max_persistent_bytes", max_bytes)
 
 
 def _require_array(
@@ -1036,10 +1056,7 @@ class DualReplayMemory:
             & jnp.all(entries.safety_costs >= 0.0)
             & jnp.all(
                 (~entries.insertion_priority_available)
-                | (
-                    (entries.insertion_priorities >= 0.0)
-                    & (entries.insertion_priorities <= 1.0)
-                )
+                | ((entries.insertion_priorities >= 0.0) & (entries.insertion_priorities <= 1.0))
             )
         )
         availability_honest = (
@@ -1047,22 +1064,15 @@ class DualReplayMemory:
                 entries.old_behavior_probability_available
                 | (entries.old_behavior_probabilities == 0.0)
             )
-            & jnp.all(
-                entries.old_behavior_logit_available | (entries.old_behavior_logits == 0.0)
-            )
+            & jnp.all(entries.old_behavior_logit_available | (entries.old_behavior_logits == 0.0))
             & jnp.all(entries.old_value_target_available | (entries.old_value_targets == 0.0))
+            & jnp.all(entries.epistemic_surprise_available | (entries.epistemic_surprises == 0.0))
             & jnp.all(
-                entries.epistemic_surprise_available | (entries.epistemic_surprises == 0.0)
-            )
-            & jnp.all(
-                entries.aleatoric_uncertainty_available
-                | (entries.aleatoric_uncertainties == 0.0)
+                entries.aleatoric_uncertainty_available | (entries.aleatoric_uncertainties == 0.0)
             )
             & jnp.all(entries.learning_progress_available | (entries.learning_progress == 0.0))
             & jnp.all(entries.safety_cost_available | (entries.safety_costs == 0.0))
-            & jnp.all(
-                entries.insertion_priority_available | (entries.insertion_priorities == 0.0)
-            )
+            & jnp.all(entries.insertion_priority_available | (entries.insertion_priorities == 0.0))
         )
         active_metadata = jnp.all(
             (~valid)
@@ -1143,8 +1153,7 @@ class DualReplayMemory:
         short_count = jnp.sum(state.short_term.valid.astype(jnp.int32))
         long_count = jnp.sum(state.long_term.valid.astype(jnp.int32))
         expected_short_evictions = jnp.maximum(
-            state.accepted_transition_count
-            - jnp.asarray(cfg.short_term_capacity, dtype=jnp.int32),
+            state.accepted_transition_count - jnp.asarray(cfg.short_term_capacity, dtype=jnp.int32),
             0,
         )
         expected_short_size = jnp.minimum(
@@ -1156,8 +1165,7 @@ class DualReplayMemory:
             jnp.asarray(cfg.long_term_capacity, dtype=jnp.int32),
         )
         expected_long_evictions = jnp.maximum(
-            state.long_term_write_count
-            - jnp.asarray(cfg.long_term_capacity, dtype=jnp.int32),
+            state.long_term_write_count - jnp.asarray(cfg.long_term_capacity, dtype=jnp.int32),
             0,
         )
         expected_head = jnp.mod(
@@ -1177,9 +1185,8 @@ class DualReplayMemory:
                 )
             )
         else:
-            policy_consistent = (
-                jnp.all(~state.short_term.insertion_priority_available)
-                & jnp.all(~state.long_term.insertion_priority_available)
+            policy_consistent = jnp.all(~state.short_term.insertion_priority_available) & jnp.all(
+                ~state.long_term.insertion_priority_available
             )
         counter_relations = (
             (state.short_term_size == short_count)
@@ -1209,10 +1216,7 @@ class DualReplayMemory:
             & counters_nonnegative
             & counters_in_range
             & counter_relations
-            & (
-                state.persistent_bytes
-                == jnp.asarray(self._persistent_bytes, dtype=jnp.uint32)
-            )
+            & (state.persistent_bytes == jnp.asarray(self._persistent_bytes, dtype=jnp.uint32))
         )
 
     @staticmethod
@@ -1231,17 +1235,9 @@ class DualReplayMemory:
                 prediction.old_behavior_probability_available
                 | (prediction.old_behavior_probability == 0.0)
             )
-            & (
-                prediction.old_behavior_logit_available
-                | (prediction.old_behavior_logit == 0.0)
-            )
-            & (
-                prediction.old_value_target_available | (prediction.old_value_target == 0.0)
-            )
-            & (
-                prediction.epistemic_surprise_available
-                | (prediction.epistemic_surprise == 0.0)
-            )
+            & (prediction.old_behavior_logit_available | (prediction.old_behavior_logit == 0.0))
+            & (prediction.old_value_target_available | (prediction.old_value_target == 0.0))
+            & (prediction.epistemic_surprise_available | (prediction.epistemic_surprise == 0.0))
             & (
                 prediction.aleatoric_uncertainty_available
                 | (prediction.aleatoric_uncertainty == 0.0)
@@ -1273,9 +1269,8 @@ class DualReplayMemory:
             & jnp.isfinite(outcome.safety_cost)
         )
         availability_honest = (
-            (outcome.learning_progress_available | (outcome.learning_progress == 0.0))
-            & (outcome.safety_cost_available | (outcome.safety_cost == 0.0))
-        )
+            outcome.learning_progress_available | (outcome.learning_progress == 0.0)
+        ) & (outcome.safety_cost_available | (outcome.safety_cost == 0.0))
         ranges = (
             (outcome.discount >= 0.0)
             & (outcome.discount <= 1.0)
@@ -1328,9 +1323,7 @@ class DualReplayMemory:
     ) -> ReplayEntries:
         return ReplayEntries(
             observations=entries.observations.at[slot].set(transition.observation),
-            next_observations=entries.next_observations.at[slot].set(
-                transition.next_observation
-            ),
+            next_observations=entries.next_observations.at[slot].set(transition.next_observation),
             actions=entries.actions.at[slot].set(transition.action),
             rewards=entries.rewards.at[slot].set(transition.reward),
             discounts=entries.discounts.at[slot].set(transition.discount),
@@ -1348,9 +1341,7 @@ class DualReplayMemory:
             old_behavior_logit_available=entries.old_behavior_logit_available.at[slot].set(
                 transition.old_behavior_logit_available
             ),
-            old_value_targets=entries.old_value_targets.at[slot].set(
-                transition.old_value_target
-            ),
+            old_value_targets=entries.old_value_targets.at[slot].set(transition.old_value_target),
             old_value_target_available=entries.old_value_target_available.at[slot].set(
                 transition.old_value_target_available
             ),
@@ -1363,12 +1354,10 @@ class DualReplayMemory:
             aleatoric_uncertainties=entries.aleatoric_uncertainties.at[slot].set(
                 transition.aleatoric_uncertainty
             ),
-            aleatoric_uncertainty_available=entries.aleatoric_uncertainty_available.at[
-                slot
-            ].set(transition.aleatoric_uncertainty_available),
-            learning_progress=entries.learning_progress.at[slot].set(
-                transition.learning_progress
+            aleatoric_uncertainty_available=entries.aleatoric_uncertainty_available.at[slot].set(
+                transition.aleatoric_uncertainty_available
             ),
+            learning_progress=entries.learning_progress.at[slot].set(transition.learning_progress),
             learning_progress_available=entries.learning_progress_available.at[slot].set(
                 transition.learning_progress_available
             ),
@@ -1384,9 +1373,7 @@ class DualReplayMemory:
             eviction_provenance_ids=entries.eviction_provenance_ids.at[slot].set(
                 eviction_provenance_id
             ),
-            insertion_priorities=entries.insertion_priorities.at[slot].set(
-                insertion_priority
-            ),
+            insertion_priorities=entries.insertion_priorities.at[slot].set(insertion_priority),
             insertion_priority_available=entries.insertion_priority_available.at[slot].set(
                 insertion_priority_available
             ),
@@ -1400,8 +1387,7 @@ class DualReplayMemory:
     ) -> tuple[Array, Array, Array, Array, Array, Array, Array]:
         cfg = self._config
         surprise = jnp.clip(
-            transition.epistemic_surprise
-            / jnp.asarray(cfg.surprise_scale, dtype=jnp.float32),
+            transition.epistemic_surprise / jnp.asarray(cfg.surprise_scale, dtype=jnp.float32),
             0.0,
             1.0,
         )
@@ -1436,12 +1422,9 @@ class DualReplayMemory:
             & transition.aleatoric_uncertainty_available
         )
         if cfg.aleatoric_control == "veto":
-            control_passed = (
-                transition.aleatoric_uncertainty_available
-                & (
-                    transition.aleatoric_uncertainty
-                    <= jnp.asarray(cfg.max_aleatoric_uncertainty, dtype=jnp.float32)
-                )
+            control_passed = transition.aleatoric_uncertainty_available & (
+                transition.aleatoric_uncertainty
+                <= jnp.asarray(cfg.max_aleatoric_uncertainty, dtype=jnp.float32)
             )
             priority = raw_priority
         else:
@@ -1632,9 +1615,7 @@ class DualReplayMemory:
                 state.long_term_size,
             ),
             write_attempt_count=_saturating_increment(state.write_attempt_count),
-            accepted_transition_count=_saturating_increment(
-                state.accepted_transition_count
-            ),
+            accepted_transition_count=_saturating_increment(state.accepted_transition_count),
             long_term_candidate_count=candidate_number,
             long_term_write_count=jnp.where(
                 wrote_long,
@@ -1801,9 +1782,7 @@ class DualReplayMemory:
             terminated=flags(entries.terminated),
             truncated=flags(entries.truncated),
             old_behavior_probabilities=floats(entries.old_behavior_probabilities),
-            old_behavior_probability_available=flags(
-                entries.old_behavior_probability_available
-            ),
+            old_behavior_probability_available=flags(entries.old_behavior_probability_available),
             old_behavior_logits=floats(entries.old_behavior_logits),
             old_behavior_logit_available=flags(entries.old_behavior_logit_available),
             old_value_targets=floats(entries.old_value_targets),
@@ -1811,9 +1790,7 @@ class DualReplayMemory:
             epistemic_surprises=floats(entries.epistemic_surprises),
             epistemic_surprise_available=flags(entries.epistemic_surprise_available),
             aleatoric_uncertainties=floats(entries.aleatoric_uncertainties),
-            aleatoric_uncertainty_available=flags(
-                entries.aleatoric_uncertainty_available
-            ),
+            aleatoric_uncertainty_available=flags(entries.aleatoric_uncertainty_available),
             learning_progress=floats(entries.learning_progress),
             learning_progress_available=flags(entries.learning_progress_available),
             safety_costs=floats(entries.safety_costs),
@@ -2030,12 +2007,8 @@ class DualReplayMemory:
         self._validate_state_static_contract(state)
         return DualReplayResourceAccounting(
             total_capacity=jnp.asarray(self._config.total_capacity, dtype=jnp.int32),
-            short_term_capacity=jnp.asarray(
-                self._config.short_term_capacity, dtype=jnp.int32
-            ),
-            long_term_capacity=jnp.asarray(
-                self._config.long_term_capacity, dtype=jnp.int32
-            ),
+            short_term_capacity=jnp.asarray(self._config.short_term_capacity, dtype=jnp.int32),
+            long_term_capacity=jnp.asarray(self._config.long_term_capacity, dtype=jnp.int32),
             active_entries=state.short_term_size + state.long_term_size,
             short_term_entries=state.short_term_size,
             long_term_entries=state.long_term_size,
@@ -2081,8 +2054,7 @@ class DualReplayMemory:
                 jax.device_get(state.rng_key_data), dtype=np.uint32
             ).tolist(),
             **{
-                field: int(jax.device_get(getattr(state, field)))
-                for field in _STATE_COUNTER_FIELDS
+                field: int(jax.device_get(getattr(state, field))) for field in _STATE_COUNTER_FIELDS
             },
             "persistent_bytes": int(jax.device_get(state.persistent_bytes)),
         }
@@ -2112,8 +2084,7 @@ class DualReplayMemory:
         expected = np.dtype(dtype)
         if np.issubdtype(expected, np.floating):
             if any(
-                isinstance(item, bool) or not isinstance(item, int | float)
-                for item in untyped.flat
+                isinstance(item, bool) or not isinstance(item, int | float) for item in untyped.flat
             ):
                 raise ValueError(f"{name} must contain only JSON real numbers")
             with np.errstate(over="ignore", under="ignore", invalid="ignore"):

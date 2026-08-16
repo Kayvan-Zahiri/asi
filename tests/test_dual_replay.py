@@ -1076,3 +1076,45 @@ def test_checkpoint_rejects_nonfinite_and_boolean_numeric_corruption() -> None:
     boolean["state_digest"] = _digest(boolean["state"])
     with pytest.raises(ValueError, match="JSON real"):
         DualReplayMemory.from_checkpoint_payload(boolean)
+
+
+def test_dual_replay_config_rejects_booleans_and_non_integers() -> None:
+    with pytest.raises(ValueError, match="total_capacity"):
+        DualReplayConfig(
+            total_capacity=True,  # type: ignore[arg-type]
+            short_term_capacity=1,
+            observation_dim=1,
+            action_dim=1,
+            short_term_sample_size=1,
+            long_term_sample_size=1,
+        )
+    with pytest.raises(ValueError, match="short_term_capacity"):
+        DualReplayConfig(
+            total_capacity=10,
+            short_term_capacity=2.5,  # type: ignore[arg-type]
+            observation_dim=1,
+            action_dim=1,
+            short_term_sample_size=1,
+            long_term_sample_size=1,
+        )
+
+
+def test_dual_replay_config_accepts_and_canonicalizes_numpy_integers() -> None:
+    cfg = DualReplayConfig(
+        total_capacity=np.int32(10),
+        short_term_capacity=np.int64(4),
+        observation_dim=np.uint16(2),
+        action_dim=np.int8(1),
+        short_term_sample_size=np.int32(2),
+        long_term_sample_size=np.int64(3),
+        max_representation_lag=np.uint32(0),
+    )
+    assert type(cfg.total_capacity) is int
+    assert type(cfg.short_term_capacity) is int
+    assert type(cfg.observation_dim) is int
+    assert type(cfg.action_dim) is int
+    assert type(cfg.short_term_sample_size) is int
+    assert type(cfg.long_term_sample_size) is int
+    assert type(cfg.max_representation_lag) is int
+    assert cfg.total_capacity == 10
+    assert cfg.short_term_capacity == 4
