@@ -79,15 +79,22 @@ class FeatureBankRouterConfig:
     active_slots: int
 
     def __post_init__(self) -> None:
+        base_dim = _require_int32("base_dim", self.base_dim, minimum=2)
+        active_slots = _require_int32(
+            "active_slots",
+            self.active_slots,
+            minimum=1,
+            maximum=_INT32_MAX - base_dim,
+        )
         object.__setattr__(
             self,
             "base_dim",
-            _require_int32("base_dim", self.base_dim, minimum=2),
+            base_dim,
         )
         object.__setattr__(
             self,
             "active_slots",
-            _require_int32("active_slots", self.active_slots, minimum=1),
+            active_slots,
         )
 
     @property
