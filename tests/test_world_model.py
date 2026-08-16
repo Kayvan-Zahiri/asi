@@ -6,6 +6,7 @@ import chex
 import jax
 import jax.numpy as jnp
 import jax.random as jr
+import numpy as np
 import pytest
 
 from alberta_framework.core.world_model import (
@@ -27,9 +28,7 @@ def test_world_model_rejects_malformed_observation_vectors(
     malformed_observation: jax.Array,
 ) -> None:
     """Wrong-rank vectors must not be silently flattened through jitted APIs."""
-    model = OneStepWorldModel(
-        WorldModelConfig(observation_dim=2, n_actions=2, hidden_sizes=())
-    )
+    model = OneStepWorldModel(WorldModelConfig(observation_dim=2, n_actions=2, hidden_sizes=()))
     state = model.init(jr.key(10))
     observation = jnp.zeros((2,), dtype=jnp.float32)
     action = jnp.array(0, dtype=jnp.int32)
@@ -96,9 +95,7 @@ def test_world_model_rejects_malformed_continuous_actions(
         ("update", "reward"),
     ],
 )
-def test_world_model_rejects_size_one_scalar_aliases(
-    operation: str, field: str
-) -> None:
+def test_world_model_rejects_size_one_scalar_aliases(operation: str, field: str) -> None:
     model = OneStepWorldModel(
         WorldModelConfig(
             observation_dim=2,
@@ -323,3 +320,33 @@ def test_world_model_learns_action_conditional_deterministic_transition() -> Non
     assert float(last_mse) < float(first_mse)
     assert float(pred_a1.reward - pred_a0.reward) > 0.25
     assert float(pred_a1.next_observation[0] - pred_a0.next_observation[0]) > 0.5
+
+
+def test_world_model_config_integer_and_scalar_validation() -> None:
+    with pytest.raises(ValueError, match="observation_dim"):
+        WorldModelConfig(observation_dim=True)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="observation_dim"):
+        WorldModelConfig(observation_dim=4.5)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="n_actions"):
+        WorldModelConfig(observation_dim=4, n_actions=True)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="action_dim"):
+        WorldModelConfig(observation_dim=4, action_dim=0)
+    with pytest.raises(ValueError, match="hidden_sizes"):
+        WorldModelConfig(observation_dim=4, hidden_sizes=(True,))  # type: ignore[arg-type]
+
+    cfg = WorldModelConfig(
+        observation_dim=np.int32(4),
+        n_actions=np.int64(2),
+        action_dim=np.int32(1),
+        hidden_sizes=(np.int32(32),),
+        utility_decay=np.float32(0.95),
+    )
+    assert type(cfg.observation_dim) is int
+    assert type(cfg.n_actions) is int
+    assert type(cfg.action_dim) is int
+    assert type(cfg.hidden_sizes[0]) is int
+    assert type(cfg.utility_decay) is float
+    assert cfg.observation_dim == 4
+    assert cfg.n_actions == 2
+    assert cfg.action_dim == 1
+    assert cfg.hidden_sizes == (32,)

@@ -16,11 +16,13 @@ from __future__ import annotations
 
 import dataclasses
 import functools
-from typing import Any, cast
+import operator
+from typing import Any, SupportsIndex, cast
 
 import chex
 import jax
 import jax.numpy as jnp
+import numpy as np
 from jax import Array
 from jaxtyping import Bool, Float
 
@@ -56,6 +58,39 @@ def _float32_operand(
     if array.shape != shape:
         raise ValueError(f"{name} must have shape {shape}, got {array.shape}")
     return array
+
+
+_INT32_MAX = 2**31 - 1
+_ACTUAL_INT_TYPES = frozenset(
+    {
+        int,
+        np.int8,
+        np.int16,
+        np.int32,
+        np.int64,
+        np.uint8,
+        np.uint16,
+        np.uint32,
+        np.uint64,
+        np.longlong,
+        np.ulonglong,
+    }
+)
+
+
+def _require_int32(name: str, value: object, *, minimum: int, maximum: int = _INT32_MAX) -> int:
+    if type(value) not in _ACTUAL_INT_TYPES:
+        raise ValueError(f"{name} must be an integer in [{minimum}, {maximum}]")
+    canonical = operator.index(cast(SupportsIndex, value))
+    if not minimum <= canonical <= maximum:
+        raise ValueError(f"{name} must be an integer in [{minimum}, {maximum}]")
+    return canonical
+
+
+def _validate_hidden_sizes(sizes: object) -> tuple[int, ...]:
+    if type(sizes) is not tuple:
+        raise ValueError("hidden_sizes must be an actual tuple")
+    return tuple(_require_int32("hidden_sizes element", s, minimum=1) for s in sizes)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -110,6 +145,44 @@ class ActionConditionedWorldModelConfig:
     observation_clip_margin: float = 0.05
     max_delta_scale: float = 5.0
     include_action_interactions: bool = False
+
+    def __post_init__(self) -> None:
+        observation_dim = _require_int32("observation_dim", self.observation_dim, minimum=1)
+        n_actions = _require_int32("n_actions", self.n_actions, minimum=1)
+        hidden_sizes = _validate_hidden_sizes(self.hidden_sizes)
+        gamma = validated_float32_scalar("gamma", self.gamma, lower=0.0, upper=1.0)
+        reward_scale = validated_float32_scalar("reward_scale", self.reward_scale, positive=True)
+        utility_decay = validated_float32_scalar(
+            "utility_decay", self.utility_decay, lower=0.0, upper=1.0, upper_inclusive=False
+        )
+        error_decay = validated_float32_scalar(
+            "error_decay", self.error_decay, lower=0.0, upper=1.0, upper_inclusive=False
+        )
+        observation_clip_margin = validated_float32_scalar(
+            "observation_clip_margin", self.observation_clip_margin, lower=0.0
+        )
+        max_delta_scale = validated_float32_scalar(
+            "max_delta_scale", self.max_delta_scale, positive=True
+        )
+        observation_scale = self.observation_scale
+        if observation_scale is not None:
+            if len(observation_scale) != observation_dim:
+                raise ValueError("observation_scale length must equal observation_dim")
+            observation_scale = tuple(
+                validated_float32_scalar("observation_scale values", scale, positive=True)
+                for scale in observation_scale
+            )
+
+        object.__setattr__(self, "observation_dim", observation_dim)
+        object.__setattr__(self, "n_actions", n_actions)
+        object.__setattr__(self, "hidden_sizes", hidden_sizes)
+        object.__setattr__(self, "gamma", gamma)
+        object.__setattr__(self, "observation_scale", observation_scale)
+        object.__setattr__(self, "reward_scale", reward_scale)
+        object.__setattr__(self, "utility_decay", utility_decay)
+        object.__setattr__(self, "error_decay", error_decay)
+        object.__setattr__(self, "observation_clip_margin", observation_clip_margin)
+        object.__setattr__(self, "max_delta_scale", max_delta_scale)
 
     def to_config(self) -> dict[str, Any]:
         """Serialize to a JSON-compatible dictionary."""
@@ -359,9 +432,7 @@ class ActionConditionedWorldModel:
             optimizer=optimizer,
             bounder=bounder_from_config(bounder_cfg) if bounder_cfg is not None else None,
             normalizer=(
-                normalizer_from_config(normalizer_cfg)
-                if normalizer_cfg is not None
-                else None
+                normalizer_from_config(normalizer_cfg) if normalizer_cfg is not None else None
             ),
             head_optimizer=(
                 optimizer_from_config(head_opt_cfg) if head_opt_cfg is not None else None
@@ -402,19 +473,13 @@ class ActionConditionedWorldModel:
         must not form arithmetic with a non-finite public observation before
         publishing the fail-visible result.
         """
-        obs = _float32_operand(
-            "observation", observation, (self._config.observation_dim,)
-        )
+        obs = _float32_operand("observation", observation, (self._config.observation_dim,))
         action_one_hot = self.encode_action(action)
-        features_valid = jnp.all(jnp.isfinite(obs)) & jnp.all(
-            jnp.isfinite(action_one_hot)
-        )
+        features_valid = jnp.all(jnp.isfinite(obs)) & jnp.all(jnp.isfinite(action_one_hot))
         # Inf observation times a silent one-hot is 0*inf = NaN. Zero both
         # factors before the product so that product is never formed.
         safe_obs = jnp.where(features_valid, obs, jnp.zeros_like(obs))
-        safe_action = jnp.where(
-            features_valid, action_one_hot, jnp.zeros_like(action_one_hot)
-        )
+        safe_action = jnp.where(features_valid, action_one_hot, jnp.zeros_like(action_one_hot))
         if self._config.include_action_interactions:
             interactions = (safe_obs[:, None] * safe_action[None, :]).reshape((-1,))
             features = jnp.concatenate([safe_obs, safe_action, interactions], axis=0)
@@ -450,9 +515,7 @@ class ActionConditionedWorldModel:
         next_observation: Array,
     ) -> Array:
         """Build normalized ``[delta_obs, reward, discount]`` targets."""
-        obs = _float32_operand(
-            "observation", observation, (self._config.observation_dim,)
-        )
+        obs = _float32_operand("observation", observation, (self._config.observation_dim,))
         next_obs = _float32_operand(
             "next_observation",
             next_observation,
@@ -502,9 +565,7 @@ class ActionConditionedWorldModel:
         low = state.observation_min - self._config.observation_clip_margin
         high = state.observation_max + self._config.observation_clip_margin
         clipped_next = jnp.clip(decoded_next_observation, low, high)
-        next_observation = jnp.where(
-            has_bounds, clipped_next, decoded_next_observation
-        )
+        next_observation = jnp.where(has_bounds, clipped_next, decoded_next_observation)
 
         raw_reward = raw_predictions[self._config.observation_dim] * self._config.reward_scale
         reward_low = state.reward_min - self._config.observation_clip_margin
@@ -559,9 +620,7 @@ class ActionConditionedWorldModel:
         action: Array,
     ) -> WorldModelPrediction:
         """Predict the guarded next observation, reward, and discount."""
-        prediction, _, _ = self._prediction_and_raw_diagnostics(
-            state, observation, action
-        )
+        prediction, _, _ = self._prediction_and_raw_diagnostics(state, observation, action)
         return prediction
 
     @functools.partial(jax.jit, static_argnums=(0,))
@@ -581,9 +640,7 @@ class ActionConditionedWorldModel:
         else:
             discount = discount_or_next_observation
 
-        obs = _float32_operand(
-            "observation", observation, (self._config.observation_dim,)
-        )
+        obs = _float32_operand("observation", observation, (self._config.observation_dim,))
         action = _float32_operand("action", action, ())
         action_arr, action_valid = safe_discrete_action(
             action,
@@ -608,19 +665,13 @@ class ActionConditionedWorldModel:
         safe_obs = jnp.where(inputs_valid, obs, jnp.zeros_like(obs))
         safe_action = jnp.where(inputs_valid, action_arr, jnp.zeros_like(action_arr))
         safe_reward = jnp.where(inputs_valid, reward_arr, jnp.zeros_like(reward_arr))
-        safe_discount = jnp.where(
-            inputs_valid, discount_arr, jnp.zeros_like(discount_arr)
-        )
-        safe_next_obs = jnp.where(
-            inputs_valid, next_obs, jnp.zeros_like(next_obs)
-        )
+        safe_discount = jnp.where(inputs_valid, discount_arr, jnp.zeros_like(discount_arr))
+        safe_next_obs = jnp.where(inputs_valid, next_obs, jnp.zeros_like(next_obs))
 
-        prediction, decoded_next_observation, decoded_reward = (
-            self._prediction_and_raw_diagnostics(state, safe_obs, safe_action)
+        prediction, decoded_next_observation, decoded_reward = self._prediction_and_raw_diagnostics(
+            state, safe_obs, safe_action
         )
-        targets = self.targets(
-            safe_obs, safe_reward, safe_discount, safe_next_obs
-        )
+        targets = self.targets(safe_obs, safe_reward, safe_discount, safe_next_obs)
         inputs = self.input_features(safe_obs, safe_action)
         learner_result = self._learner.update(state.learner_state, inputs, targets)
 
@@ -672,13 +723,9 @@ class ActionConditionedWorldModel:
             learner_result, state.learner_state, update_applied
         )
         reported_prediction = WorldModelPrediction(
-            next_observation=neutralize_array(
-                update_applied, prediction.next_observation
-            ),
+            next_observation=neutralize_array(update_applied, prediction.next_observation),
             reward=neutralize_array(update_applied, prediction.reward),
-            raw_predictions=neutralize_array(
-                update_applied, prediction.raw_predictions
-            ),
+            raw_predictions=neutralize_array(update_applied, prediction.raw_predictions),
             discount=neutralize_array(update_applied, prediction.discount),
         )
 
@@ -691,9 +738,7 @@ class ActionConditionedWorldModel:
             prediction_error=neutralize_array(update_applied, prediction_error),
             observation_mse=neutralize_array(update_applied, observation_mse),
             reward_error=neutralize_array(update_applied, reward_error),
-            next_observation_errors=neutralize_array(
-                update_applied, next_observation_errors
-            ),
+            next_observation_errors=neutralize_array(update_applied, next_observation_errors),
             discount_error=neutralize_array(update_applied, discount_error),
             learner_result=reported_learner_result,
             update_applied=update_applied,
@@ -703,40 +748,9 @@ class ActionConditionedWorldModel:
         self, config: ActionConditionedWorldModelConfig
     ) -> ActionConditionedWorldModelConfig:
         """Fail closed on malformed configuration and return its canonical float32 form."""
-        if config.observation_dim <= 0:
-            raise ValueError("observation_dim must be positive")
-        if config.n_actions <= 0:
-            raise ValueError("n_actions must be positive")
-        if any(size <= 0 for size in config.hidden_sizes):
-            raise ValueError("hidden_sizes must contain only positive widths")
-        observation_scale = config.observation_scale
-        if observation_scale is not None:
-            if len(observation_scale) != config.observation_dim:
-                raise ValueError("observation_scale length must equal observation_dim")
-            observation_scale = tuple(
-                validated_float32_scalar("observation_scale values", scale, positive=True)
-                for scale in observation_scale
-            )
-        return dataclasses.replace(
-            config,
-            gamma=validated_float32_scalar("gamma", config.gamma, lower=0.0, upper=1.0),
-            observation_scale=observation_scale,
-            reward_scale=validated_float32_scalar(
-                "reward_scale", config.reward_scale, positive=True
-            ),
-            utility_decay=validated_float32_scalar(
-                "utility_decay", config.utility_decay, lower=0.0, upper=1.0, upper_inclusive=False
-            ),
-            error_decay=validated_float32_scalar(
-                "error_decay", config.error_decay, lower=0.0, upper=1.0, upper_inclusive=False
-            ),
-            observation_clip_margin=validated_float32_scalar(
-                "observation_clip_margin", config.observation_clip_margin, lower=0.0
-            ),
-            max_delta_scale=validated_float32_scalar(
-                "max_delta_scale", config.max_delta_scale, positive=True
-            ),
-        )
+        if not isinstance(config, ActionConditionedWorldModelConfig):
+            raise TypeError("config must be an ActionConditionedWorldModelConfig")
+        return config
 
 
 def run_action_conditioned_world_model_learning_loop(
@@ -778,20 +792,23 @@ def run_action_conditioned_world_model_learning_loop(
             result.update_applied,
         )
 
-    final_state, (
-        next_observation_predictions,
-        reward_predictions,
-        discount_predictions,
-        raw_predictions,
-        targets,
-        errors,
-        prediction_errors,
-        observation_mse,
-        reward_errors,
-        next_observation_errors,
-        discount_errors,
-        per_head_metrics,
-        updates_applied,
+    (
+        final_state,
+        (
+            next_observation_predictions,
+            reward_predictions,
+            discount_predictions,
+            raw_predictions,
+            targets,
+            errors,
+            prediction_errors,
+            observation_mse,
+            reward_errors,
+            next_observation_errors,
+            discount_errors,
+            per_head_metrics,
+            updates_applied,
+        ),
     ) = jax.lax.scan(
         _scan_fn,
         state,
@@ -851,6 +868,25 @@ class WorldModelConfig:
     use_layer_norm: bool = True
     predict_delta: bool = False
     utility_decay: float = 0.99
+
+    def __post_init__(self) -> None:
+        observation_dim = _require_int32("observation_dim", self.observation_dim, minimum=1)
+        n_actions = (
+            _require_int32("n_actions", self.n_actions, minimum=1)
+            if self.n_actions is not None
+            else None
+        )
+        action_dim = _require_int32("action_dim", self.action_dim, minimum=1)
+        hidden_sizes = _validate_hidden_sizes(self.hidden_sizes)
+        utility_decay = validated_float32_scalar(
+            "utility_decay", self.utility_decay, lower=0.0, upper=1.0, upper_inclusive=False
+        )
+
+        object.__setattr__(self, "observation_dim", observation_dim)
+        object.__setattr__(self, "n_actions", n_actions)
+        object.__setattr__(self, "action_dim", action_dim)
+        object.__setattr__(self, "hidden_sizes", hidden_sizes)
+        object.__setattr__(self, "utility_decay", utility_decay)
 
     def to_config(self) -> dict[str, Any]:
         """Serialize to a JSON-compatible dictionary."""
@@ -975,9 +1011,7 @@ class OneStepWorldModel:
             optimizer=optimizer,
             bounder=bounder_from_config(bounder_cfg) if bounder_cfg is not None else None,
             normalizer=(
-                normalizer_from_config(normalizer_cfg)
-                if normalizer_cfg is not None
-                else None
+                normalizer_from_config(normalizer_cfg) if normalizer_cfg is not None else None
             ),
             head_optimizer=(
                 optimizer_from_config(head_opt_cfg) if head_opt_cfg is not None else None
@@ -1015,17 +1049,13 @@ class OneStepWorldModel:
     @functools.partial(jax.jit, static_argnums=(0,))
     def input_features(self, observation: Array, action: Array) -> Array:
         """Return ``concat(observation, encoded_action)``."""
-        obs = _float32_operand(
-            "observation", observation, (self._config.observation_dim,)
-        )
+        obs = _float32_operand("observation", observation, (self._config.observation_dim,))
         return jnp.concatenate([obs, self.encode_action(action)], axis=0)
 
     @functools.partial(jax.jit, static_argnums=(0,))
     def targets(self, observation: Array, reward: Array, next_observation: Array) -> Array:
         """Build ``[reward, next_obs_or_delta]`` targets."""
-        obs = _float32_operand(
-            "observation", observation, (self._config.observation_dim,)
-        )
+        obs = _float32_operand("observation", observation, (self._config.observation_dim,))
         reward_arr = _float32_operand("reward", reward, ())
         next_obs = _float32_operand(
             "next_observation",
@@ -1046,18 +1076,14 @@ class OneStepWorldModel:
         action: Array,
     ) -> WorldModelPrediction:
         """Predict reward and next observation."""
-        obs = _float32_operand(
-            "observation", observation, (self._config.observation_dim,)
-        )
+        obs = _float32_operand("observation", observation, (self._config.observation_dim,))
         raw_predictions = self._learner.predict(
             state.learner_state,
             self.input_features(obs, action),
         )
         reward = raw_predictions[0]
         obs_prediction = raw_predictions[1:]
-        next_observation = (
-            obs + obs_prediction if self._config.predict_delta else obs_prediction
-        )
+        next_observation = obs + obs_prediction if self._config.predict_delta else obs_prediction
         return WorldModelPrediction(
             next_observation=next_observation,
             reward=reward,
@@ -1075,9 +1101,7 @@ class OneStepWorldModel:
         next_observation: Array,
     ) -> WorldModelUpdateResult:
         """Update from one real transition."""
-        observation = _float32_operand(
-            "observation", observation, (self._config.observation_dim,)
-        )
+        observation = _float32_operand("observation", observation, (self._config.observation_dim,))
         reward = _float32_operand("reward", reward, ())
         next_observation = _float32_operand(
             "next_observation",
@@ -1091,9 +1115,7 @@ class OneStepWorldModel:
                 self._config.n_actions,
             )
         else:
-            action_arr = _float32_operand(
-                "action", action, (self._config.action_dim,)
-            )
+            action_arr = _float32_operand("action", action, (self._config.action_dim,))
             action_valid = jnp.all(jnp.isfinite(action_arr))
             safe_action = jnp.where(
                 action_valid,
@@ -1128,13 +1150,9 @@ class OneStepWorldModel:
             learner_result, state.learner_state, update_applied
         )
         reported_prediction = WorldModelPrediction(
-            next_observation=neutralize_array(
-                update_applied, prediction.next_observation
-            ),
+            next_observation=neutralize_array(update_applied, prediction.next_observation),
             reward=neutralize_array(update_applied, prediction.reward),
-            raw_predictions=neutralize_array(
-                update_applied, prediction.raw_predictions
-            ),
+            raw_predictions=neutralize_array(update_applied, prediction.raw_predictions),
             discount=prediction.discount,
         )
         reported_targets = jnp.where(
@@ -1163,16 +1181,8 @@ class OneStepWorldModel:
         )
 
     def _validate_config(self, config: WorldModelConfig) -> None:
-        if config.observation_dim <= 0:
-            raise ValueError("observation_dim must be positive")
-        if config.n_actions is not None and config.n_actions <= 0:
-            raise ValueError("n_actions must be positive when provided")
-        if config.n_actions is None and config.action_dim <= 0:
-            raise ValueError("action_dim must be positive for vector actions")
-        if any(size <= 0 for size in config.hidden_sizes):
-            raise ValueError("hidden_sizes must contain only positive widths")
-        if not 0.0 <= config.utility_decay < 1.0:
-            raise ValueError("utility_decay must be in [0, 1)")
+        if not isinstance(config, WorldModelConfig):
+            raise TypeError("config must be a WorldModelConfig")
 
 
 def run_world_model_learning_loop(
@@ -1200,13 +1210,16 @@ def run_world_model_learning_loop(
             result.update_applied,
         )
 
-    final_state, (
-        reward_predictions,
-        next_observation_predictions,
-        reward_errors,
-        next_observation_errors,
-        per_head_metrics,
-        updates_applied,
+    (
+        final_state,
+        (
+            reward_predictions,
+            next_observation_predictions,
+            reward_errors,
+            next_observation_errors,
+            per_head_metrics,
+            updates_applied,
+        ),
     ) = jax.lax.scan(step_fn, state, (observations, actions, rewards, next_observations))
     return WorldModelLearningResult(
         state=final_state,

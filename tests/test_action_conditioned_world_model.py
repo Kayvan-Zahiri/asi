@@ -399,10 +399,10 @@ def test_default_discounts_do_not_inherit_the_reward_dtype() -> None:
             model, state, observations, actions, rewards, next_observations
         )
         chex.assert_trees_all_close(defaulted.discount_errors, explicit.discount_errors)
-        chex.assert_trees_all_close(
-            defaulted.discount_predictions, explicit.discount_predictions
-        )
+        chex.assert_trees_all_close(defaulted.discount_predictions, explicit.discount_predictions)
         assert bool(jnp.all(defaulted.updates_applied))
+
+
 @pytest.mark.parametrize(
     "overrides",
     [
@@ -419,11 +419,13 @@ def test_default_discounts_do_not_inherit_the_reward_dtype() -> None:
 )
 def test_config_rejects_non_finite_scalars(overrides: dict[str, object]) -> None:
     """A NaN scalar passes a bare `< 0` check and yields an all-rejected run scoring 0.0."""
-    config = ActionConditionedWorldModelConfig(
-        observation_dim=2, n_actions=2, hidden_sizes=(), **overrides  # type: ignore[arg-type]
-    )
     with pytest.raises(ValueError, match="finite"):
-        ActionConditionedWorldModel(config)
+        ActionConditionedWorldModelConfig(
+            observation_dim=2,
+            n_actions=2,
+            hidden_sizes=(),
+            **overrides,  # type: ignore[arg-type]
+        )
 
 
 class _FloatSpoof:
@@ -474,13 +476,15 @@ def test_config_rejects_scalars_that_leave_the_float32_domain(
     overrides: dict[str, object], message: str
 ) -> None:
     """Host-finite values must also stay finite and in range once narrowed to float32."""
-    config = ActionConditionedWorldModelConfig(
-        observation_dim=2, n_actions=2, hidden_sizes=(), **overrides  # type: ignore[arg-type]
-    )
     with warnings.catch_warnings():
         warnings.simplefilter("error")
         with pytest.raises(ValueError, match=message):
-            ActionConditionedWorldModel(config)
+            ActionConditionedWorldModelConfig(
+                observation_dim=2,
+                n_actions=2,
+                hidden_sizes=(),
+                **overrides,  # type: ignore[arg-type]
+            )
 
 
 def test_config_canonicalizes_real_scalars_and_preserves_builtin_floats() -> None:
@@ -698,9 +702,7 @@ def test_diagnostics_reflect_true_decodes_not_guard_clips() -> None:
         )
         learner_state = dataclasses.replace(
             init_state.learner_state,
-            head_params=dataclasses.replace(
-                head_params, weights=new_weights, biases=new_biases
-            ),
+            head_params=dataclasses.replace(head_params, weights=new_weights, biases=new_biases),
         )
         return dataclasses.replace(
             init_state,
@@ -730,20 +732,46 @@ def test_diagnostics_reflect_true_decodes_not_guard_clips() -> None:
     # reward range +/- the margin, unchanged by this fix.
     assert float(far_result.prediction.reward) == pytest.approx(5.05, abs=1e-4)
     assert float(near_result.prediction.reward) == pytest.approx(5.05, abs=1e-4)
-    assert float(far_result.prediction.next_observation[0]) == pytest.approx(
-        0.05, abs=1e-4
-    )
-    assert float(near_result.prediction.next_observation[0]) == pytest.approx(
-        0.05, abs=1e-4
-    )
+    assert float(far_result.prediction.next_observation[0]) == pytest.approx(0.05, abs=1e-4)
+    assert float(near_result.prediction.next_observation[0]) == pytest.approx(0.05, abs=1e-4)
 
     # reward_error must separate a badly wrong head from a nearly-correct one
     # instead of both saturating at observation_clip_margin.
     assert float(near_result.reward_error) == pytest.approx(0.05, abs=1e-3)
     assert float(far_result.reward_error) == pytest.approx(45.0, abs=1e-3)
-    assert float(near_result.next_observation_errors[0]) == pytest.approx(
-        0.05, abs=1e-3
-    )
+    assert float(near_result.next_observation_errors[0]) == pytest.approx(0.05, abs=1e-3)
     assert float(far_result.next_observation_errors[0]) == pytest.approx(
         config.max_delta_scale, abs=1e-3
     )
+
+
+def test_action_conditioned_world_model_config_integer_and_scalar_validation() -> None:
+    with pytest.raises(ValueError, match="observation_dim"):
+        ActionConditionedWorldModelConfig(observation_dim=True, n_actions=2)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="observation_dim"):
+        ActionConditionedWorldModelConfig(observation_dim=4.5, n_actions=2)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="n_actions"):
+        ActionConditionedWorldModelConfig(observation_dim=4, n_actions=True)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="hidden_sizes"):
+        ActionConditionedWorldModelConfig(observation_dim=4, n_actions=2, hidden_sizes=(True,))  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="hidden_sizes"):
+        ActionConditionedWorldModelConfig(observation_dim=4, n_actions=2, hidden_sizes=(64, 0))
+
+    cfg = ActionConditionedWorldModelConfig(
+        observation_dim=np.int32(4),
+        n_actions=np.int64(2),
+        hidden_sizes=(np.int32(32), np.int64(32)),
+        gamma=np.float32(0.95),
+        reward_scale=np.float32(2.0),
+        utility_decay=np.float32(0.9),
+    )
+    assert type(cfg.observation_dim) is int
+    assert type(cfg.n_actions) is int
+    assert type(cfg.hidden_sizes) is tuple
+    assert type(cfg.hidden_sizes[0]) is int
+    assert type(cfg.gamma) is float
+    assert type(cfg.reward_scale) is float
+    assert type(cfg.utility_decay) is float
+    assert cfg.observation_dim == 4
+    assert cfg.n_actions == 2
+    assert cfg.hidden_sizes == (32, 32)
