@@ -500,3 +500,27 @@ def test_consumer_layout_and_descriptor_static_contracts_are_strict() -> None:
             _NEW.astype(jnp.float32),
             feature_axes=_feature_axes(),
         )
+
+
+@pytest.mark.unit
+def test_router_config_rejects_booleans_and_non_integers() -> None:
+    with pytest.raises(ValueError, match="base_dim"):
+        FeatureBankRouterConfig(base_dim=True, active_slots=4)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="active_slots"):
+        FeatureBankRouterConfig(base_dim=4, active_slots=True)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="base_dim"):
+        FeatureBankRouterConfig(base_dim=4.5, active_slots=4)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="active_slots"):
+        FeatureBankRouterConfig(base_dim=4, active_slots=4.5)  # type: ignore[arg-type]
+
+
+@pytest.mark.unit
+def test_router_config_accepts_and_canonicalizes_numpy_integers() -> None:
+    config = FeatureBankRouterConfig(
+        base_dim=np.int32(4),
+        active_slots=np.uint16(4),
+    )
+    assert type(config.base_dim) is int
+    assert type(config.active_slots) is int
+    assert config.base_dim == 4
+    assert config.active_slots == 4
