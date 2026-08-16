@@ -318,3 +318,49 @@ def test_semidp_q_infinite_reward_does_not_poison_weights() -> None:
     chex.assert_trees_all_close(new_rbar, rbar)
     assert float(td_error) == 0.0
     assert not bool(update_applied)
+
+
+def test_subtask_spec_validation() -> None:
+    # Valid spec
+    spec = SubtaskSpec(feature_index=0, threshold=0.5, pseudo_reward_scale=1.0, max_option_steps=8)
+    assert spec.feature_index == 0
+    assert spec.threshold == 0.5
+    assert spec.pseudo_reward_scale == 1.0
+    assert spec.max_option_steps == 8
+
+    # Invalid feature_index
+    with pytest.raises(ValueError, match="feature_index"):
+        SubtaskSpec(feature_index=-1)
+    with pytest.raises(ValueError, match="feature_index"):
+        SubtaskSpec(feature_index=True)  # type: ignore[arg-type]
+
+    # Invalid threshold
+    with pytest.raises(ValueError, match="threshold"):
+        SubtaskSpec(feature_index=0, threshold=0.0)
+    with pytest.raises(ValueError, match="threshold"):
+        SubtaskSpec(feature_index=0, threshold=-1.0)
+    with pytest.raises(ValueError, match="threshold"):
+        SubtaskSpec(feature_index=0, threshold=float("nan"))
+    with pytest.raises(ValueError, match="threshold"):
+        SubtaskSpec(feature_index=0, threshold=float("inf"))
+    with pytest.raises(ValueError, match="threshold"):
+        SubtaskSpec(feature_index=0, threshold=True)  # type: ignore[arg-type]
+
+    # Invalid pseudo_reward_scale
+    with pytest.raises(ValueError, match="pseudo_reward_scale"):
+        SubtaskSpec(feature_index=0, pseudo_reward_scale=0.0)
+    with pytest.raises(ValueError, match="pseudo_reward_scale"):
+        SubtaskSpec(feature_index=0, pseudo_reward_scale=-2.0)
+    with pytest.raises(ValueError, match="pseudo_reward_scale"):
+        SubtaskSpec(feature_index=0, pseudo_reward_scale=float("nan"))
+    with pytest.raises(ValueError, match="pseudo_reward_scale"):
+        SubtaskSpec(feature_index=0, pseudo_reward_scale=float("inf"))
+    with pytest.raises(ValueError, match="pseudo_reward_scale"):
+        SubtaskSpec(feature_index=0, pseudo_reward_scale=False)  # type: ignore[arg-type]
+
+    # Invalid max_option_steps
+    with pytest.raises(ValueError, match="max_option_steps"):
+        SubtaskSpec(feature_index=0, max_option_steps=0)
+    with pytest.raises(ValueError, match="max_option_steps"):
+        SubtaskSpec(feature_index=0, max_option_steps=True)  # type: ignore[arg-type]
+

@@ -81,11 +81,31 @@ class SubtaskSpec:
 
     def __post_init__(self) -> None:
         """Validate subtask specification."""
-        if self.feature_index < 0:
+        if (
+            isinstance(self.feature_index, bool)
+            or not isinstance(self.feature_index, int)
+            or self.feature_index < 0
+        ):
             raise ValueError("feature_index must be non-negative")
-        if self.threshold <= 0.0:
+        if (
+            isinstance(self.threshold, bool)
+            or not isinstance(self.threshold, (int, float))
+            or not math.isfinite(self.threshold)
+            or self.threshold <= 0.0
+        ):
             raise ValueError("threshold must be positive")
-        if self.max_option_steps < 1:
+        if (
+            isinstance(self.pseudo_reward_scale, bool)
+            or not isinstance(self.pseudo_reward_scale, (int, float))
+            or not math.isfinite(self.pseudo_reward_scale)
+            or self.pseudo_reward_scale <= 0.0
+        ):
+            raise ValueError("pseudo_reward_scale must be positive")
+        if (
+            isinstance(self.max_option_steps, bool)
+            or not isinstance(self.max_option_steps, int)
+            or self.max_option_steps < 1
+        ):
             raise ValueError("max_option_steps must be at least 1")
 
 
