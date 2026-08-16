@@ -458,3 +458,60 @@ def test_trainable_encoder_config_validation_fails_closed(
     )
     with pytest.raises(ValueError):
         LatentWorldModel(config)
+
+
+def test_latent_world_model_config_finiteness() -> None:
+    # Valid config
+    cfg = LatentWorldModelConfig(observation_dim=2, n_actions=2)
+    model = LatentWorldModel(cfg)
+    assert model.config.observation_dim == 2
+
+    # Non-finite scalars
+    with pytest.raises(ValueError, match="min_latent_std"):
+        LatentWorldModel(
+            LatentWorldModelConfig(observation_dim=2, n_actions=2, min_latent_std=float("nan"))
+        )
+    with pytest.raises(ValueError, match="min_latent_std"):
+        LatentWorldModel(
+            LatentWorldModelConfig(observation_dim=2, n_actions=2, min_latent_std=float("inf"))
+        )
+    with pytest.raises(ValueError, match="max_latent_delta"):
+        LatentWorldModel(
+            LatentWorldModelConfig(observation_dim=2, n_actions=2, max_latent_delta=float("nan"))
+        )
+    with pytest.raises(ValueError, match="encoder_step_size"):
+        LatentWorldModel(
+            LatentWorldModelConfig(observation_dim=2, n_actions=2, encoder_step_size=float("nan"))
+        )
+    with pytest.raises(ValueError, match="max_encoder_update"):
+        LatentWorldModel(
+            LatentWorldModelConfig(observation_dim=2, n_actions=2, max_encoder_update=float("nan"))
+        )
+    with pytest.raises(ValueError, match="encoder_scale"):
+        LatentWorldModel(
+            LatentWorldModelConfig(observation_dim=2, n_actions=2, encoder_scale=float("nan"))
+        )
+
+
+def test_latent_world_model_rejects_out_of_range_discount() -> None:
+    cfg = LatentWorldModelConfig(observation_dim=2, n_actions=2)
+    model = LatentWorldModel(cfg)
+    state = model.init(jr.key(0))
+
+    obs = jnp.array([0.0, 1.0], dtype=jnp.float32)
+    action = jnp.int32(0)
+    reward = jnp.float32(1.0)
+    next_obs = jnp.array([0.5, 0.5], dtype=jnp.float32)
+
+    # Valid discount in [0, 1]
+    res_valid = model.update(state, obs, action, reward, jnp.float32(0.9), next_obs)
+    assert bool(res_valid.update_applied)
+
+    # Discount > 1.0 must not apply
+    res_high = model.update(state, obs, action, reward, jnp.float32(5.0), next_obs)
+    assert not bool(res_high.update_applied)
+
+    # Negative discount must not apply
+    res_neg = model.update(state, obs, action, reward, jnp.float32(-1.0), next_obs)
+    assert not bool(res_neg.update_applied)
+

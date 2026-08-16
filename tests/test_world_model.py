@@ -6,6 +6,7 @@ import chex
 import jax
 import jax.numpy as jnp
 import jax.random as jr
+import pytest
 
 from alberta_framework.core.world_model import (
     OneStepWorldModel,
@@ -173,3 +174,87 @@ def test_world_model_learns_action_conditional_deterministic_transition() -> Non
     assert float(last_mse) < float(first_mse)
     assert float(pred_a1.reward - pred_a0.reward) > 0.25
     assert float(pred_a1.next_observation[0] - pred_a0.next_observation[0]) > 0.5
+
+
+def test_action_conditioned_world_model_config_finiteness() -> None:
+    from alberta_framework.core.world_model import (
+        ActionConditionedWorldModel,
+        ActionConditionedWorldModelConfig,
+    )
+
+    # Valid config constructs
+    cfg = ActionConditionedWorldModelConfig(observation_dim=2, n_actions=2)
+    model = ActionConditionedWorldModel(cfg)
+    assert model.config.observation_dim == 2
+
+    # Non-finite / invalid scalars
+    with pytest.raises(ValueError, match="observation_clip_margin"):
+        ActionConditionedWorldModel(
+            ActionConditionedWorldModelConfig(
+                observation_dim=2, n_actions=2, observation_clip_margin=float("nan")
+            )
+        )
+    with pytest.raises(ValueError, match="max_delta_scale"):
+        ActionConditionedWorldModel(
+            ActionConditionedWorldModelConfig(
+                observation_dim=2, n_actions=2, max_delta_scale=float("nan")
+            )
+        )
+    with pytest.raises(ValueError, match="max_delta_scale"):
+        ActionConditionedWorldModel(
+            ActionConditionedWorldModelConfig(
+                observation_dim=2, n_actions=2, max_delta_scale=float("inf")
+            )
+        )
+    with pytest.raises(ValueError, match="reward_scale"):
+        ActionConditionedWorldModel(
+            ActionConditionedWorldModelConfig(
+                observation_dim=2, n_actions=2, reward_scale=float("nan")
+            )
+        )
+    with pytest.raises(ValueError, match="reward_scale"):
+        ActionConditionedWorldModel(
+            ActionConditionedWorldModelConfig(
+                observation_dim=2, n_actions=2, reward_scale=float("inf")
+            )
+        )
+    with pytest.raises(ValueError, match="observation_scale"):
+        ActionConditionedWorldModel(
+            ActionConditionedWorldModelConfig(
+                observation_dim=2, n_actions=2, observation_scale=(float("nan"), 1.0)
+            )
+        )
+    with pytest.raises(ValueError, match="gamma"):
+        ActionConditionedWorldModel(
+            ActionConditionedWorldModelConfig(observation_dim=2, n_actions=2, gamma=float("nan"))
+        )
+
+
+def test_action_conditioned_world_model_rejects_out_of_range_discount() -> None:
+    from alberta_framework.core.world_model import (
+        ActionConditionedWorldModel,
+        ActionConditionedWorldModelConfig,
+    )
+
+    cfg = ActionConditionedWorldModelConfig(observation_dim=2, n_actions=2)
+    model = ActionConditionedWorldModel(cfg)
+    state = model.init(jr.key(0))
+
+    obs = jnp.array([0.0, 1.0], dtype=jnp.float32)
+    action = jnp.int32(0)
+    reward = jnp.float32(1.0)
+    next_obs = jnp.array([0.5, 0.5], dtype=jnp.float32)
+
+    # Valid discount in [0, 1]
+    res_valid = model.update(state, obs, action, reward, jnp.float32(0.9), next_obs)
+    assert bool(res_valid.update_applied)
+
+    # Discount > 1.0 must not apply
+    res_high = model.update(state, obs, action, reward, jnp.float32(5.0), next_obs)
+    assert not bool(res_high.update_applied)
+
+    # Negative discount must not apply
+    res_neg = model.update(state, obs, action, reward, jnp.float32(-1.0), next_obs)
+    assert not bool(res_neg.update_applied)
+
+

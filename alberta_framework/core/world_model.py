@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import dataclasses
 import functools
+import math
 from typing import Any, cast
 
 import chex
@@ -557,6 +558,7 @@ class ActionConditionedWorldModel:
             & action_valid
             & jnp.all(jnp.isfinite(reward_arr))
             & jnp.all(jnp.isfinite(discount_arr))
+            & jnp.all((discount_arr >= 0.0) & (discount_arr <= 1.0))
             & jnp.all(jnp.isfinite(next_obs))
         )
         safe_obs = jnp.where(inputs_valid, obs, jnp.zeros_like(obs))
@@ -654,29 +656,73 @@ class ActionConditionedWorldModel:
         )
 
     def _validate_config(self, config: ActionConditionedWorldModelConfig) -> None:
-        if config.observation_dim <= 0:
+        if (
+            isinstance(config.observation_dim, bool)
+            or not isinstance(config.observation_dim, int)
+            or config.observation_dim <= 0
+        ):
             raise ValueError("observation_dim must be positive")
-        if config.n_actions <= 0:
+        if (
+            isinstance(config.n_actions, bool)
+            or not isinstance(config.n_actions, int)
+            or config.n_actions <= 0
+        ):
             raise ValueError("n_actions must be positive")
-        if not 0.0 <= config.gamma <= 1.0:
-            raise ValueError("gamma must be in [0, 1]")
+        if not math.isfinite(config.gamma) or not 0.0 <= config.gamma <= 1.0:
+            raise ValueError("gamma must be finite and in [0, 1]")
         if config.observation_scale is not None:
             if len(config.observation_scale) != config.observation_dim:
                 raise ValueError("observation_scale length must equal observation_dim")
-            if any(scale <= 0.0 for scale in config.observation_scale):
-                raise ValueError("observation_scale values must be positive")
-        if config.reward_scale <= 0.0:
-            raise ValueError("reward_scale must be positive")
-        if any(size <= 0 for size in config.hidden_sizes):
+            if any(
+                isinstance(scale, bool)
+                or not isinstance(scale, (int, float))
+                or not math.isfinite(scale)
+                or scale <= 0.0
+                for scale in config.observation_scale
+            ):
+                raise ValueError("observation_scale values must be positive and finite")
+        if (
+            isinstance(config.reward_scale, bool)
+            or not isinstance(config.reward_scale, (int, float))
+            or not math.isfinite(config.reward_scale)
+            or config.reward_scale <= 0.0
+        ):
+            raise ValueError("reward_scale must be positive and finite")
+        if any(
+            isinstance(size, bool)
+            or not isinstance(size, int)
+            or size <= 0
+            for size in config.hidden_sizes
+        ):
             raise ValueError("hidden_sizes must contain only positive widths")
-        if not 0.0 <= config.utility_decay < 1.0:
-            raise ValueError("utility_decay must be in [0, 1)")
-        if not 0.0 <= config.error_decay < 1.0:
-            raise ValueError("error_decay must be in [0, 1)")
-        if config.observation_clip_margin < 0.0:
-            raise ValueError("observation_clip_margin must be non-negative")
-        if config.max_delta_scale <= 0.0:
-            raise ValueError("max_delta_scale must be positive")
+        if (
+            isinstance(config.utility_decay, bool)
+            or not isinstance(config.utility_decay, (int, float))
+            or not math.isfinite(config.utility_decay)
+            or not 0.0 <= config.utility_decay < 1.0
+        ):
+            raise ValueError("utility_decay must be finite and in [0, 1)")
+        if (
+            isinstance(config.error_decay, bool)
+            or not isinstance(config.error_decay, (int, float))
+            or not math.isfinite(config.error_decay)
+            or not 0.0 <= config.error_decay < 1.0
+        ):
+            raise ValueError("error_decay must be finite and in [0, 1)")
+        if (
+            isinstance(config.observation_clip_margin, bool)
+            or not isinstance(config.observation_clip_margin, (int, float))
+            or not math.isfinite(config.observation_clip_margin)
+            or config.observation_clip_margin < 0.0
+        ):
+            raise ValueError("observation_clip_margin must be non-negative and finite")
+        if (
+            isinstance(config.max_delta_scale, bool)
+            or not isinstance(config.max_delta_scale, (int, float))
+            or not math.isfinite(config.max_delta_scale)
+            or config.max_delta_scale <= 0.0
+        ):
+            raise ValueError("max_delta_scale must be positive and finite")
 
 
 def run_action_conditioned_world_model_learning_loop(
