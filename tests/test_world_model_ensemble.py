@@ -86,9 +86,7 @@ def _config(
 
 
 def _event(index: int = 0) -> tuple[jax.Array, ...]:
-    observation = jnp.asarray(
-        [0.1 + 0.02 * index, -0.2 + 0.01 * index], dtype=jnp.float32
-    )
+    observation = jnp.asarray([0.1 + 0.02 * index, -0.2 + 0.01 * index], dtype=jnp.float32)
     action = jnp.asarray(index % 2, dtype=jnp.int32)
     reward = jnp.asarray(0.3 - 0.01 * index, dtype=jnp.float32)
     discount = jnp.asarray(0.9, dtype=jnp.float32)
@@ -189,8 +187,7 @@ def test_init_uses_distinct_member_keys_and_isolated_real_replay_mask_keys() -> 
     assert len(state.member_states) == 3
 
     member_weights = [
-        state.member_states[index].learner_state.head_params.weights[0]
-        for index in range(3)
+        state.member_states[index].learner_state.head_params.weights[0] for index in range(3)
     ]
     assert not bool(jnp.array_equal(member_weights[0], member_weights[1]))
     assert not bool(jnp.array_equal(member_weights[1], member_weights[2]))
@@ -203,9 +200,7 @@ def test_init_uses_distinct_member_keys_and_isolated_real_replay_mask_keys() -> 
     )
     assert not bool(jnp.array_equal(state.bootstrap_key, state.replay_bootstrap_key))
     chex.assert_trees_all_equal(state.last_bootstrap_mask, jnp.zeros(3, dtype=jnp.bool_))
-    chex.assert_trees_all_equal(
-        state.last_replay_bootstrap_mask, jnp.zeros(3, dtype=jnp.bool_)
-    )
+    chex.assert_trees_all_equal(state.last_replay_bootstrap_mask, jnp.zeros(3, dtype=jnp.bool_))
 
 
 def test_predict_is_read_only_and_fail_closed() -> None:
@@ -274,9 +269,7 @@ def test_update_reports_exact_preupdate_prediction_loss_and_targets() -> None:
 
 
 def test_replay_update_changes_only_model_and_replay_accounting() -> None:
-    ensemble = WorldModelEnsemble(
-        _config(bootstrap_probability=0.999)
-    )
+    ensemble = WorldModelEnsemble(_config(bootstrap_probability=0.999))
     real = ensemble.update(ensemble.init(jr.key(71)), *_event(0))
     assert bool(real.diagnostics.applied)
     state = real.state
@@ -407,9 +400,7 @@ def test_representation_gradient_matches_frozen_target_autodiff_and_difference()
                 for member in state.member_states
             ]
         )
-        return 0.5 * jnp.mean(
-            jnp.square(raw_predictions - frozen_target[None, :])
-        )
+        return 0.5 * jnp.mean(jnp.square(raw_predictions - frozen_target[None, :]))
 
     expected_objective, expected_gradient = jax.value_and_grad(objective)(observation)
     result = ensemble.update(state, *_event(2))
@@ -428,8 +419,7 @@ def test_representation_gradient_matches_frozen_target_autodiff_and_difference()
     for index in range(observation.shape[0]):
         basis = jnp.zeros_like(observation).at[index].set(epsilon)
         finite_difference.append(
-            (objective(observation + basis) - objective(observation - basis))
-            / (2.0 * epsilon)
+            (objective(observation + basis) - objective(observation - basis)) / (2.0 * epsilon)
         )
     chex.assert_trees_all_close(
         result.representation_gradient,
@@ -511,9 +501,7 @@ def test_residual_proxy_updates_only_after_signal_observation() -> None:
 
 
 def test_residual_proxy_readiness_obeys_configured_warmup() -> None:
-    ensemble = WorldModelEnsemble(
-        _config(residual_variance_warmup_steps=2)
-    )
+    ensemble = WorldModelEnsemble(_config(residual_variance_warmup_steps=2))
     state = ensemble.init(jr.key(43))
 
     first = ensemble.update(state, *_event(0))
@@ -573,9 +561,7 @@ def test_invalid_dynamic_input_is_an_exact_atomic_noop(
 def test_corrupt_dynamic_state_is_an_exact_atomic_noop() -> None:
     ensemble = WorldModelEnsemble(_config())
     state = ensemble.init(jr.key(2))
-    corrupt = state.replace(
-        residual_variances=state.residual_variances.at[0, 0].set(jnp.nan)
-    )
+    corrupt = state.replace(residual_variances=state.residual_variances.at[0, 0].set(jnp.nan))
     result = ensemble.update(corrupt, *_event())
     assert not bool(result.diagnostics.state_valid)
     assert not bool(result.diagnostics.applied)
@@ -595,9 +581,7 @@ def test_corrupt_dynamic_member_state_is_an_exact_atomic_noop() -> None:
     )
     corrupt_learner = member.learner_state.replace(head_params=corrupt_head_params)
     corrupt_member = member.replace(learner_state=corrupt_learner)
-    corrupt = state.replace(
-        member_states=(corrupt_member, *state.member_states[1:])
-    )
+    corrupt = state.replace(member_states=(corrupt_member, *state.member_states[1:]))
 
     result = ensemble.update(corrupt, *_event())
     assert not bool(result.diagnostics.state_valid)
@@ -665,9 +649,7 @@ def test_static_shape_and_dtype_drift_raise_before_execution() -> None:
 def test_member_static_shape_corruption_raises_before_execution() -> None:
     ensemble = WorldModelEnsemble(_config())
     state = ensemble.init(jr.key(53))
-    member = state.member_states[0].replace(
-        observation_min=jnp.zeros((1, 2), dtype=jnp.float32)
-    )
+    member = state.member_states[0].replace(observation_min=jnp.zeros((1, 2), dtype=jnp.float32))
     corrupt = state.replace(member_states=(member, *state.member_states[1:]))
     with pytest.raises(ValueError, match=r"member_states\[0\].*shape"):
         ensemble.update(corrupt, *_event())
@@ -751,3 +733,52 @@ def test_checkpoint_rejects_invalid_state(tmp_path: Path) -> None:
             corrupt,
             tmp_path / "invalid",
         )
+
+
+def test_world_model_ensemble_config_integer_and_scalar_validation() -> None:
+    model_cfg = ActionConditionedWorldModelConfig(observation_dim=2, n_actions=2, hidden_sizes=())
+    sig_cfg = LearningSignalEstimatorConfig(ensemble_size=3, target_dim=4)
+
+    with pytest.raises(ValueError, match="ensemble_size"):
+        WorldModelEnsembleConfig(
+            model=model_cfg,
+            signal_estimator=sig_cfg,
+            ensemble_size=True,  # type: ignore[arg-type]
+        )
+    with pytest.raises(ValueError, match="ensemble_size"):
+        WorldModelEnsembleConfig(
+            model=model_cfg,
+            signal_estimator=sig_cfg,
+            ensemble_size=3.5,  # type: ignore[arg-type]
+        )
+    with pytest.raises(ValueError, match="residual_variance_warmup_steps"):
+        WorldModelEnsembleConfig(
+            model=model_cfg,
+            signal_estimator=sig_cfg,
+            ensemble_size=3,
+            residual_variance_warmup_steps=True,  # type: ignore[arg-type]
+        )
+    with pytest.raises(ValueError, match="bootstrap_probability"):
+        WorldModelEnsembleConfig(
+            model=model_cfg,
+            signal_estimator=sig_cfg,
+            ensemble_size=3,
+            bootstrap_probability=1.5,
+        )
+
+    cfg = WorldModelEnsembleConfig(
+        model=model_cfg,
+        signal_estimator=sig_cfg,
+        ensemble_size=np.int32(3),
+        residual_variance_warmup_steps=np.int64(2),
+        bootstrap_probability=np.float32(0.8),
+        residual_variance_decay=np.float32(0.95),
+        residual_variance_floor=np.float32(1e-5),
+    )
+    assert type(cfg.ensemble_size) is int
+    assert type(cfg.residual_variance_warmup_steps) is int
+    assert type(cfg.bootstrap_probability) is float
+    assert type(cfg.residual_variance_decay) is float
+    assert type(cfg.residual_variance_floor) is float
+    assert cfg.ensemble_size == 3
+    assert cfg.residual_variance_warmup_steps == 2

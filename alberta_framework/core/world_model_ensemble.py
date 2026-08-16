@@ -39,17 +39,19 @@ import dataclasses
 import functools
 import hashlib
 import json
-import math
+import operator
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, SupportsIndex, cast
 
 import chex
 import jax
 import jax.numpy as jnp
 import jax.random as jr
+import numpy as np
 from jax import Array
 from jaxtyping import Bool, Float, Int
 
+from alberta_framework.core._float32_scalars import validated_float32_scalar
 from alberta_framework.core.checkpoints import (
     load_checkpoint,
     load_checkpoint_metadata,
@@ -71,6 +73,32 @@ from alberta_framework.core.world_model import (
 WORLD_MODEL_ENSEMBLE_CHECKPOINT_SCHEMA = "alberta.world_model_ensemble.v2"
 _WORLD_MODEL_ENSEMBLE_CHECKPOINT_SCHEMA_V1 = "alberta.world_model_ensemble.v1"
 _INT32_MAX = 2**31 - 1
+_ACTUAL_INT_TYPES = frozenset(
+    {
+        int,
+        np.int8,
+        np.int16,
+        np.int32,
+        np.int64,
+        np.uint8,
+        np.uint16,
+        np.uint32,
+        np.uint64,
+        np.longlong,
+        np.ulonglong,
+    }
+)
+
+
+def _require_int32(name: str, value: object, *, minimum: int, maximum: int = _INT32_MAX) -> int:
+    if type(value) not in _ACTUAL_INT_TYPES:
+        raise ValueError(f"{name} must be an integer in [{minimum}, {maximum}]")
+    canonical = operator.index(cast(SupportsIndex, value))
+    if not minimum <= canonical <= maximum:
+        raise ValueError(f"{name} must be an integer in [{minimum}, {maximum}]")
+    return canonical
+
+
 _REPLAY_KEY_FOLD_IN = 0x5245504C
 _V1_REPLAY_KEY_FOLD_IN = 0x50525632
 
@@ -127,39 +155,48 @@ class WorldModelEnsembleConfig:
     residual_variance_floor: float = 1.0e-6
 
     def __post_init__(self) -> None:
-        if (
-            isinstance(self.ensemble_size, bool)
-            or not isinstance(self.ensemble_size, int)
-            or self.ensemble_size < 2
-        ):
-            raise ValueError("ensemble_size must be an integer >= 2")
-        if (
-            not math.isfinite(self.bootstrap_probability)
-            or not 0.0 < self.bootstrap_probability < 1.0
-        ):
-            raise ValueError("bootstrap_probability must be finite and in (0, 1)")
-        if (
-            not math.isfinite(self.residual_variance_decay)
-            or not 0.0 <= self.residual_variance_decay < 1.0
-        ):
-            raise ValueError("residual_variance_decay must be finite and in [0, 1)")
-        if (
-            isinstance(self.residual_variance_warmup_steps, bool)
-            or not isinstance(self.residual_variance_warmup_steps, int)
-            or not 1 <= self.residual_variance_warmup_steps <= _INT32_MAX
-        ):
-            raise ValueError("residual_variance_warmup_steps must be an integer in [1, int32 max]")
-        if not math.isfinite(self.residual_variance_floor) or self.residual_variance_floor <= 0.0:
-            raise ValueError("residual_variance_floor must be positive and finite")
-        if self.signal_estimator.ensemble_size != self.ensemble_size:
+        ensemble_size = _require_int32("ensemble_size", self.ensemble_size, minimum=2)
+        residual_variance_warmup_steps = _require_int32(
+            "residual_variance_warmup_steps",
+            self.residual_variance_warmup_steps,
+            minimum=1,
+            maximum=_INT32_MAX,
+        )
+        bootstrap_probability = validated_float32_scalar(
+            "bootstrap_probability",
+            self.bootstrap_probability,
+            positive=True,
+            upper=1.0,
+            upper_inclusive=False,
+        )
+        residual_variance_decay = validated_float32_scalar(
+            "residual_variance_decay",
+            self.residual_variance_decay,
+            lower=0.0,
+            upper=1.0,
+            upper_inclusive=False,
+        )
+        residual_variance_floor = validated_float32_scalar(
+            "residual_variance_floor",
+            self.residual_variance_floor,
+            positive=True,
+        )
+
+        if self.signal_estimator.ensemble_size != ensemble_size:
             raise ValueError("signal_estimator.ensemble_size must match ensemble_size")
         expected_target_dim = self.model.observation_dim + 2
         if self.signal_estimator.target_dim != expected_target_dim:
             raise ValueError("signal_estimator.target_dim must equal model.observation_dim + 2")
-        if self.residual_variance_floor < self.signal_estimator.variance_floor:
+        if residual_variance_floor < self.signal_estimator.variance_floor:
             raise ValueError("residual_variance_floor must be >= signal_estimator.variance_floor")
-        if self.residual_variance_floor > self.signal_estimator.max_predicted_variance:
+        if residual_variance_floor > self.signal_estimator.max_predicted_variance:
             raise ValueError("residual_variance_floor exceeds the signal estimator variance bound")
+
+        object.__setattr__(self, "ensemble_size", ensemble_size)
+        object.__setattr__(self, "residual_variance_warmup_steps", residual_variance_warmup_steps)
+        object.__setattr__(self, "bootstrap_probability", bootstrap_probability)
+        object.__setattr__(self, "residual_variance_decay", residual_variance_decay)
+        object.__setattr__(self, "residual_variance_floor", residual_variance_floor)
 
         # Reuse the model's complete constructor validation rather than
         # maintaining a second, drifting copy here.
@@ -721,15 +758,11 @@ class WorldModelEnsemble:
             prediction_output_logical_bytes=prediction.logical_bytes,
             update_result_output_logical_scalars=update_result.logical_scalars,
             update_result_output_logical_bytes=update_result.logical_bytes,
-            replay_update_result_output_logical_scalars=(
-                replay_update_result.logical_scalars
-            ),
+            replay_update_result_output_logical_scalars=(replay_update_result.logical_scalars),
             replay_update_result_output_logical_bytes=replay_update_result.logical_bytes,
             member_update_candidates_per_valid_event=self._config.ensemble_size,
             max_member_updates_per_event=self._config.ensemble_size,
-            replay_member_update_candidates_per_available_sample=(
-                self._config.ensemble_size
-            ),
+            replay_member_update_candidates_per_available_sample=(self._config.ensemble_size),
             max_replay_member_updates_per_available_sample=self._config.ensemble_size,
             max_event_count=_INT32_MAX,
             max_member_update_count=_INT32_MAX,
@@ -856,10 +889,7 @@ class WorldModelEnsemble:
             member_valid.append(self._member_state_valid(member_state))
             member_counts_match.append(
                 member_state.step_count
-                == (
-                    state.member_update_counts[index]
-                    + state.replay_member_update_counts[index]
-                )
+                == (state.member_update_counts[index] + state.replay_member_update_counts[index])
             )
         signal_cfg = self._config.signal_estimator
         signal_state = state.signal_state
@@ -881,8 +911,7 @@ class WorldModelEnsemble:
             & jnp.all(state.replay_member_update_counts <= state.replay_event_count)
             & jnp.all(
                 state.member_update_counts
-                <= jnp.asarray(_INT32_MAX, dtype=jnp.int32)
-                - state.replay_member_update_counts
+                <= jnp.asarray(_INT32_MAX, dtype=jnp.int32) - state.replay_member_update_counts
             )
             & jnp.all(jnp.stack(member_valid))
             & jnp.all(jnp.stack(member_counts_match))
@@ -1112,13 +1141,9 @@ class WorldModelEnsemble:
             prediction=self._zero_prediction(),
             targets=jnp.zeros((self._config.target_dim,), dtype=jnp.float32),
             observed_loss=jnp.asarray(0.0, dtype=jnp.float32),
-            member_prediction_losses=jnp.zeros(
-                (self._config.ensemble_size,), dtype=jnp.float32
-            ),
+            member_prediction_losses=jnp.zeros((self._config.ensemble_size,), dtype=jnp.float32),
             bootstrap_mask=jnp.zeros((self._config.ensemble_size,), dtype=jnp.bool_),
-            member_updates_applied=jnp.zeros(
-                (self._config.ensemble_size,), dtype=jnp.bool_
-            ),
+            member_updates_applied=jnp.zeros((self._config.ensemble_size,), dtype=jnp.bool_),
             diagnostics=diagnostics,
         )
 
@@ -1222,9 +1247,7 @@ class WorldModelEnsemble:
                 candidate_members.append(candidate)
                 candidate_members_valid.append(self._member_state_valid(candidate))
 
-            replay_counts = (
-                state.replay_member_update_counts + bootstrap_mask.astype(jnp.int32)
-            )
+            replay_counts = state.replay_member_update_counts + bootstrap_mask.astype(jnp.int32)
             total_counts = state.member_update_counts + replay_counts
             member_updates_valid = (
                 jnp.all(jnp.stack(candidate_members_valid))
@@ -1448,8 +1471,7 @@ class WorldModelEnsemble:
                 & jnp.all(member_update_counts >= state.member_update_counts)
                 & jnp.all(
                     member_update_counts
-                    <= jnp.asarray(_INT32_MAX, dtype=jnp.int32)
-                    - state.replay_member_update_counts
+                    <= jnp.asarray(_INT32_MAX, dtype=jnp.int32) - state.replay_member_update_counts
                 )
                 & jnp.all(
                     jnp.stack(
