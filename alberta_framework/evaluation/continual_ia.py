@@ -23,10 +23,11 @@ feature discovery, or completion of the Alberta Plan.
 from __future__ import annotations
 
 import functools
+import operator
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from time import perf_counter
-from typing import Literal, cast
+from typing import Literal, SupportsIndex, cast
 
 import jax
 import jax.numpy as jnp
@@ -82,6 +83,31 @@ RECOMMENDATION_CONDITIONS: tuple[IAConditionName, ...] = (
     "recommendation_p05",
     "accept_always",
 )
+_INT32_MAX = 2**31 - 1
+_ACTUAL_INT_TYPES = frozenset(
+    {
+        int,
+        np.int8,
+        np.int16,
+        np.int32,
+        np.int64,
+        np.uint8,
+        np.uint16,
+        np.uint32,
+        np.uint64,
+        np.longlong,
+        np.ulonglong,
+    }
+)
+
+
+def _require_int32(name: str, value: object, *, minimum: int, maximum: int = _INT32_MAX) -> int:
+    if type(value) not in _ACTUAL_INT_TYPES:
+        raise ValueError(f"{name} must be an integer in [{minimum}, {maximum}]")
+    canonical = operator.index(cast(SupportsIndex, value))
+    if not minimum <= canonical <= maximum:
+        raise ValueError(f"{name} must be an integer in [{minimum}, {maximum}]")
+    return canonical
 
 
 @dataclass(frozen=True)
@@ -105,28 +131,44 @@ class ContinualIAConfig:
     bootstrap_seed: int = 2_026_073_012
 
     def __post_init__(self) -> None:
-        if self.num_steps < 1 or self.phase_length < 1:
-            raise ValueError("num_steps and phase_length must be positive")
-        if self.num_steps % self.phase_length != 0:
+        num_steps = _require_int32("num_steps", self.num_steps, minimum=1)
+        phase_length = _require_int32(
+            "phase_length", self.phase_length, minimum=1, maximum=num_steps
+        )
+        if num_steps % phase_length != 0:
             raise ValueError("num_steps must be divisible by phase_length")
-        if self.observation_dim != 2 or self.n_actions != 2:
-            raise ValueError("the frozen protocol requires two observations/actions")
-        if self.n_demons < 1:
-            raise ValueError("n_demons must be positive")
+        observation_dim = _require_int32(
+            "observation_dim", self.observation_dim, minimum=2, maximum=2
+        )
+        n_actions = _require_int32("n_actions", self.n_actions, minimum=2, maximum=2)
+        n_demons = _require_int32("n_demons", self.n_demons, minimum=1)
+        recovery_window = _require_int32(
+            "recovery_window", self.recovery_window, minimum=1, maximum=phase_length
+        )
+        bootstrap_resamples = _require_int32(
+            "bootstrap_resamples", self.bootstrap_resamples, minimum=1000
+        )
+        bootstrap_seed = _require_int32(
+            "bootstrap_seed", self.bootstrap_seed, minimum=0, maximum=2**32 - 1
+        )
+
+        object.__setattr__(self, "num_steps", num_steps)
+        object.__setattr__(self, "phase_length", phase_length)
+        object.__setattr__(self, "observation_dim", observation_dim)
+        object.__setattr__(self, "n_actions", n_actions)
+        object.__setattr__(self, "n_demons", n_demons)
+        object.__setattr__(self, "recovery_window", recovery_window)
+        object.__setattr__(self, "bootstrap_resamples", bootstrap_resamples)
+        object.__setattr__(self, "bootstrap_seed", bootstrap_seed)
+
         if not 0.0 <= self.partner_epsilon <= 1.0:
             raise ValueError("partner_epsilon must lie in [0, 1]")
         if not 0.0 <= self.recommendation_acceptance_probability <= 1.0:
             raise ValueError("acceptance probability must lie in [0, 1]")
-        if not 1 <= self.recovery_window <= self.phase_length:
-            raise ValueError("recovery_window must lie in [1, phase_length]")
         if not 0.0 <= self.recovery_mean_reward_threshold <= 1.0:
             raise ValueError("recovery threshold must lie in [0, 1]")
-        if self.bootstrap_resamples < 1_000:
-            raise ValueError("bootstrap_resamples must be at least 1000")
         if not 0.0 < self.confidence_level < 1.0:
             raise ValueError("confidence_level must lie in (0, 1)")
-        if not 0 <= self.bootstrap_seed < 2**32:
-            raise ValueError("bootstrap_seed must lie in [0, 2**32)")
 
     @property
     def n_phases(self) -> int:
@@ -147,8 +189,23 @@ class IAAcceptanceThresholds:
     maximum_executed_action_credit_mismatches: int = 0
 
     def __post_init__(self) -> None:
-        if self.minimum_seed_count < 1 or self.evidence_seed_start < 0:
-            raise ValueError("seed count/start must be positive/non-negative")
+        minimum_seed_count = _require_int32(
+            "minimum_seed_count", self.minimum_seed_count, minimum=1
+        )
+        evidence_seed_start = _require_int32(
+            "evidence_seed_start", self.evidence_seed_start, minimum=0
+        )
+        maximum_mismatches = _require_int32(
+            "maximum_executed_action_credit_mismatches",
+            self.maximum_executed_action_credit_mismatches,
+            minimum=0,
+            maximum=0,
+        )
+
+        object.__setattr__(self, "minimum_seed_count", minimum_seed_count)
+        object.__setattr__(self, "evidence_seed_start", evidence_seed_start)
+        object.__setattr__(self, "maximum_executed_action_credit_mismatches", maximum_mismatches)
+
         minimums = (
             self.minimum_primary_uplift_lower_ci,
             self.minimum_changed_action_intervention_rate,
@@ -157,8 +214,6 @@ class IAAcceptanceThresholds:
         )
         if not all(np.isfinite(value) for value in minimums):
             raise ValueError("acceptance thresholds must be finite")
-        if self.maximum_executed_action_credit_mismatches < 0:
-            raise ValueError("credit mismatch threshold must be non-negative")
 
 
 @dataclass(frozen=True)

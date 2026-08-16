@@ -159,9 +159,7 @@ def test_frozen_primary_result_is_a_valid_intervention_rate_rejection(
     assert interval.estimate == pytest.approx(0.26702777777777775)
     assert interval.lower == pytest.approx(0.2550548611111111)
     assert interval.upper == pytest.approx(0.2783888888888889)
-    assert aggregate.mean_changed_action_intervention_rate == pytest.approx(
-        0.08727777777777779
-    )
+    assert aggregate.mean_changed_action_intervention_rate == pytest.approx(0.08727777777777779)
     assert aggregate.total_action_changing_interventions == 3_142
     assert aggregate.primary_state_budget_matched
     assert aggregate.primary_interaction_budget_matched
@@ -543,3 +541,50 @@ def test_cli_rejects_an_injected_non_promoted_schedule_without_writing(
     assert emitted["valid"] is False
     assert emitted["accepted"] is False
     assert not path.exists()
+
+
+def test_continual_ia_config_rejects_booleans_and_non_integers() -> None:
+    with pytest.raises(ValueError, match="num_steps"):
+        ContinualIAConfig(num_steps=True)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="num_steps"):
+        ContinualIAConfig(num_steps=1200.5)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="phase_length"):
+        ContinualIAConfig(phase_length=True)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="bootstrap_resamples"):
+        ContinualIAConfig(bootstrap_resamples=1000.5)  # type: ignore[arg-type]
+
+
+def test_continual_ia_config_accepts_and_canonicalizes_numpy_integers() -> None:
+    cfg = ContinualIAConfig(
+        num_steps=np.int32(1_200),
+        phase_length=np.int64(200),
+        observation_dim=np.int32(2),
+        n_actions=np.int32(2),
+        n_demons=np.uint16(2),
+        recovery_window=np.uint8(20),
+        bootstrap_resamples=np.int32(10_000),
+        bootstrap_seed=np.uint32(2_026_073_012),
+    )
+    assert type(cfg.num_steps) is int
+    assert type(cfg.phase_length) is int
+    assert type(cfg.observation_dim) is int
+    assert type(cfg.n_actions) is int
+    assert type(cfg.n_demons) is int
+    assert type(cfg.recovery_window) is int
+    assert type(cfg.bootstrap_resamples) is int
+    assert type(cfg.bootstrap_seed) is int
+    assert cfg.num_steps == 1200
+    assert cfg.phase_length == 200
+
+
+def test_ia_acceptance_thresholds_accepts_and_canonicalizes_numpy_integers() -> None:
+    thresholds = IAAcceptanceThresholds(
+        minimum_seed_count=np.int32(30),
+        evidence_seed_start=np.int64(30),
+        maximum_executed_action_credit_mismatches=np.int32(0),
+    )
+    assert type(thresholds.minimum_seed_count) is int
+    assert type(thresholds.evidence_seed_start) is int
+    assert type(thresholds.maximum_executed_action_credit_mismatches) is int
+    assert thresholds.minimum_seed_count == 30
+    assert thresholds.evidence_seed_start == 30
