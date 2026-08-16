@@ -617,3 +617,131 @@ def test_scan_is_jittable_and_configuration_roundtrips() -> None:
     chex.assert_shape(result.squared_errors, (4,))
     chex.assert_tree_all_finite(result)
     assert int(result.state.step_count) == 4
+
+
+def test_sparse_ftl_config_rejects_booleans_and_non_integers() -> None:
+    with pytest.raises(ValueError, match="observation_dim"):
+        SparseFTLWorldModelConfig(observation_dim=True, action_dim=1)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="action_dim"):
+        SparseFTLWorldModelConfig(observation_dim=1, action_dim=True)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="projection_dim"):
+        SparseFTLWorldModelConfig(observation_dim=1, action_dim=1, projection_dim=True)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="bins"):
+        SparseFTLWorldModelConfig(observation_dim=1, action_dim=1, bins=True)  # type: ignore[arg-type]
+
+    with pytest.raises(ValueError, match="observation_dim"):
+        SparseFTLWorldModelConfig(observation_dim=2.5, action_dim=1)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="action_dim"):
+        SparseFTLWorldModelConfig(observation_dim=1, action_dim=1.5)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="projection_dim"):
+        SparseFTLWorldModelConfig(observation_dim=1, action_dim=1, projection_dim=32.5)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="bins"):
+        SparseFTLWorldModelConfig(observation_dim=1, action_dim=1, bins=7.5)  # type: ignore[arg-type]
+
+    with pytest.raises(ValueError, match="statistics_decay"):
+        SparseFTLWorldModelConfig(observation_dim=1, action_dim=1, statistics_decay=True)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="error_decay"):
+        SparseFTLWorldModelConfig(observation_dim=1, action_dim=1, error_decay=True)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="error_decay"):
+        SparseFTLWorldModelConfig(observation_dim=1, action_dim=1, error_decay=1.0 - 1e-10)
+
+
+def test_sparse_ftl_config_accepts_and_canonicalizes_numpy_integers() -> None:
+    config = SparseFTLWorldModelConfig(
+        observation_dim=np.int32(4),
+        action_dim=np.int64(2),
+        projection_dim=np.uint16(16),
+        bins=np.int8(6),
+    )
+    assert type(config.observation_dim) is int
+    assert type(config.action_dim) is int
+    assert type(config.projection_dim) is int
+    assert type(config.bins) is int
+    assert config.observation_dim == 4
+    assert config.action_dim == 2
+    assert config.projection_dim == 16
+    assert config.bins == 6
+
+
+def test_sparse_ftl_config_rejects_derived_dimensions_outside_int32() -> None:
+    int32_max = 2**31 - 1
+    with pytest.raises(ValueError, match="derived input_dim"):
+        SparseFTLWorldModelConfig(observation_dim=int32_max, action_dim=1)
+    with pytest.raises(ValueError, match="derived feature_dim"):
+        SparseFTLWorldModelConfig(
+            observation_dim=1,
+            action_dim=1,
+            projection_dim=2**30,
+            bins=2,
+        )
+    with pytest.raises(ValueError, match="derived feature_dim"):
+        SparseFTLWorldModelConfig(
+            observation_dim=1,
+            action_dim=1,
+            projection_dim=46_341,
+            bins=46_341,
+        )
+    with pytest.raises(ValueError, match="derived state_nbytes"):
+        SparseFTLWorldModelConfig(
+            observation_dim=1,
+            action_dim=1,
+            projection_dim=11_585,
+            bins=2,
+        )
+
+
+def test_sparse_ftl_config_accepts_largest_state_below_int32_boundary() -> None:
+    config = SparseFTLWorldModelConfig(
+        observation_dim=1,
+        action_dim=1,
+        projection_dim=11_584,
+        bins=2,
+    )
+    model = SparseFTLWorldModel(config)
+    assert config.input_dim == 2
+    assert config.feature_dim == 23_168
+    assert config.active_feature_count == 23_168
+    assert model.state_nbytes == 2_147_302_920
+
+
+@pytest.mark.parametrize("field", ["ridge", "prediction_clip"])
+def test_sparse_ftl_config_normalizes_hostile_ratio_hook_errors(field: str) -> None:
+    class RatioBomb(float):
+        def as_integer_ratio(self) -> tuple[int, int]:
+            raise RuntimeError("hostile ratio hook")
+
+        def __repr__(self) -> str:
+            raise AssertionError("repr hook must not run")
+
+    with pytest.raises(ValueError, match=field):
+        SparseFTLWorldModelConfig(
+            observation_dim=1,
+            action_dim=1,
+            **{field: RatioBomb(0.5)},
+        )
+
+
+def test_zero_error_decay_replaces_infinite_prior_ema_without_nan() -> None:
+    model = SparseFTLWorldModel(
+        SparseFTLWorldModelConfig(
+            observation_dim=1,
+            action_dim=1,
+            projection_dim=2,
+            bins=3,
+            error_decay=0.0,
+        )
+    )
+    state = model.init(jr.key(8)).replace(  # type: ignore[attr-defined]
+        step_count=jnp.array(1, dtype=jnp.int32),
+        prediction_error_ema=jnp.array(jnp.inf, dtype=jnp.float32),
+    )
+
+    result = model.update(
+        state,
+        jnp.array([0.0], dtype=jnp.float32),
+        jnp.array([0.0], dtype=jnp.float32),
+        jnp.array([1.0], dtype=jnp.float32),
+    )
+
+    assert jnp.isfinite(result.squared_error)
+    assert result.state.prediction_error_ema == result.squared_error
