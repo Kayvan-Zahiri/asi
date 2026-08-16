@@ -338,9 +338,7 @@ def test_state_schema_migration_and_byte_accounting_are_strict() -> None:
             jax.Array,
         ):
             without_new_clock += int(value.size) * int(value.dtype.itemsize)
-    assert measured == (
-        without_new_clock + INTERACTION_FEATURE_TRANSACTION_CLOCK_DELTA_NBYTES
-    )
+    assert measured == (without_new_clock + INTERACTION_FEATURE_TRANSACTION_CLOCK_DELTA_NBYTES)
     accounting = learner.memory_accounting(state)
     assert accounting["lifetime_counter_bytes"] == 12
     assert accounting["replacement_phase_bytes"] == 4
@@ -385,3 +383,28 @@ def test_current_checkpoint_resumes_exactly_and_v1_is_rejected_precisely(
     )
     with pytest.raises(ValueError, match="lacks exact step_words.*resave"):
         load_interaction_feature_checkpoint(legacy_path)
+
+
+def test_interaction_learner_rejects_booleans_and_non_integers() -> None:
+    with pytest.raises(ValueError, match="n_features"):
+        FixedBudgetInteractionLearner(n_features=True, n_tasks=1)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="n_features"):
+        FixedBudgetInteractionLearner(n_features=4.5, n_tasks=1)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="n_tasks"):
+        FixedBudgetInteractionLearner(n_features=4, n_tasks=True)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="candidate_count"):
+        FixedBudgetInteractionLearner(n_features=4, n_tasks=1, candidate_count=True)  # type: ignore[arg-type]
+
+
+def test_interaction_learner_accepts_and_canonicalizes_numpy_integers() -> None:
+    learner = FixedBudgetInteractionLearner(
+        n_features=np.int32(4),
+        n_tasks=np.int64(2),
+        candidate_count=np.int32(2),
+        replacement_interval=np.int32(50),
+        min_feature_age=np.int64(20),
+        candidate_min_age=np.int32(10),
+    )
+    assert learner._n_features == 4
+    assert learner._n_tasks == 2
+    assert learner._candidate_count == 2

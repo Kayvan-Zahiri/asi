@@ -19,17 +19,19 @@ References:
 import dataclasses
 import functools
 import math
+import operator
 import struct
 import time
 from collections.abc import Mapping
 from numbers import Real
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, SupportsIndex, cast
 
 import chex
 import jax
 import jax.numpy as jnp
 import jax.random as jr
+import numpy as np
 from jax import Array
 from jaxtyping import Bool, Float, Int, PRNGKeyArray, UInt
 
@@ -47,6 +49,31 @@ from alberta_framework.core.future_utility import one_step_output_loss_reduction
 
 _INT32_MAX = 2**31 - 1
 _UINT32_MAX = 2**32 - 1
+_ACTUAL_INT_TYPES = frozenset(
+    {
+        int,
+        np.int8,
+        np.int16,
+        np.int32,
+        np.int64,
+        np.uint8,
+        np.uint16,
+        np.uint32,
+        np.uint64,
+        np.longlong,
+        np.ulonglong,
+    }
+)
+
+
+def _require_int32(name: str, value: object, *, minimum: int, maximum: int = _INT32_MAX) -> int:
+    if type(value) not in _ACTUAL_INT_TYPES:
+        raise ValueError(f"{name} must be an integer in [{minimum}, {maximum}]")
+    canonical = operator.index(cast(SupportsIndex, value))
+    if not minimum <= canonical <= maximum:
+        raise ValueError(f"{name} must be an integer in [{minimum}, {maximum}]")
+    return canonical
+
 
 CURATION_ACTIVE_INELIGIBLE_RANK = float.fromhex("0x1.fffffep+127")
 CURATION_CANDIDATE_INELIGIBLE_RANK = -CURATION_ACTIVE_INELIGIBLE_RANK
@@ -73,9 +100,7 @@ INTERACTION_FEATURE_LIFETIME_COUNTER_NBYTES = 12
 INTERACTION_FEATURE_LIFETIME_COUNTER_DELTA_NBYTES = 8
 INTERACTION_FEATURE_TRANSACTION_CLOCK_NBYTES = 16
 INTERACTION_FEATURE_TRANSACTION_CLOCK_DELTA_NBYTES = 12
-_LEGACY_INTERACTION_FEATURE_CHECKPOINT_SCHEMA = (
-    "alberta.interaction-feature-checkpoint.v1"
-)
+_LEGACY_INTERACTION_FEATURE_CHECKPOINT_SCHEMA = "alberta.interaction-feature-checkpoint.v1"
 
 
 def _require_array_contract(
@@ -406,22 +431,38 @@ class FixedBudgetInteractionLearner:
         scale_normalizer_epsilon: float = 1e-6,
         task_utility_weights: tuple[float, ...] | None = None,
     ):
-        if n_features < 1:
-            raise ValueError("n_features must be positive")
-        if n_tasks < 1:
-            raise ValueError("n_tasks must be positive")
-        if candidate_count < 0:
-            raise ValueError("candidate_count must be non-negative")
+        n_features = _require_int32("n_features", n_features, minimum=1)
+        n_tasks = _require_int32("n_tasks", n_tasks, minimum=1)
+        candidate_count = _require_int32("candidate_count", candidate_count, minimum=0)
+        replacement_interval = _require_int32(
+            "replacement_interval", replacement_interval, minimum=0
+        )
+        min_feature_age = _require_int32("min_feature_age", min_feature_age, minimum=0)
+        candidate_min_age = _require_int32("candidate_min_age", candidate_min_age, minimum=0)
+        utility_top_k = _require_int32("utility_top_k", utility_top_k, minimum=1)
+        if utility_retention_grace_steps is not None:
+            utility_retention_grace_steps = _require_int32(
+                "utility_retention_grace_steps", utility_retention_grace_steps, minimum=0
+            )
+        utility_evidence_confirmation_steps = _require_int32(
+            "utility_evidence_confirmation_steps", utility_evidence_confirmation_steps, minimum=0
+        )
+        candidate_promotion_confirmation_steps = _require_int32(
+            "candidate_promotion_confirmation_steps",
+            candidate_promotion_confirmation_steps,
+            minimum=0,
+        )
+        candidate_reacquisition_confirmation_steps = _require_int32(
+            "candidate_reacquisition_confirmation_steps",
+            candidate_reacquisition_confirmation_steps,
+            minimum=0,
+        )
+        if stale_retirement_interval is not None:
+            stale_retirement_interval = _require_int32(
+                "stale_retirement_interval", stale_retirement_interval, minimum=1
+            )
         if not 0.0 <= utility_decay < 1.0:
             raise ValueError("utility_decay must be in [0, 1)")
-        if (
-            isinstance(replacement_interval, bool)
-            or not isinstance(replacement_interval, int)
-            or not 0 <= replacement_interval <= _INT32_MAX
-        ):
-            raise ValueError(
-                "replacement_interval must be an int32-safe non-negative integer"
-            )
         if (
             isinstance(promotion_margin, bool)
             or not isinstance(cast(object, promotion_margin), Real)
@@ -435,8 +476,7 @@ class FixedBudgetInteractionLearner:
             raise ValueError("candidate_strategy must be 'random' or 'all_pairs'")
         if utility_aggregation not in {"mean", "max", "topk"}:
             raise ValueError("utility_aggregation must be 'mean', 'max', or 'topk'")
-        if utility_top_k < 1:
-            raise ValueError("utility_top_k must be positive")
+
         if utility_task_balancing not in {"none", "active", "active_inverse_frequency"}:
             raise ValueError(
                 "utility_task_balancing must be 'none', 'active', or 'active_inverse_frequency'"
@@ -457,15 +497,9 @@ class FixedBudgetInteractionLearner:
                 try:
                     float32_weight = struct.unpack("!f", struct.pack("!f", weight))[0]
                 except OverflowError as exc:
-                    raise ValueError(
-                        "task_utility_weights must be float32 representable"
-                    ) from exc
-                if not math.isfinite(float32_weight) or (
-                    weight > 0.0 and float32_weight == 0.0
-                ):
-                    raise ValueError(
-                        "task_utility_weights must be float32 representable"
-                    )
+                    raise ValueError("task_utility_weights must be float32 representable") from exc
+                if not math.isfinite(float32_weight) or (weight > 0.0 and float32_weight == 0.0):
+                    raise ValueError("task_utility_weights must be float32 representable")
                 float32_weights.append(float32_weight)
             float32_total = sum(float32_weights)
             try:
@@ -478,9 +512,7 @@ class FixedBudgetInteractionLearner:
                     "task_utility_weights total must be float32 representable"
                 ) from exc
             if not math.isfinite(float32_total):
-                raise ValueError(
-                    "task_utility_weights total must be float32 representable"
-                )
+                raise ValueError("task_utility_weights total must be float32 representable")
             if float32_total <= 0.0:
                 raise ValueError("task_utility_weights must contain positive mass")
         if not 0.0 <= task_activity_decay < 1.0:
@@ -518,8 +550,7 @@ class FixedBudgetInteractionLearner:
             or not 0 <= utility_evidence_confirmation_steps < 2**31 - 1
         ):
             raise ValueError(
-                "utility_evidence_confirmation_steps must be a non-negative "
-                "int32-safe integer"
+                "utility_evidence_confirmation_steps must be a non-negative int32-safe integer"
             )
         if evidence_gated_active_output_memory and utility_retention_grace_steps is None:
             raise ValueError(
@@ -527,8 +558,7 @@ class FixedBudgetInteractionLearner:
             )
         if evidence_gated_active_output_memory and utility_evidence_threshold <= 0.0:
             raise ValueError(
-                "evidence_gated_active_output_memory requires a positive "
-                "utility_evidence_threshold"
+                "evidence_gated_active_output_memory requires a positive utility_evidence_threshold"
             )
         if evidence_gated_active_output_memory and utility_evidence_confirmation_steps <= 0:
             raise ValueError(
@@ -541,14 +571,10 @@ class FixedBudgetInteractionLearner:
             not isinstance(relevance_probe_mode, str)
             or relevance_probe_mode not in RELEVANCE_PROBE_MODES
         ):
-            raise ValueError(
-                "relevance_probe_mode must be 'conditional_v1' or "
-                "'target_only_v1'"
-            )
+            raise ValueError("relevance_probe_mode must be 'conditional_v1' or 'target_only_v1'")
         if independent_relevance_probe and not evidence_gated_active_output_memory:
             raise ValueError(
-                "independent_relevance_probe requires "
-                "evidence_gated_active_output_memory"
+                "independent_relevance_probe requires evidence_gated_active_output_memory"
             )
         if not isinstance(retire_stale_features, bool):
             raise ValueError("retire_stale_features must be boolean")
@@ -560,8 +586,7 @@ class FixedBudgetInteractionLearner:
             or not 1 <= stale_retirement_interval <= _INT32_MAX
         ):
             raise ValueError(
-                "stale_retirement_interval must be None or a positive "
-                "int32-safe integer"
+                "stale_retirement_interval must be None or a positive int32-safe integer"
             )
         if (
             isinstance(candidate_promotion_floor, bool)
@@ -587,8 +612,7 @@ class FixedBudgetInteractionLearner:
             or not 1 <= candidate_promotion_confirmation_steps < 2**31 - 1
         ):
             raise ValueError(
-                "candidate_promotion_confirmation_steps must be a positive "
-                "int32-safe integer"
+                "candidate_promotion_confirmation_steps must be a positive int32-safe integer"
             )
         if (
             isinstance(candidate_reacquisition_confirmation_steps, bool)
@@ -596,8 +620,7 @@ class FixedBudgetInteractionLearner:
             or not 1 <= candidate_reacquisition_confirmation_steps < 2**31 - 1
         ):
             raise ValueError(
-                "candidate_reacquisition_confirmation_steps must be a positive "
-                "int32-safe integer"
+                "candidate_reacquisition_confirmation_steps must be a positive int32-safe integer"
             )
         # Only a retirement raises candidate_reacquisition_required. A value
         # above one is intentionally allowed in the matched no-retirement arm,
@@ -658,9 +681,7 @@ class FixedBudgetInteractionLearner:
         self._retire_stale_features = retire_stale_features
         self._stale_retirement_interval = stale_retirement_interval
         self._candidate_promotion_floor = candidate_promotion_floor
-        self._candidate_promotion_confirmation_steps = (
-            candidate_promotion_confirmation_steps
-        )
+        self._candidate_promotion_confirmation_steps = candidate_promotion_confirmation_steps
         self._candidate_reacquisition_confirmation_steps = (
             candidate_reacquisition_confirmation_steps
         )
@@ -825,8 +846,7 @@ class FixedBudgetInteractionLearner:
             return replacement_phase == jnp.asarray(0, dtype=jnp.int32)
         exact_phase = _exact_words_modulo(step_words, self._replacement_interval)
         phase_in_range = (replacement_phase >= 0) & (
-            replacement_phase
-            < jnp.asarray(self._replacement_interval, dtype=jnp.int32)
+            replacement_phase < jnp.asarray(self._replacement_interval, dtype=jnp.int32)
         )
         return phase_in_range & (replacement_phase.astype(jnp.uint32) == exact_phase)
 
@@ -861,9 +881,7 @@ class FixedBudgetInteractionLearner:
             feature_dim,
         )
         active_vacancy = (state.feature_left == -1) & (state.feature_right == -1)
-        candidate_vacancy = (state.candidate_left == -1) & (
-            state.candidate_right == -1
-        )
+        candidate_vacancy = (state.candidate_left == -1) & (state.candidate_right == -1)
         lineage_values_valid = jnp.asarray(True, dtype=jnp.bool_)
         for lineage in (
             state.feature_parent_a,
@@ -875,11 +893,9 @@ class FixedBudgetInteractionLearner:
                 (lineage >= -1) & (lineage < self._n_features)
             )
         generator_values_valid = jnp.all(
-            (state.feature_generator >= -1)
-            & (state.feature_generator <= GENERATOR_IMPRINT)
+            (state.feature_generator >= -1) & (state.feature_generator <= GENERATOR_IMPRINT)
         ) & jnp.all(
-            (state.candidate_generator >= -1)
-            & (state.candidate_generator <= GENERATOR_IMPRINT)
+            (state.candidate_generator >= -1) & (state.candidate_generator <= GENERATOR_IMPRINT)
         )
         counters_valid = (
             jnp.all(state.evidence_idle_steps >= 0)
@@ -979,8 +995,7 @@ class FixedBudgetInteractionLearner:
             "relevance_probe_bias_scalars": self._n_tasks,
             "relevance_probe_bias_bytes": int(state.relevance_probe_biases.nbytes),
             "relevance_probe_bytes": int(
-                state.relevance_probe_weights.nbytes
-                + state.relevance_probe_biases.nbytes
+                state.relevance_probe_weights.nbytes + state.relevance_probe_biases.nbytes
             ),
             "candidate_output_weight_scalars": self._n_tasks * self._candidate_count,
             "candidate_promotion_evidence_streak_scalars": int(
@@ -1002,9 +1017,7 @@ class FixedBudgetInteractionLearner:
             "active_output_memory_committed_scalars": int(
                 state.active_output_memory_committed.size
             ),
-            "active_output_memory_committed_bytes": int(
-                state.active_output_memory_committed.size
-            ),
+            "active_output_memory_committed_bytes": int(state.active_output_memory_committed.size),
             "normalizer_scalars": int(normalizer_scalars),
             "normalizer_bytes": int(normalizer_scalars) * 4,
             "lifetime_counter_bytes": INTERACTION_FEATURE_LIFETIME_COUNTER_NBYTES,
@@ -1034,21 +1047,15 @@ class FixedBudgetInteractionLearner:
             "utility_top_k": self._utility_top_k,
             "utility_task_balancing": self._utility_task_balancing,
             "task_utility_weights": (
-                None
-                if self._task_utility_weights is None
-                else list(self._task_utility_weights)
+                None if self._task_utility_weights is None else list(self._task_utility_weights)
             ),
             "task_activity_decay": self._task_activity_decay,
             "future_utility_mix": self._future_utility_mix,
             "utility_retention_decay": self._utility_retention_decay,
             "utility_retention_grace_steps": self._utility_retention_grace_steps,
             "utility_evidence_threshold": self._utility_evidence_threshold,
-            "evidence_gated_active_output_memory": (
-                self._evidence_gated_active_output_memory
-            ),
-            "utility_evidence_confirmation_steps": (
-                self._utility_evidence_confirmation_steps
-            ),
+            "evidence_gated_active_output_memory": (self._evidence_gated_active_output_memory),
+            "utility_evidence_confirmation_steps": (self._utility_evidence_confirmation_steps),
             "independent_relevance_probe": self._independent_relevance_probe,
             "relevance_probe_mode": self._relevance_probe_mode,
             "retire_stale_features": self._retire_stale_features,
@@ -1089,8 +1096,7 @@ class FixedBudgetInteractionLearner:
         if "relevance_probe_mode" not in config:
             if config.get("independent_relevance_probe", False):
                 raise ValueError(
-                    "probe-enabled legacy config is ambiguous; set "
-                    "relevance_probe_mode explicitly"
+                    "probe-enabled legacy config is ambiguous; set relevance_probe_mode explicitly"
                 )
             config["relevance_probe_mode"] = RELEVANCE_PROBE_MODE_CONDITIONAL_V1
         generator_mix = config.pop("generator_mix", (1.0, 0.0, 0.0))
@@ -1713,8 +1719,7 @@ class FixedBudgetInteractionLearner:
             clip,
         )
         insertion_gain = jnp.maximum(
-            normalized_error * normalized_contribution
-            - 0.5 * normalized_contribution**2,
+            normalized_error * normalized_contribution - 0.5 * normalized_contribution**2,
             0.0,
         )
         bounded_gain = insertion_gain / (1.0 + insertion_gain)
@@ -1839,9 +1844,7 @@ class FixedBudgetInteractionLearner:
         evidence_refreshed = live & jnp.asarray(evidence_refreshed, dtype=jnp.bool_)
         refresh_lease = live & jnp.asarray(retention_evidence_refreshed, dtype=jnp.bool_)
         idle_cap = jnp.asarray(2**31 - 1, dtype=jnp.int32)
-        incremented = (
-            jnp.minimum(jnp.maximum(old_idle_steps, 0), idle_cap - 1) + 1
-        )
+        incremented = jnp.minimum(jnp.maximum(old_idle_steps, 0), idle_cap - 1) + 1
         idle_steps = jnp.where(
             live,
             jnp.where(refresh_lease, 0, incremented),
@@ -2007,9 +2010,7 @@ class FixedBudgetInteractionLearner:
         external = (
             jnp.ones((self._n_features,), dtype=jnp.bool_)
             if external_read_mask is None
-            else jnp.asarray(external_read_mask, dtype=jnp.bool_).reshape(
-                (self._n_features,)
-            )
+            else jnp.asarray(external_read_mask, dtype=jnp.bool_).reshape((self._n_features,))
         )
         live = self._live_descriptor_mask(
             state.feature_left,
@@ -2057,25 +2058,22 @@ class FixedBudgetInteractionLearner:
         )
         feature_dim = raw_observation.shape[0]
         self._require_state_contract(state, feature_dim=feature_dim)
-        proposed_step_words, lifetime_capacity_available = (
-            _checked_lifetime_words_increment(state.step_words)
+        proposed_step_words, lifetime_capacity_available = _checked_lifetime_words_increment(
+            state.step_words
         )
         lifetime_counter_valid = _lifetime_counter_valid(
             state.step_words,
             state.step_count,
         )
         replacement_phase_valid = self._replacement_phase_valid(
-            state.step_words,
-            state.replacement_phase
+            state.step_words, state.replacement_phase
         )
         state_valid = (
             lifetime_counter_valid
             & replacement_phase_valid
             & self._state_values_valid(state, feature_dim=feature_dim)
         )
-        proposed_replacement_phase = self._next_replacement_phase(
-            state.replacement_phase
-        )
+        proposed_replacement_phase = self._next_replacement_phase(state.replacement_phase)
         external = (
             jnp.ones((self._n_features,), dtype=jnp.bool_)
             if external_read_mask is None
@@ -2102,8 +2100,7 @@ class FixedBudgetInteractionLearner:
             priority_override = curation_priority_override
         else:
             raise TypeError(
-                "curation_priority_override must be an "
-                "InteractionCurationPriorityOverride"
+                "curation_priority_override must be an InteractionCurationPriorityOverride"
             )
         priority_override_enabled = _require_array_contract(
             priority_override.enabled,
@@ -2123,9 +2120,9 @@ class FixedBudgetInteractionLearner:
             shape=(self._candidate_count,),
             dtype=jnp.dtype(jnp.float32),
         )
-        priority_override_valid = jnp.all(
-            jnp.isfinite(raw_active_priority_ranks)
-        ) & jnp.all(jnp.isfinite(raw_candidate_priority_ranks))
+        priority_override_valid = jnp.all(jnp.isfinite(raw_active_priority_ranks)) & jnp.all(
+            jnp.isfinite(raw_candidate_priority_ranks)
+        )
         active_priority_ranks = jnp.where(
             jnp.isfinite(raw_active_priority_ranks),
             raw_active_priority_ranks,
@@ -2203,9 +2200,7 @@ class FixedBudgetInteractionLearner:
                 (self._n_tasks, self._n_features),
             )
             candidate_learning_errors = target_only_errors
-            input_valid = input_valid & jnp.all(
-                jnp.isfinite(state.relevance_probe_biases)
-            )
+            input_valid = input_valid & jnp.all(jnp.isfinite(state.relevance_probe_biases))
 
         candidate_features = jnp.zeros(self._candidate_count, dtype=jnp.float32)
         if self._candidate_count > 0:
@@ -2263,10 +2258,7 @@ class FixedBudgetInteractionLearner:
                     candidate_errors = jnp.where(
                         active_mask[:, None],
                         candidate_learning_errors[:, None]
-                        - (
-                            state.candidate_output_weights
-                            * candidate_features[None, :]
-                        ),
+                        - (state.candidate_output_weights * candidate_features[None, :]),
                         0.0,
                     )
                     candidate_output_delta = (
@@ -2288,10 +2280,7 @@ class FixedBudgetInteractionLearner:
 
         bounding_scale = jnp.array(1.0, dtype=jnp.float32)
         if self._use_obgd and not self._scale_robust:
-            total_step = (
-                jnp.sum(jnp.abs(output_delta))
-                + jnp.sum(jnp.abs(output_bias_delta))
-            )
+            total_step = jnp.sum(jnp.abs(output_delta)) + jnp.sum(jnp.abs(output_bias_delta))
             if not self._independent_relevance_probe:
                 total_step = total_step + jnp.sum(jnp.abs(candidate_output_delta))
             err_norm = jnp.linalg.norm(errors)
@@ -2383,9 +2372,7 @@ class FixedBudgetInteractionLearner:
         )
         if self._independent_relevance_probe:
             first_commit = (
-                live_features
-                & ~state.active_output_memory_committed
-                & retention_evidence_refreshed
+                live_features & ~state.active_output_memory_committed & retention_evidence_refreshed
             )
             output_weights = jnp.where(
                 state.active_output_memory_committed[None, :],
@@ -2401,8 +2388,7 @@ class FixedBudgetInteractionLearner:
             )
         elif self._evidence_gated_active_output_memory:
             output_write_gate = (
-                ~state.active_output_memory_committed
-                | retention_evidence_refreshed
+                ~state.active_output_memory_committed | retention_evidence_refreshed
             ) & live_features
             output_weights = jnp.where(
                 output_write_gate[None, :],
@@ -2410,14 +2396,11 @@ class FixedBudgetInteractionLearner:
                 state.output_weights,
             )
             active_output_memory_committed = live_features & (
-                state.active_output_memory_committed
-                | retention_evidence_refreshed
+                state.active_output_memory_committed | retention_evidence_refreshed
             )
         else:
             output_weights = proposed_output_weights
-            active_output_memory_committed = jnp.zeros_like(
-                state.active_output_memory_committed
-            )
+            active_output_memory_committed = jnp.zeros_like(state.active_output_memory_committed)
         (
             new_utilities,
             evidence_idle_steps,
@@ -2501,12 +2484,8 @@ class FixedBudgetInteractionLearner:
                     )
                 )
             )
-        candidate_promotion_evidence_streak_pre = (
-            state.candidate_promotion_evidence_streak
-        )
-        candidate_reacquisition_required_pre = (
-            state.candidate_reacquisition_required
-        )
+        candidate_promotion_evidence_streak_pre = state.candidate_promotion_evidence_streak
+        candidate_reacquisition_required_pre = state.candidate_reacquisition_required
         candidate_reacquisition_required = (
             candidate_reacquisition_required_pre
             & candidate_live
@@ -2531,9 +2510,8 @@ class FixedBudgetInteractionLearner:
             candidate_reacquisition_confirmation_cap,
             candidate_promotion_confirmation_cap,
         )
-        candidate_confirmation_gate_active = (
-            self._independent_relevance_probe
-            & (candidate_required_confirmation_steps > 1)
+        candidate_confirmation_gate_active = self._independent_relevance_probe & (
+            candidate_required_confirmation_steps > 1
         )
         candidate_incremented_streak = (
             jnp.minimum(
@@ -2549,22 +2527,14 @@ class FixedBudgetInteractionLearner:
         )
         candidate_promotion_confirmed = candidate_live & (
             ~candidate_confirmation_gate_active
-            | (
-                candidate_promotion_evidence_streak_updated
-                >= candidate_required_confirmation_steps
-            )
+            | (candidate_promotion_evidence_streak_updated >= candidate_required_confirmation_steps)
         )
         candidate_reacquisition_confirmed = (
             candidate_live
             & candidate_reacquisition_required
-            & (
-                candidate_promotion_evidence_streak_updated
-                >= candidate_required_confirmation_steps
-            )
+            & (candidate_promotion_evidence_streak_updated >= candidate_required_confirmation_steps)
         )
-        candidate_promotion_evidence_streak = (
-            candidate_promotion_evidence_streak_updated
-        )
+        candidate_promotion_evidence_streak = candidate_promotion_evidence_streak_updated
         ages = jnp.where(
             live_features,
             _saturating_int32_increment(state.ages),
@@ -2610,9 +2580,7 @@ class FixedBudgetInteractionLearner:
             candidate_output_weights=candidate_output_weights,
             candidate_utilities=new_candidate_utilities,
             candidate_ages=candidate_ages,
-            candidate_promotion_evidence_streak=(
-                candidate_promotion_evidence_streak
-            ),
+            candidate_promotion_evidence_streak=(candidate_promotion_evidence_streak),
             candidate_reacquisition_required=candidate_reacquisition_required,
             feature_second_moments=feature_second_moments,
             candidate_second_moments=candidate_second_moments,
@@ -2645,10 +2613,7 @@ class FixedBudgetInteractionLearner:
             if self._stale_retirement_interval is None
             else self._stale_retirement_interval
         )
-        should_try_retire = (
-            retirement_interval > 0
-            and self._retire_stale_features
-        ) & (
+        should_try_retire = (retirement_interval > 0 and self._retire_stale_features) & (
             _exact_words_modulo(proposed_step_words, max(retirement_interval, 1))
             == jnp.asarray(0, dtype=jnp.uint32)
         )
@@ -2669,9 +2634,7 @@ class FixedBudgetInteractionLearner:
         stale_slot = jnp.argmax(stale_scores).astype(jnp.int32)
         has_stale_slot = jnp.any(stale_scores >= 0)
         has_vacancy_before = jnp.any(~live_features)
-        should_retire = (
-            should_try_retire & has_stale_slot & ~has_vacancy_before
-        )
+        should_retire = should_try_retire & has_stale_slot & ~has_vacancy_before
         retired_slot = jnp.where(should_retire, stale_slot, retired_slot)
         retired_left = jnp.where(
             should_retire,
@@ -2847,8 +2810,10 @@ class FixedBudgetInteractionLearner:
                 axis=1,
             )
             eligible_candidates = (
-                candidate_ages >= self._candidate_min_age
-            ) & ~candidate_matches_active & candidate_promotion_confirmed
+                (candidate_ages >= self._candidate_min_age)
+                & ~candidate_matches_active
+                & candidate_promotion_confirmed
+            )
             # Retirement resets every archive entry with the retired identity.
             # The confirmation booleans above describe pre-reset evidence, so
             # this explicit post-reset exclusion prevents same-transaction
@@ -2886,10 +2851,7 @@ class FixedBudgetInteractionLearner:
             should_promote = (
                 (
                     (should_try_replace & ~should_retire)
-                    | (
-                        should_retire
-                        & (self._stale_retirement_interval is not None)
-                    )
+                    | (should_retire & (self._stale_retirement_interval is not None))
                 )
                 & has_destination
                 & has_candidate
@@ -2905,14 +2867,9 @@ class FixedBudgetInteractionLearner:
                 )
             )
             should_refresh_candidate = (
-                ~should_promote
-                & should_try_replace
-                & ~should_retire
-                & self._refresh_candidates
+                ~should_promote & should_try_replace & ~should_retire & self._refresh_candidates
             )
-            should_refresh_promoted_candidate = (
-                should_promote & self._refresh_promoted_candidate
-            )
+            should_refresh_promoted_candidate = should_promote & self._refresh_promoted_candidate
             refreshed_candidate = jnp.where(
                 should_refresh_promoted_candidate,
                 best_candidate,
@@ -3067,8 +3024,7 @@ class FixedBudgetInteractionLearner:
                 return fl, fr, ow, util, age, cl, cr, cow, cutil, cage, fpa, fpb, fg, cpa, cpb, cg
 
             promoted_probe_seed = (
-                self._promotion_blend
-                * candidate_output_weights[:, best_candidate]
+                self._promotion_blend * candidate_output_weights[:, best_candidate]
             )
             carry = (
                 feature_left,
@@ -3107,9 +3063,7 @@ class FixedBudgetInteractionLearner:
                 candidate_generator,
             ) = jax.lax.cond(should_promote, promote_branch, refresh_candidate_branch, carry)
             candidate_indices = jnp.arange(self._candidate_count, dtype=jnp.int32)
-            promoted_candidate_reset = should_promote & (
-                candidate_indices == best_candidate
-            )
+            promoted_candidate_reset = should_promote & (candidate_indices == best_candidate)
             refreshed_candidate_reset = (
                 ~should_promote
                 & should_try_replace
@@ -3134,9 +3088,7 @@ class FixedBudgetInteractionLearner:
             )
             relevance_probe_weights = jax.lax.select(
                 should_promote,
-                relevance_probe_weights.at[:, destination_slot].set(
-                    probe_destination_value
-                ),
+                relevance_probe_weights.at[:, destination_slot].set(probe_destination_value),
                 relevance_probe_weights,
             )
             if self._independent_relevance_probe:
@@ -3287,9 +3239,7 @@ class FixedBudgetInteractionLearner:
             candidate_output_weights=candidate_output_weights,
             candidate_utilities=new_candidate_utilities,
             candidate_ages=candidate_ages,
-            candidate_promotion_evidence_streak=(
-                candidate_promotion_evidence_streak
-            ),
+            candidate_promotion_evidence_streak=(candidate_promotion_evidence_streak),
             candidate_reacquisition_required=candidate_reacquisition_required,
             feature_second_moments=feature_second_moments,
             candidate_second_moments=candidate_second_moments,
@@ -3430,9 +3380,7 @@ class FixedBudgetInteractionLearner:
                     false_candidates,
                 )
             ),
-            candidate_promotion_evidence_streak_pre=(
-                candidate_promotion_evidence_streak_pre
-            ),
+            candidate_promotion_evidence_streak_pre=(candidate_promotion_evidence_streak_pre),
             candidate_promotion_evidence_streak_updated=(
                 jnp.where(
                     input_valid,
@@ -3445,9 +3393,7 @@ class FixedBudgetInteractionLearner:
                 candidate_promotion_confirmed,
                 false_candidates,
             ),
-            candidate_reacquisition_required_pre=(
-                candidate_reacquisition_required_pre
-            ),
+            candidate_reacquisition_required_pre=(candidate_reacquisition_required_pre),
             candidate_reacquisition_required_post=(
                 jnp.where(
                     input_valid,
@@ -3494,9 +3440,7 @@ class FixedBudgetInteractionLearner:
             curation_priority_override_enabled=priority_override_enabled,
             curation_attempted=input_valid & (should_try_replace | should_retire),
             curation_priority_override_applied=(
-                input_valid
-                & (should_try_replace | should_retire)
-                & priority_override_enabled
+                input_valid & (should_try_replace | should_retire) & priority_override_enabled
             ),
             curation_selected_active_worst_slot=jnp.where(
                 input_valid & (should_try_replace | should_retire),
@@ -3581,9 +3525,7 @@ def migrate_legacy_interaction_feature_state(
         or not isinstance(replacement_interval, int)
         or not 0 <= replacement_interval <= _INT32_MAX
     ):
-        raise ValueError(
-            "replacement_interval must be an int32-safe non-negative integer"
-        )
+        raise ValueError("replacement_interval must be an int32-safe non-negative integer")
     if isinstance(legacy_state, Mapping):
         fields = dict(legacy_state)
     elif dataclasses.is_dataclass(legacy_state) and not isinstance(legacy_state, type):
@@ -3635,9 +3577,7 @@ def save_interaction_feature_checkpoint(
     learner._require_state_contract(state, feature_dim=feature_dim)
     if not bool(_lifetime_counter_valid(state.step_words, state.step_count)):
         raise ValueError("interaction-feature checkpoint lifetime counter is invalid")
-    if not bool(
-        learner._replacement_phase_valid(state.step_words, state.replacement_phase)
-    ):
+    if not bool(learner._replacement_phase_valid(state.step_words, state.replacement_phase)):
         raise ValueError("interaction-feature checkpoint replacement phase is invalid")
     if not bool(learner._state_values_valid(state, feature_dim=feature_dim)):
         raise ValueError("interaction-feature checkpoint state values are invalid")
