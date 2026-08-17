@@ -226,6 +226,31 @@ class PavlovianPhase:
     cs_active: tuple[int, ...]
     compound_index: int = -1
 
+    def __post_init__(self) -> None:
+        if type(self.name) is not str or not self.name:
+            raise ValueError("name must be a non-empty string")
+        if (
+            type(self.n_steps) is not int
+            or isinstance(self.n_steps, bool)
+            or self.n_steps <= 0
+        ):
+            raise ValueError("n_steps must be a positive integer")
+        if (
+            not isinstance(self.cs_us_contingency, (int, float))
+            or isinstance(self.cs_us_contingency, bool)
+            or not math.isfinite(self.cs_us_contingency)
+            or not (0.0 <= self.cs_us_contingency <= 1.0)
+        ):
+            raise ValueError("cs_us_contingency must be a float in [0.0, 1.0]")
+        if type(self.cs_active) is not tuple:
+            raise TypeError("cs_active must be a tuple")
+        if (
+            type(self.compound_index) is not int
+            or isinstance(self.compound_index, bool)
+            or self.compound_index < -1
+        ):
+            raise ValueError("compound_index must be an integer >= -1")
+
 
 @chex.dataclass(frozen=True)
 class PavlovianState:
