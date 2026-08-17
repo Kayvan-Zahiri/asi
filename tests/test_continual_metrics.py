@@ -258,3 +258,28 @@ def test_tracking_error_shorter_than_window_has_no_computable_values() -> None:
 def test_running_mean_rejects_invalid_window_size(window_size: object) -> None:
     with pytest.raises(ValueError, match="window_size"):
         compute_running_mean([1.0, 2.0, 3.0], window_size=window_size)  # type: ignore[arg-type]
+
+
+def test_first_exposure_and_recovery_lengths_scalars_validation() -> None:
+    matrix = [[0.80], [0.60], [0.75]]
+
+    # compute_per_task_forgetting rejects boolean or non-integer first_exposure
+    with pytest.raises(ValueError, match="first_exposure"):
+        compute_per_task_forgetting(matrix, first_exposure=[True])  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="first_exposure"):
+        compute_per_task_forgetting(matrix, first_exposure=[0.0])  # type: ignore[list-item]
+
+    # Valid first_exposure
+    f = compute_per_task_forgetting(matrix, first_exposure=[0])
+    np.testing.assert_allclose(f, [0.05])
+
+    # compute_recovery_lengths validation
+    trace = [0.1, 0.5, 0.9, 0.9, 0.2, 0.9]
+    with pytest.raises(ValueError, match="change_points"):
+        compute_recovery_lengths(trace, change_points=[True], threshold=0.8)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="window_size"):
+        compute_recovery_lengths(trace, change_points=[0], threshold=0.8, window_size=True)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="threshold"):
+        compute_recovery_lengths(trace, change_points=[0], threshold=True)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="threshold"):
+        compute_recovery_lengths(trace, change_points=[0], threshold=float("nan"))

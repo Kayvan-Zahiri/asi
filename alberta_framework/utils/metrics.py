@@ -15,6 +15,7 @@ References:
         Lifelong Learning: Identifying the Stability Gap."
 """
 
+import math
 from dataclasses import dataclass
 
 import numpy as np
@@ -63,13 +64,27 @@ def _performance_matrix(
     return matrix
 
 
+def _require_int_sequence(name: str, sequence: object) -> NDArray[np.int64]:
+    if isinstance(sequence, (bool, np.bool_)):
+        raise ValueError(f"{name} must not be a boolean")
+    try:
+        raw_np = np.asarray(sequence)
+        if raw_np.dtype == np.bool_ or any(isinstance(x, (bool, np.bool_)) for x in raw_np.flat):
+            raise ValueError(f"{name} must not contain booleans")
+        if not np.issubdtype(raw_np.dtype, np.integer):
+            raise ValueError(f"{name} must contain integers")
+        return raw_np.astype(np.int64)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must contain integers") from exc
+
+
 def _first_exposure_rows(
     first_exposure: NDArray[np.integer] | list[int],
     *,
     n_checkpoints: int,
     n_tasks: int,
 ) -> NDArray[np.int64]:
-    rows = np.asarray(first_exposure, dtype=np.int64)
+    rows = _require_int_sequence("first_exposure", first_exposure)
     if rows.shape != (n_tasks,):
         raise ValueError("first_exposure must contain one row index per task")
     if np.any(rows < 0) or np.any(rows >= n_checkpoints):
@@ -266,8 +281,12 @@ def compute_recovery_lengths(
     recovered before the next change point (or the end of the stream).
     """
 
+    if type(window_size) is not int or window_size < 1:
+        raise ValueError("window_size must be a positive built-in int")
+    if isinstance(threshold, (bool, np.bool_)) or not math.isfinite(float(threshold)):
+        raise ValueError("threshold must be a finite real number")
     values = np.asarray(online_performance, dtype=np.float64)
-    points = np.asarray(change_points, dtype=np.int64)
+    points = _require_int_sequence("change_points", change_points)
     if values.ndim != 1 or values.size == 0:
         raise ValueError("online_performance must be a non-empty one-dimensional trace")
     if points.ndim != 1 or points.size == 0:
@@ -276,8 +295,6 @@ def compute_recovery_lengths(
         raise ValueError("change_points must index online_performance")
     if np.any(np.diff(points) <= 0):
         raise ValueError("change_points must be strictly increasing")
-    if window_size < 1:
-        raise ValueError("window_size must be positive")
 
     recoveries = np.full(points.shape, -1, dtype=np.int64)
     for point_index, start in enumerate(points):
@@ -288,9 +305,7 @@ def compute_recovery_lengths(
                 np.all(window >= threshold) if higher_is_better else np.all(window <= threshold)
             )
             if meets:
-                recoveries[point_index] = (
-                    window_start + window_size - int(start)
-                )
+                recoveries[point_index] = window_start + window_size - int(start)
                 break
     return recoveries
 
