@@ -385,9 +385,7 @@ def _current_foragax_result(
                 "environment_runtime_profile_sha256": hashlib.sha256(
                     json.dumps(
                         {
-                            "schema_version": (
-                                "test.environment_runtime_profile.v1"
-                            ),
+                            "schema_version": ("test.environment_runtime_profile.v1"),
                             "install_tree_sha256": install_tree_sha256,
                         },
                         sort_keys=True,
@@ -863,6 +861,15 @@ def test_official_npz_import_accepts_finite_endpoint_values(tmp_path: Path) -> N
 
     assert result.mean_reward == pytest.approx(1.0)
 
+    # Accepts numpy.float64
+    result_np = import_official_foragax_npz(
+        OfficialForagaxRunSpec(agent="DQN", seed=0, path=path, expected_steps=4),
+        ewm_decay=np.float64(0.999),
+        record_every=1,
+        final_window=1,
+    )
+    assert result_np.mean_reward == pytest.approx(1.0)
+
 
 def test_protocol_attestation_cannot_be_minted_by_constructing_evidence(
     tmp_path: Path,
@@ -982,9 +989,7 @@ def test_pairing_requires_matching_foragax_rng_schedule() -> None:
         paired_forager_comparison([candidate], [self_declared_profile])
 
     partial_profile_metadata = dict(matched.agent_metadata)
-    partial_profile_metadata["runtime_profile_id"] = (
-        "foragax-current-gpu-a"
-    )
+    partial_profile_metadata["runtime_profile_id"] = "foragax-current-gpu-a"
     partial_profile = dataclasses.replace(
         matched,
         agent_metadata=partial_profile_metadata,
@@ -1187,3 +1192,37 @@ def test_official_foragax_api_smoke(environment: ForagerEnvConfig) -> None:
     assert reward.shape == ()
     assert not bool(done)
     assert "biome_regret" in info
+
+
+def test_forager_benchmark_config_ewm_decay_validation() -> None:
+    class SpoofedFloat:
+        @property
+        def __class__(self) -> type:
+            return float
+
+        def __float__(self) -> float:
+            return 0.999
+
+    spoofed = SpoofedFloat()
+    assert isinstance(spoofed, float)
+
+    # Spoofed class rejected
+    with pytest.raises(ValueError, match="ewm_decay must be a real number"):
+        ForagerBenchmarkConfig(
+            environment=ForagerEnvConfig.paper_field_of_view(),
+            ewm_decay=spoofed,  # type: ignore[arg-type]
+        )
+
+    # Booleans rejected
+    with pytest.raises(ValueError, match="ewm_decay must be a real number"):
+        ForagerBenchmarkConfig(
+            environment=ForagerEnvConfig.paper_field_of_view(),
+            ewm_decay=True,  # type: ignore[arg-type]
+        )
+
+    # numpy.float64 accepted
+    config = ForagerBenchmarkConfig(
+        environment=ForagerEnvConfig.paper_field_of_view(),
+        ewm_decay=np.float64(0.999),
+    )
+    assert config.ewm_decay == pytest.approx(0.999)

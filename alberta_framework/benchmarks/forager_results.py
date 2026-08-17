@@ -958,8 +958,7 @@ class OfficialForagaxRunSpec:
                 or ".." in relative_artifact.parts
                 or ".." in windows_artifact.parts
                 or "\\" in self.artifact_relative_path
-                or relative_artifact.as_posix()
-                != self.artifact_relative_path
+                or relative_artifact.as_posix() != self.artifact_relative_path
             ):
                 raise ValueError("artifact_relative_path must be a safe relative path")
             if relative_artifact.name != self.path.name:
@@ -1087,9 +1086,7 @@ class OfficialForagaxRunSpec:
     def _validate_protocol_attestation(self) -> None:
         evidence = self.attestation_evidence
         if evidence is None:
-            raise ValueError(
-                "protocol attestation requires verifier-issued evidence"
-            )
+            raise ValueError("protocol attestation requires verifier-issued evidence")
         from alberta_framework.benchmarks.official_foragax import (
             VerifiedOfficialForagaxManifest,
             reverify_official_foragax_evidence,
@@ -1098,9 +1095,7 @@ class OfficialForagaxRunSpec:
         try:
             verified = reverify_official_foragax_evidence(evidence)
         except (OSError, TypeError, ValueError) as exc:
-            raise ValueError(
-                "official Foragax attestation evidence does not reverify"
-            ) from exc
+            raise ValueError("official Foragax attestation evidence does not reverify") from exc
         manifest = verified.manifest
         source_manifest = manifest["source"]
         run_manifest = manifest["run"]
@@ -1123,8 +1118,7 @@ class OfficialForagaxRunSpec:
         explicit_execution = self.execution_commit or self.source_commit
         if self.source_repository is None or explicit_execution is None:
             raise ValueError(
-                "protocol-attested imports require explicit source_repository "
-                "and execution_commit"
+                "protocol-attested imports require explicit source_repository and execution_commit"
             )
         if self.config_commit is None:
             raise ValueError(
@@ -1144,16 +1138,12 @@ class OfficialForagaxRunSpec:
             "execution_runtime": self.execution_runtime,
             "environment_provenance": self.environment_provenance,
             "resolved_hyperparameters": self.resolved_hyperparameters,
-            "resolved_hyperparameters_sha256": (
-                self.resolved_hyperparameters_sha256
-            ),
+            "resolved_hyperparameters_sha256": (self.resolved_hyperparameters_sha256),
             "registry": self.registry,
             "registry_sha256": self.registry_sha256,
             "agent_access": self.agent_access,
             "agent_access_sha256": self.agent_access_sha256,
-            "agent_access_binding_sha256": (
-                self.agent_access_binding_sha256
-            ),
+            "agent_access_binding_sha256": (self.agent_access_binding_sha256),
             "environment_rng_schedule": self.environment_rng_schedule,
             "manifest_sha256": self.manifest_sha256,
             "artifact_relative_path": self.artifact_relative_path,
@@ -1183,16 +1173,12 @@ class OfficialForagaxRunSpec:
         run = {
             "agent": self.agent,
             "resolved_hyperparameters": self.resolved_hyperparameters,
-            "resolved_hyperparameters_sha256": (
-                self.resolved_hyperparameters_sha256
-            ),
+            "resolved_hyperparameters_sha256": (self.resolved_hyperparameters_sha256),
             "registry": self.registry,
             "registry_sha256": self.registry_sha256,
             "agent_access": self.agent_access,
             "agent_access_sha256": self.agent_access_sha256,
-            "agent_access_binding_sha256": (
-                self.agent_access_binding_sha256
-            ),
+            "agent_access_binding_sha256": (self.agent_access_binding_sha256),
             "environment": semantic,
         }
         _resolved, access, _registry = _verified_agent_access_sections(
@@ -1205,10 +1191,7 @@ class OfficialForagaxRunSpec:
                 "official agent implementation"
             )
         classified_privileged = access.get("privileged")
-        if (
-            not isinstance(classified_privileged, bool)
-            or classified_privileged != self.privileged
-        ):
+        if not isinstance(classified_privileged, bool) or classified_privileged != self.privileged:
             raise ValueError(
                 "official agent privilege label does not match the verified "
                 "agent-access classification"
@@ -1221,43 +1204,27 @@ class OfficialForagaxRunSpec:
             "config_path": source_section["config_path"],
             "config_sha256": source_section["config_sha256"],
             "config_git_blob_sha1": source_section["config_git_blob_sha1"],
-            "config_commit_lock_sha256": source_section[
-                "config_commit_lock_sha256"
-            ],
+            "config_commit_lock_sha256": source_section["config_commit_lock_sha256"],
             "execution_lock_sha256": source_section["lock_sha256"],
             "source_tree_sha256": source_section["source_tree_sha256"],
             "interpreter_sha256": execution_section["interpreter_sha256"],
             "package_freeze": tuple(execution_section["package_freeze"]),
-            "package_freeze_sha256": execution_section[
-                "package_freeze_sha256"
-            ],
+            "package_freeze_sha256": execution_section["package_freeze_sha256"],
             "execution_runtime": execution_section["runtime"],
-            "relevant_environment": execution_section[
-                "relevant_environment"
-            ],
+            "relevant_environment": execution_section["relevant_environment"],
             "environment_provenance": environment_section,
-            "resolved_hyperparameters": run_section[
-                "resolved_hyperparameters"
-            ],
-            "resolved_hyperparameters_sha256": run_section[
-                "resolved_hyperparameters_sha256"
-            ],
+            "resolved_hyperparameters": run_section["resolved_hyperparameters"],
+            "resolved_hyperparameters_sha256": run_section["resolved_hyperparameters_sha256"],
             "registry": run_section["registry"],
             "registry_sha256": run_section["registry_sha256"],
             "agent_access": run_section["agent_access"],
             "agent_access_sha256": run_section["agent_access_sha256"],
-            "agent_access_binding_sha256": run_section[
-                "agent_access_binding_sha256"
-            ],
-            "environment_rng_schedule": run_section[
-                "environment_rng_schedule"
-            ],
+            "agent_access_binding_sha256": run_section["agent_access_binding_sha256"],
+            "environment_rng_schedule": run_section["environment_rng_schedule"],
             "manifest_sha256": manifest["manifest_sha256"],
         }
         mismatches = [
-            name
-            for name, expected in expected_shared.items()
-            if getattr(self, name) != expected
+            name for name, expected in expected_shared.items() if getattr(self, name) != expected
         ]
         if mismatches:
             raise ValueError(
@@ -1292,22 +1259,17 @@ class OfficialForagaxRunSpec:
             )
         ]
         if len(matches) != 1:
-            raise ValueError(
-                "official import spec does not identify exactly one endorsed "
-                "artifact"
-            )
+            raise ValueError("official import spec does not identify exactly one endorsed artifact")
         run_entry, artifact, artifact_path = matches[0]
         if (
             self.path != artifact_path
             or self.agent != run_section["agent"]
-            or self.expected_steps
-            != run_entry["expected_result_env_steps"]
+            or self.expected_steps != run_entry["expected_result_env_steps"]
             or self.manifest_sha256 != evidence.manifest_sha256
             or self.expected_archive_sha256 != artifact["sha256"]
         ):
             raise ValueError(
-                "official import spec artifact identity differs from its "
-                "reverified evidence"
+                "official import spec artifact identity differs from its reverified evidence"
             )
 
 
@@ -1347,9 +1309,7 @@ def _serialized_official_evidence(
     return {
         "artifact_identities_sha256": evidence.artifact_identities_sha256,
         "endorsement_descriptor_id": evidence.endorsement_descriptor_id,
-        "endorsement_descriptor_sha256": (
-            evidence.endorsement_descriptor_sha256
-        ),
+        "endorsement_descriptor_sha256": (evidence.endorsement_descriptor_sha256),
         "endorsement_sha256": evidence.endorsement_sha256,
         "manifest_kind": evidence.manifest_kind,
         "manifest_path": str(evidence.manifest_path),
@@ -1368,10 +1328,7 @@ def _official_environment_runtime_profile(
     trust = manifest["trust"]
     run = manifest["run"]
     execution = manifest["execution"]
-    if not all(
-        isinstance(section, Mapping)
-        for section in (trust, run, execution)
-    ):
+    if not all(isinstance(section, Mapping) for section in (trust, run, execution)):
         raise ValueError("official runtime profile source sections are invalid")
     runtime = execution["runtime"]
     if not isinstance(runtime, Mapping):
@@ -1390,19 +1347,13 @@ def _official_environment_runtime_profile(
         "nvidia-",
     )
     scientific_packages = sorted(
-        line
-        for line in package_inventory
-        if line.casefold().startswith(relevant_prefixes)
+        line for line in package_inventory if line.casefold().startswith(relevant_prefixes)
     )
     command = execution["command"]
-    if not isinstance(command, list) or not all(
-        isinstance(argument, str) for argument in command
-    ):
+    if not isinstance(command, list) or not all(isinstance(argument, str) for argument in command):
         raise ValueError("official runtime profile command is invalid")
     container_environment = sorted(
-        argument.removeprefix("--env=")
-        for argument in command
-        if argument.startswith("--env=")
+        argument.removeprefix("--env=") for argument in command if argument.startswith("--env=")
     )
     schedule = run["environment_rng_schedule"]
     if schedule not in {
@@ -1437,9 +1388,7 @@ def _official_environment_runtime_profile(
         "import_shadow_contract": runtime["import_shadow_contract"],
         "foragax": {
             "distribution": implementation["distribution"],
-            "install_tree_hash_scheme": implementation[
-                "install_tree_hash_scheme"
-            ],
+            "install_tree_hash_scheme": implementation["install_tree_hash_scheme"],
             "install_tree_sha256": implementation["install_tree_sha256"],
             "version": implementation["version"],
         },
@@ -1450,72 +1399,39 @@ def _official_environment_runtime_profile(
             "version": runtime["jax"],
         },
         "dependency_contract": {
-            "cuda_wheel_library_profile_sha256": immutable[
-                "cuda_wheel_library_profile_sha256"
-            ],
-            "cuda_wheel_library_paths": immutable[
-                "cuda_wheel_library_paths"
-            ],
-            "dependency_lock_sha256": immutable[
-                "dependency_lock_sha256"
-            ],
-            "determinism_qualification": immutable[
-                "determinism_qualification"
-            ],
-            "determinism_qualification_sha256": immutable[
-                "determinism_qualification_sha256"
-            ],
-            "driver_user_library_paths": immutable[
-                "driver_user_library_paths"
-            ],
-            "driver_user_library_hash_scheme": immutable[
-                "driver_user_library_hash_scheme"
-            ],
-            "driver_user_library_tree_sha256": immutable[
-                "driver_user_library_tree_sha256"
-            ],
+            "cuda_wheel_library_profile_sha256": immutable["cuda_wheel_library_profile_sha256"],
+            "cuda_wheel_library_paths": immutable["cuda_wheel_library_paths"],
+            "dependency_lock_sha256": immutable["dependency_lock_sha256"],
+            "determinism_qualification": immutable["determinism_qualification"],
+            "determinism_qualification_sha256": immutable["determinism_qualification_sha256"],
+            "driver_user_library_paths": immutable["driver_user_library_paths"],
+            "driver_user_library_hash_scheme": immutable["driver_user_library_hash_scheme"],
+            "driver_user_library_tree_sha256": immutable["driver_user_library_tree_sha256"],
             "executor_kind": immutable["executor_kind"],
-            "gpu_user_library_bundle_sha256": immutable[
-                "gpu_user_library_bundle_sha256"
-            ],
+            "gpu_user_library_bundle_sha256": immutable["gpu_user_library_bundle_sha256"],
             "image_id": immutable["image_id"],
-            "image_reference_digest": immutable[
-                "image_reference_digest"
-            ],
+            "image_reference_digest": immutable["image_reference_digest"],
             "libcuda_sha256": immutable["libcuda_sha256"],
-            "native_runtime_inventory_sha256": immutable[
-                "native_runtime_inventory_sha256"
-            ],
+            "native_runtime_inventory_sha256": immutable["native_runtime_inventory_sha256"],
             "native_runtime_inventory_hash_scheme": immutable[
                 "native_runtime_inventory_hash_scheme"
             ],
-            "native_runtime_inventory_root": immutable[
-                "native_runtime_inventory_root"
-            ],
-            "runtime_binary_sha256": immutable[
-                "runtime_binary_sha256"
-            ],
+            "native_runtime_inventory_root": immutable["native_runtime_inventory_root"],
+            "runtime_binary_sha256": immutable["runtime_binary_sha256"],
             "sbom_sha256": immutable["sbom_sha256"],
-            "scientific_runtime_class": immutable[
-                "scientific_runtime_class"
-            ],
+            "scientific_runtime_class": immutable["scientific_runtime_class"],
         },
         "gpu_host_runtime": runtime["gpu_host_runtime"],
         "container_environment": container_environment,
     }
     schedule_sha256 = environment_rng_schedule_sha256(str(schedule))
-    if (
-        immutable["scientific_runtime_class"]
-        != "matched_current_foragax_0_55_cuda12"
-    ):
+    if immutable["scientific_runtime_class"] != "matched_current_foragax_0_55_cuda12":
         return None, None, schedule_sha256
     profile_sha256 = environment_runtime_profile_sha256(normalized)
     immutable_runtime_profile_id = immutable["runtime_profile_id"]
     if immutable_runtime_profile_id is None:
         if immutable["executor_kind"] != "test-native":
-            raise ValueError(
-                "official immutable runtime profile ID is unavailable"
-            )
+            raise ValueError("official immutable runtime profile ID is unavailable")
         runtime_profile_id = f"test-native:{trust['profile_id']}"
     elif type(immutable_runtime_profile_id) is str:
         runtime_profile_id = immutable_runtime_profile_id
@@ -1567,7 +1483,8 @@ def import_official_foragax_npz(
     final_window: int = 100_000,
 ) -> ForagerRunResult:
     """Convert one official ``data/<seed>.npz`` archive to Alberta's schema."""
-    if type(ewm_decay) not in (int, float):
+    actual_type = type(ewm_decay)
+    if issubclass(actual_type, bool) or not issubclass(actual_type, (int, float)):
         raise ValueError("ewm_decay must be a finite number in [0, 1)")
     try:
         ewm_decay_as_float = float(ewm_decay)
@@ -1593,9 +1510,7 @@ def import_official_foragax_npz(
         )
 
         assert spec.attestation_evidence is not None
-        reverified = reverify_official_foragax_evidence(
-            spec.attestation_evidence
-        )
+        reverified = reverify_official_foragax_evidence(spec.attestation_evidence)
         (
             runtime_profile_id,
             environment_runtime_profile_sha256,
@@ -1604,17 +1519,11 @@ def import_official_foragax_npz(
         reverified_run = reverified.manifest["run"]
         if not isinstance(reverified_run, Mapping):
             raise ValueError("official manifest run section is invalid")
-        raw_metric_horizon_policy = reverified_run.get(
-            "metric_horizon_policy"
-        )
+        raw_metric_horizon_policy = reverified_run.get("metric_horizon_policy")
         if type(raw_metric_horizon_policy) is not str:
-            raise ValueError(
-                "official manifest metric horizon policy is invalid"
-            )
+            raise ValueError("official manifest metric horizon policy is invalid")
         metric_horizon_policy = raw_metric_horizon_policy
-    path = Path(
-        os.path.abspath(os.path.expanduser(os.fspath(spec.path)))
-    )
+    path = Path(os.path.abspath(os.path.expanduser(os.fspath(spec.path))))
     if not path.is_file():
         raise FileNotFoundError(path)
     if protocol_attested and path.name != f"{spec.seed}.npz":
@@ -1672,9 +1581,7 @@ def import_official_foragax_npz(
             or np.issubdtype(biome_regret.dtype, np.complexfloating)
             or not np.issubdtype(biome_regret.dtype, np.number)
         ):
-            raise ValueError(
-                f"{path} biome_regret must be a real numeric ({steps},) array"
-            )
+            raise ValueError(f"{path} biome_regret must be a real numeric ({steps},) array")
         if not np.all(np.isfinite(biome_regret)):
             raise FloatingPointError(f"{path} contains non-finite biome_regret")
         biome_regret = biome_regret.astype(np.float64, copy=False)
@@ -1736,16 +1643,12 @@ def import_official_foragax_npz(
         "interpreter_sha256": spec.interpreter_sha256,
         "package_freeze_sha256": spec.package_freeze_sha256,
         "resolved_hyperparameters": spec.resolved_hyperparameters,
-        "resolved_hyperparameters_sha256": (
-            spec.resolved_hyperparameters_sha256
-        ),
+        "resolved_hyperparameters_sha256": (spec.resolved_hyperparameters_sha256),
         "registry": spec.registry,
         "registry_sha256": spec.registry_sha256,
         "agent_access": spec.agent_access,
         "agent_access_sha256": spec.agent_access_sha256,
-        "agent_access_binding_sha256": (
-            spec.agent_access_binding_sha256
-        ),
+        "agent_access_binding_sha256": (spec.agent_access_binding_sha256),
         "execution_runtime": safe_runtime,
         "execution_runtime_sha256": execution_runtime_sha256,
         "relevant_environment_sha256": relevant_environment_sha256,
@@ -1755,26 +1658,16 @@ def import_official_foragax_npz(
             if environment_implementation is None
             else _canonical_json_sha256(environment_implementation)
         ),
-        "official_foragax_evidence": _serialized_official_evidence(
-            spec.attestation_evidence
-        ),
+        "official_foragax_evidence": _serialized_official_evidence(spec.attestation_evidence),
         "metric_horizon_policy": metric_horizon_policy,
-        "attestation_state": (
-            "protocol_attested" if protocol_attested else "unattested"
-        ),
+        "attestation_state": ("protocol_attested" if protocol_attested else "unattested"),
         "environment_rng_schedule": spec.environment_rng_schedule,
-        "environment_rng_schedule_sha256": (
-            environment_rng_schedule_sha256
-        ),
-        "environment_runtime_profile_sha256": (
-            environment_runtime_profile_sha256
-        ),
+        "environment_rng_schedule_sha256": (environment_rng_schedule_sha256),
+        "environment_runtime_profile_sha256": (environment_runtime_profile_sha256),
         "runtime_profile_id": runtime_profile_id,
         "timing_available": False,
         "pairing": (
-            "verified_foragax_environment"
-            if protocol_attested
-            else "unpaired_unattested_import"
+            "verified_foragax_environment" if protocol_attested else "unpaired_unattested_import"
         ),
         "comparison_note": (
             "Imported seed-level output from the official agent repository. "
@@ -1817,9 +1710,7 @@ def _reverified_official_foragax_run(
     """Reverify serialized endorsement evidence and its imported run binding."""
     raw_evidence = run.agent_metadata.get("official_foragax_evidence")
     if not isinstance(raw_evidence, Mapping):
-        raise ValueError(
-            "official Foragax run lacks repository-endorsed evidence"
-        )
+        raise ValueError("official Foragax run lacks repository-endorsed evidence")
     evidence_data = _json_mapping_copy(
         raw_evidence,
         name="official_foragax_evidence",
@@ -1858,27 +1749,17 @@ def _reverified_official_foragax_run(
             manifest_sha256=evidence_data["manifest_sha256"],
             manifest_kind=evidence_data["manifest_kind"],
             trust_descriptor_id=evidence_data["trust_descriptor_id"],
-            trust_descriptor_sha256=evidence_data[
-                "trust_descriptor_sha256"
-            ],
+            trust_descriptor_sha256=evidence_data["trust_descriptor_sha256"],
             profile_id=evidence_data["profile_id"],
             profile_sha256=evidence_data["profile_sha256"],
-            artifact_identities_sha256=evidence_data[
-                "artifact_identities_sha256"
-            ],
-            endorsement_descriptor_id=evidence_data[
-                "endorsement_descriptor_id"
-            ],
-            endorsement_descriptor_sha256=evidence_data[
-                "endorsement_descriptor_sha256"
-            ],
+            artifact_identities_sha256=evidence_data["artifact_identities_sha256"],
+            endorsement_descriptor_id=evidence_data["endorsement_descriptor_id"],
+            endorsement_descriptor_sha256=evidence_data["endorsement_descriptor_sha256"],
             endorsement_sha256=evidence_data["endorsement_sha256"],
         )
         verified = reverify_official_foragax_evidence(evidence)
     except (OSError, TypeError, ValueError) as exc:
-        raise ValueError(
-            "official Foragax result evidence does not reverify"
-        ) from exc
+        raise ValueError("official Foragax result evidence does not reverify") from exc
     if _serialized_official_evidence(evidence) != evidence_data:
         raise ValueError("official Foragax result evidence was relabelled")
     manifest = verified.manifest
@@ -1907,16 +1788,12 @@ def _reverified_official_foragax_run(
         for run_entry, artifact, artifact_path in artifact_entries
         if (
             run_entry["effective_seed"] == run.seed
-            and artifact["sha256"]
-            == run.agent_metadata.get("archive_sha256")
-            and artifact["path"]
-            == run.agent_metadata.get("artifact_relative_path")
+            and artifact["sha256"] == run.agent_metadata.get("archive_sha256")
+            and artifact["path"] == run.agent_metadata.get("artifact_relative_path")
         )
     ]
     if len(matches) != 1:
-        raise ValueError(
-            "official Foragax result does not identify one endorsed artifact"
-        )
+        raise ValueError("official Foragax result does not identify one endorsed artifact")
     run_entry, _artifact, artifact_path = matches[0]
     schedule = run_section["environment_rng_schedule"]
     access = run_section["agent_access"]
@@ -1927,11 +1804,9 @@ def _reverified_official_foragax_run(
     ) = _official_environment_runtime_profile(manifest)
     if (
         run.agent_metadata.get("attestation_state") != "protocol_attested"
-        or run.agent_metadata.get("manifest_sha256")
-        != manifest["manifest_sha256"]
+        or run.agent_metadata.get("manifest_sha256") != manifest["manifest_sha256"]
         or run.agent_metadata.get("environment_rng_schedule") != schedule
-        or run.agent_metadata.get("runtime_profile_id")
-        != runtime_profile_id
+        or run.agent_metadata.get("runtime_profile_id") != runtime_profile_id
         or run.agent_metadata.get("environment_runtime_profile_sha256")
         != environment_runtime_profile_sha256
         or run.agent_metadata.get("environment_rng_schedule_sha256")
@@ -1940,9 +1815,7 @@ def _reverified_official_foragax_run(
         or run.privileged != access["privileged"]
         or run.steps != run_entry["expected_result_env_steps"]
     ):
-        raise ValueError(
-            "official Foragax result metadata differs from reverified evidence"
-        )
+        raise ValueError("official Foragax result metadata differs from reverified evidence")
     metric_contract = run.metric_contract
     if not isinstance(metric_contract, Mapping):
         raise ValueError("official Foragax result metric contract is invalid")
@@ -1950,7 +1823,8 @@ def _reverified_official_foragax_run(
     record_every = metric_contract.get("record_every_steps")
     final_window = metric_contract.get("final_window_steps_configured")
     if (
-        type(ewm_decay) not in {int, float}
+        issubclass(type(ewm_decay), bool)
+        or not issubclass(type(ewm_decay), (int, float))
         or type(record_every) is not int
         or type(final_window) is not int
     ):
@@ -1961,10 +1835,7 @@ def _reverified_official_foragax_run(
         label="paired comparison artifact",
         capture_bytes=True,
     )
-    if (
-        archive_bytes is None
-        or archive_metadata["sha256"] != _artifact["sha256"]
-    ):
+    if archive_bytes is None or archive_metadata["sha256"] != _artifact["sha256"]:
         raise ValueError("official Foragax paired artifact changed")
     with np.load(io.BytesIO(archive_bytes), allow_pickle=False) as archive:
         rewards = np.asarray(archive["rewards"])
@@ -1995,14 +1866,8 @@ def _reverified_official_foragax_run(
         steps=run.steps,
     )
     finite_regret = biome_regret[np.isfinite(biome_regret)]
-    expected_mean_regret = (
-        float(np.mean(finite_regret)) if finite_regret.size else math.nan
-    )
-    expected_final_regret = (
-        float(np.ravel(biome_regret)[-1])
-        if biome_regret.size
-        else math.nan
-    )
+    expected_mean_regret = float(np.mean(finite_regret)) if finite_regret.size else math.nan
+    expected_final_regret = float(np.ravel(biome_regret)[-1]) if biome_regret.size else math.nan
     scalar_pairs = (
         (run.total_reward, total_reward),
         (run.mean_reward, total_reward / run.steps),
@@ -2012,16 +1877,10 @@ def _reverified_official_foragax_run(
         (run.fov_last_10pct_ema_auc, fov_auc),
     )
     regret_matches = (
-        (
-            math.isnan(run.mean_biome_regret)
-            and math.isnan(expected_mean_regret)
-        )
+        (math.isnan(run.mean_biome_regret) and math.isnan(expected_mean_regret))
         or run.mean_biome_regret == expected_mean_regret
     ) and (
-        (
-            math.isnan(run.final_biome_regret)
-            and math.isnan(expected_final_regret)
-        )
+        (math.isnan(run.final_biome_regret) and math.isnan(expected_final_regret))
         or run.final_biome_regret == expected_final_regret
     )
     if (
@@ -2032,9 +1891,7 @@ def _reverified_official_foragax_run(
         or run.curve_window_reward != curve_window
         or dict(metric_contract) != expected_metric_contract
     ):
-        raise ValueError(
-            "official Foragax result metrics differ from the endorsed archive"
-        )
+        raise ValueError("official Foragax result metrics differ from the endorsed archive")
     return manifest, str(schedule)
 
 
@@ -2076,10 +1933,7 @@ def _foragax_implementation_signature(run: ForagerRunResult) -> str | None:
     environment = run.environment
     implementation = environment.get("environment_implementation")
     if implementation is not None:
-        if (
-            run.agent_metadata.get("result_source")
-            != "official_foragax_agents_npz"
-        ):
+        if run.agent_metadata.get("result_source") != "official_foragax_agents_npz":
             return None
         manifest, _schedule = _reverified_official_foragax_run(run)
         manifest_environment = manifest["environment"]
@@ -2087,30 +1941,20 @@ def _foragax_implementation_signature(run: ForagerRunResult) -> str | None:
             raise ValueError("reverified manifest environment is invalid")
         manifest_implementation = manifest_environment["implementation"]
         if not isinstance(manifest_implementation, Mapping):
-            raise ValueError(
-                "reverified manifest implementation provenance is invalid"
-            )
+            raise ValueError("reverified manifest implementation provenance is invalid")
         expected_implementation = {
             "distribution": manifest_implementation["distribution"],
             "package": manifest_implementation["package"],
             "version": manifest_implementation["version"],
-            "direct_url_sha256": _canonical_json_sha256(
-                manifest_implementation["direct_url"]
-            ),
-            "install_tree_hash_scheme": manifest_implementation[
-                "install_tree_hash_scheme"
-            ],
-            "install_tree_sha256": manifest_implementation[
-                "install_tree_sha256"
-            ],
+            "direct_url_sha256": _canonical_json_sha256(manifest_implementation["direct_url"]),
+            "install_tree_hash_scheme": manifest_implementation["install_tree_hash_scheme"],
+            "install_tree_sha256": manifest_implementation["install_tree_sha256"],
         }
         if (
             not isinstance(implementation, Mapping)
             or dict(implementation) != expected_implementation
             or environment.get("environment_implementation_attestation")
-            != run.agent_metadata["official_foragax_evidence"][
-                "endorsement_sha256"
-            ]
+            != run.agent_metadata["official_foragax_evidence"]["endorsement_sha256"]
         ):
             return None
         recorded = run.agent_metadata.get("environment_implementation_sha256")
@@ -2178,10 +2022,7 @@ def _environment_signature(run: ForagerRunResult) -> tuple[Any, ...]:
 
 
 def _environment_rng_schedule(run: ForagerRunResult) -> str | None:
-    if (
-        run.agent_metadata.get("result_source")
-        == "official_foragax_agents_npz"
-    ):
+    if run.agent_metadata.get("result_source") == "official_foragax_agents_npz":
         _manifest, official_schedule = _reverified_official_foragax_run(run)
         return official_schedule
     if _foragax_semantic_signature(run) is None:
@@ -2192,26 +2033,17 @@ def _environment_rng_schedule(run: ForagerRunResult) -> str | None:
         "shared_agent_environment_rng_v1",
     }:
         raise ValueError(
-            "current Foragax pairing requires an explicit environment RNG "
-            "schedule identity"
+            "current Foragax pairing requires an explicit environment RNG schedule identity"
         )
-    recorded_schedule_sha256 = run.agent_metadata.get(
-        "environment_rng_schedule_sha256"
-    )
+    recorded_schedule_sha256 = run.agent_metadata.get("environment_rng_schedule_sha256")
     if type(recorded_schedule_sha256) is not str:
-        raise ValueError(
-            "current Foragax pairing requires an environment RNG schedule digest"
-        )
+        raise ValueError("current Foragax pairing requires an environment RNG schedule digest")
     _validate_sha256(
         recorded_schedule_sha256,
         name="environment_rng_schedule_sha256",
     )
-    if recorded_schedule_sha256 != environment_rng_schedule_sha256(
-        str(recorded_schedule)
-    ):
-        raise ValueError(
-            "Foragax environment RNG schedule digest does not verify"
-        )
+    if recorded_schedule_sha256 != environment_rng_schedule_sha256(str(recorded_schedule)):
+        raise ValueError("Foragax environment RNG schedule digest does not verify")
     return str(recorded_schedule)
 
 
@@ -2219,26 +2051,20 @@ def _environment_runtime_profile_identity(
     run: ForagerRunResult,
 ) -> tuple[str, str, str] | None:
     """Return a verified immutable runtime and RNG-schedule identity."""
-    if (
-        run.agent_metadata.get("result_source")
-        == "official_foragax_agents_npz"
-    ):
+    if run.agent_metadata.get("result_source") == "official_foragax_agents_npz":
         manifest, _official_schedule = _reverified_official_foragax_run(run)
-        profile_id, profile_sha256, schedule_sha256 = (
-            _official_environment_runtime_profile(manifest)
+        profile_id, profile_sha256, schedule_sha256 = _official_environment_runtime_profile(
+            manifest
         )
         if profile_id is None or profile_sha256 is None:
             raise ValueError(
-                "official Foragax run is not a matched-current immutable "
-                "runtime comparator"
+                "official Foragax run is not a matched-current immutable runtime comparator"
             )
         return profile_id, profile_sha256, schedule_sha256
     if _foragax_semantic_signature(run) is None:
         return None
     runtime_profile_id = run.agent_metadata.get("runtime_profile_id")
-    runtime_sha256 = run.agent_metadata.get(
-        "environment_runtime_profile_sha256"
-    )
+    runtime_sha256 = run.agent_metadata.get("environment_runtime_profile_sha256")
     if runtime_profile_id is not None or runtime_sha256 is not None:
         raise ValueError(
             "ordinary host Forager results may not self-declare a trusted "
@@ -2299,10 +2125,7 @@ def paired_forager_comparison(
         ("baseline", baseline_runs),
     ):
         for run in method_runs:
-            if (
-                run.agent_metadata.get("result_source")
-                == "official_foragax_agents_npz"
-            ):
+            if run.agent_metadata.get("result_source") == "official_foragax_agents_npz":
                 try:
                     _reverified_official_foragax_run(run)
                 except ValueError as exc:
@@ -2343,12 +2166,8 @@ def paired_forager_comparison(
                 f"seed {seed} uses different environment RNG schedules; "
                 "those trajectories are not paired"
             )
-        candidate_runtime_profile = _environment_runtime_profile_identity(
-            candidate
-        )
-        baseline_runtime_profile = _environment_runtime_profile_identity(
-            baseline
-        )
+        candidate_runtime_profile = _environment_runtime_profile_identity(candidate)
+        baseline_runtime_profile = _environment_runtime_profile_identity(baseline)
         if candidate_runtime_profile != baseline_runtime_profile:
             raise ValueError(
                 f"seed {seed} uses a different immutable environment runtime "
