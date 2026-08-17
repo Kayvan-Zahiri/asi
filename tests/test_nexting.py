@@ -270,8 +270,7 @@ class TestRMSE:
             per_horizon_rmse(predictions, returns, burn_in=burn_in)
 
         assert str(exc_info.value) == (
-            "burn_in must satisfy 0 <= burn_in < n_steps "
-            f"(got burn_in={burn_in}, n_steps=3)"
+            f"burn_in must satisfy 0 <= burn_in < n_steps (got burn_in={burn_in}, n_steps=3)"
         )
 
     @pytest.mark.parametrize(
@@ -513,9 +512,7 @@ class TestRunningRMSE:
             np.testing.assert_array_equal(np.asarray(eager), expected)
             np.testing.assert_array_equal(np.asarray(jitted), expected)
 
-        closed_over = jax.jit(
-            lambda p, r: per_horizon_running_rmse(p, r, window_size=3)
-        )
+        closed_over = jax.jit(lambda p, r: per_horizon_running_rmse(p, r, window_size=3))
         np.testing.assert_array_equal(
             np.asarray(closed_over(predictions, returns)),
             expected_by_window[3],
@@ -567,3 +564,38 @@ class TestRunningRMSE:
         assert float(running[-1, 0]) < 0.01
         # Mid-series transition: some error
         assert float(running[19, 0]) > 0.5
+
+
+def test_nexting_discount_and_terminal_value_validation() -> None:
+    c = jnp.array([1.0, 2.0, 3.0])
+
+    # forward_view_returns gamma validation
+    with pytest.raises(ValueError, match="gamma"):
+        forward_view_returns(c, gamma=True)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="gamma"):
+        forward_view_returns(c, gamma=False)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="gamma"):
+        forward_view_returns(c, gamma=float("nan"))
+    with pytest.raises(ValueError, match="gamma"):
+        forward_view_returns(c, gamma=-0.1)
+    with pytest.raises(ValueError, match="gamma"):
+        forward_view_returns(c, gamma=1.1)
+
+    # forward_view_returns terminal_value validation
+    with pytest.raises(ValueError, match="terminal_value"):
+        forward_view_returns(c, gamma=0.5, terminal_value=True)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="terminal_value"):
+        forward_view_returns(c, gamma=0.5, terminal_value=float("nan"))
+
+    # multi_horizon_returns gammas validation
+    with pytest.raises(ValueError, match="gammas"):
+        multi_horizon_returns(c, gammas=[True, False])  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="gammas"):
+        multi_horizon_returns(c, gammas=jnp.array([True, False]))
+
+    # Valid NumPy scalars
+    g1 = forward_view_returns(c, gamma=np.float32(0.5), terminal_value=np.float64(0.0))
+    assert g1.shape == (3,)
+
+    g_multi = multi_horizon_returns(c, gammas=np.array([0.0, 0.5], dtype=np.float32))
+    assert g_multi.shape == (3, 2)

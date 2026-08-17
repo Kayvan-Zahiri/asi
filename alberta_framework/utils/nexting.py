@@ -36,8 +36,50 @@ from functools import partial
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 from jax import Array
 from jaxtyping import Float
+
+from alberta_framework.core._float32_scalars import validated_float32_scalar
+
+
+def _validate_gamma(name: str, gamma: object) -> float | Array:
+    if isinstance(gamma, (bool, np.bool_)):
+        raise ValueError(f"{name} must not be a boolean")
+    if isinstance(gamma, (int, float, np.number)):
+        return validated_float32_scalar(name, gamma, lower=0.0, upper=1.0)
+    arr = jnp.asarray(gamma)
+    if arr.dtype == jnp.bool_:
+        raise ValueError(f"{name} must not be a boolean")
+    return gamma  # type: ignore[return-value]
+
+
+def _validate_terminal_value(name: str, terminal_value: object) -> float | Array:
+    if isinstance(terminal_value, (bool, np.bool_)):
+        raise ValueError(f"{name} must not be a boolean")
+    if isinstance(terminal_value, (int, float, np.number)):
+        return validated_float32_scalar(name, terminal_value)
+    arr = jnp.asarray(terminal_value)
+    if arr.dtype == jnp.bool_:
+        raise ValueError(f"{name} must not be a boolean")
+    return terminal_value  # type: ignore[return-value]
+
+
+def _validate_gammas_array(name: str, gammas: object) -> Array:
+    if isinstance(gammas, (bool, np.bool_)):
+        raise ValueError(f"{name} must not be a boolean")
+    try:
+        raw_np = np.asarray(gammas)
+        if raw_np.dtype == np.bool_ or any(isinstance(x, (bool, np.bool_)) for x in raw_np.flat):
+            raise ValueError(f"{name} must not contain booleans")
+    except TypeError:
+        pass
+    arr = jnp.asarray(gammas)
+    if arr.dtype == jnp.bool_:
+        raise ValueError(f"{name} must not be a boolean array")
+    if arr.ndim != 1:
+        raise ValueError(f"{name} must be a 1-D array")
+    return arr
 
 
 def forward_view_returns(
@@ -61,6 +103,8 @@ def forward_view_returns(
         Array of shape ``(T,)`` where index ``t`` is the forward-view
         return ``G_t = c_{t+1} + gamma * c_{t+2} + gamma^2 * c_{t+3} + ...``.
     """
+    _validate_gamma("gamma", gamma)
+    _validate_terminal_value("terminal_value", terminal_value)
     gamma_s = jnp.asarray(gamma, dtype=cumulants.dtype)
     init = jnp.asarray(terminal_value, dtype=cumulants.dtype)
 
@@ -94,6 +138,9 @@ def multi_horizon_returns(
         from step ``t`` at horizon ``gammas[h]``.
     """
 
+    _validate_gammas_array("gammas", gammas)
+    _validate_terminal_value("terminal_value", terminal_value)
+
     def per_gamma(g: Array) -> Array:
         return forward_view_returns(cumulants, g, terminal_value=terminal_value)
 
@@ -115,6 +162,9 @@ def multi_channel_horizon_returns(
     Returns:
         Array of shape ``(T, C, H)`` of forward-view returns.
     """
+    _validate_gammas_array("gammas", gammas)
+    _validate_terminal_value("terminal_value", terminal_value)
+
     # Vmap over channels: for each channel apply multi_horizon_returns
     def per_channel(c_series: Array) -> Array:
         return multi_horizon_returns(c_series, gammas, terminal_value=terminal_value)
@@ -192,9 +242,7 @@ def _pad_running_window(values: Array, window_size: int) -> Array:
     return jnp.concatenate([pad, values], axis=0)
 
 
-def _scaled_running_rmse_terms(
-    errors: Array, window_size: int
-) -> tuple[Array, Array, Array]:
+def _scaled_running_rmse_terms(errors: Array, window_size: int) -> tuple[Array, Array, Array]:
     """Return one global power-of-two scale and stable sliding RMS terms."""
     scale = jnp.max(jnp.abs(errors), axis=0)
     _, exponent = jnp.frexp(scale)
@@ -218,12 +266,8 @@ def _finite_running_rmse_jvp(
     tangents: tuple[Array],
 ) -> tuple[Array, Array]:
     (errors,), (errors_dot,) = primals, tangents
-    exponent, scaled_errors, scaled_running = _scaled_running_rmse_terms(
-        errors, window_size
-    )
-    running = _pad_running_window(
-        jnp.ldexp(scaled_running, exponent), window_size
-    )
+    exponent, scaled_errors, scaled_running = _scaled_running_rmse_terms(errors, window_size)
+    running = _pad_running_window(jnp.ldexp(scaled_running, exponent), window_size)
     safe_scaled_running = jnp.where(
         scaled_running > 0.0,
         scaled_running,
