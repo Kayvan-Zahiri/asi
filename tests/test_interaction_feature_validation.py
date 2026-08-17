@@ -194,3 +194,45 @@ def test_config_normalizes_hostile_mapping_failure() -> None:
 
     with pytest.raises(ValueError, match="could not be read"):
         FixedBudgetInteractionLearner.from_config(HostileMapping())
+
+
+def test_constructor_scalars_reject_booleans_and_nans() -> None:
+    # step_size_output
+    with pytest.raises(ValueError, match="step_size_output"):
+        FixedBudgetInteractionLearner(n_features=2, n_tasks=2, step_size_output=True)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="step_size_output"):
+        FixedBudgetInteractionLearner(n_features=2, n_tasks=2, step_size_output=float("nan"))
+    with pytest.raises(ValueError, match="step_size_output"):
+        FixedBudgetInteractionLearner(n_features=2, n_tasks=2, step_size_output=float("inf"))
+
+    # obgd_kappa
+    with pytest.raises(ValueError, match="obgd_kappa"):
+        FixedBudgetInteractionLearner(n_features=2, n_tasks=2, obgd_kappa=True)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="obgd_kappa"):
+        FixedBudgetInteractionLearner(n_features=2, n_tasks=2, obgd_kappa=float("nan"))
+    with pytest.raises(ValueError, match="obgd_kappa"):
+        FixedBudgetInteractionLearner(n_features=2, n_tasks=2, obgd_kappa=0.0)
+
+    # utility_decay
+    with pytest.raises(ValueError, match="utility_decay"):
+        FixedBudgetInteractionLearner(n_features=2, n_tasks=2, utility_decay=False)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="utility_decay"):
+        FixedBudgetInteractionLearner(n_features=2, n_tasks=2, utility_decay=1.0)
+
+    # promotion_blend & future_utility_mix
+    with pytest.raises(ValueError, match="promotion_blend"):
+        FixedBudgetInteractionLearner(n_features=2, n_tasks=2, promotion_blend=True)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="future_utility_mix"):
+        FixedBudgetInteractionLearner(n_features=2, n_tasks=2, future_utility_mix=True)  # type: ignore[arg-type]
+
+    # task_activity_decay & scale_normalizer_decay
+    with pytest.raises(ValueError, match="task_activity_decay"):
+        FixedBudgetInteractionLearner(n_features=2, n_tasks=2, task_activity_decay=False)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="scale_normalizer_decay"):
+        FixedBudgetInteractionLearner(n_features=2, n_tasks=2, scale_normalizer_decay=False)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="scale_normalizer_epsilon"):
+        FixedBudgetInteractionLearner(n_features=2, n_tasks=2, scale_normalizer_epsilon=True)  # type: ignore[arg-type]
+
+    # Valid construction
+    learner = FixedBudgetInteractionLearner(n_features=2, n_tasks=2, step_size_output=0.0)
+    assert learner._step_size_output == 0.0
