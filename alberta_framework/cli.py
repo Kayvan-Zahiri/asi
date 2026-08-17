@@ -27,7 +27,7 @@ from alberta_framework.steps.step2 import (
 
 
 def _print_json(payload: dict[str, object]) -> None:
-    print(json.dumps(payload, indent=2, sort_keys=True))
+    print(json.dumps(payload, indent=2, sort_keys=True, allow_nan=False))
 
 
 def step1_smoke_main(argv: Sequence[str] | None = None) -> int:
@@ -67,6 +67,7 @@ def step1_smoke_main(argv: Sequence[str] | None = None) -> int:
     )
     _print_json(result.to_dict())
     return 0 if result.finite else 1
+
 
 def step2_smoke_main(argv: Sequence[str] | None = None) -> int:
     """Entry point for ``alberta-step2-smoke``."""
