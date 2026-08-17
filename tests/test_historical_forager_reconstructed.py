@@ -548,3 +548,33 @@ def test_metric_rejects_nonfinite_or_unbounded_shapes() -> None:
         historical_fov_metrics(np.asarray([[1.0]]))
     with pytest.raises(HistoricalForagerContractError):
         historical_fov_metrics(np.asarray([math.nan]))
+
+
+def test_finite_reward_rejects_class_spoofed_non_real_reward() -> None:
+    from alberta_framework.benchmarks.historical_forager import _finite_reward
+
+    class SpoofedReward:
+        @property
+        def __class__(self) -> type:
+            return float
+
+        def __float__(self) -> float:
+            return 0.5
+
+    spoofed = SpoofedReward()
+    assert isinstance(spoofed, float)  # isinstance fooled by __class__ property
+
+    with pytest.raises(
+        HistoricalForagerContractError, match="historical reward must be a real scalar"
+    ):
+        _finite_reward(spoofed)
+
+    # Rejects bool
+    with pytest.raises(
+        HistoricalForagerContractError, match="historical reward must be a real scalar"
+    ):
+        _finite_reward(True)
+
+    # Valid reward
+    assert _finite_reward(0.5) == 0.5
+    assert _finite_reward(np.float64(0.5)) == 0.5
