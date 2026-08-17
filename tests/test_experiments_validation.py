@@ -151,9 +151,7 @@ def test_unique_names_preserve_config_and_seed_order() -> None:
     assert results["second"].seeds == [7, 3]
     assert results["first"].seeds == [7, 3]
     assert all(
-        summary.n_seeds == 2
-        for result in results.values()
-        for summary in result.summary.values()
+        summary.n_seeds == 2 for result in results.values() for summary in result.summary.values()
     )
     for result in results.values():
         for summary in result.summary.values():
@@ -198,9 +196,7 @@ def test_single_seed_surfaces_report_zero_spread() -> None:
 
 
 def test_empty_config_sequence_still_returns_empty_results() -> None:
-    assert (
-        run_multi_seed_experiment([], seeds=[0], parallel=False, show_progress=False) == {}
-    )
+    assert run_multi_seed_experiment([], seeds=[0], parallel=False, show_progress=False) == {}
 
 
 def _two_seed_trace() -> AggregatedResults:
@@ -510,7 +506,13 @@ def test_extract_hyperparameter_results_rejects_spoofed_numeric_subclasses() -> 
         10**1000,
         Fraction(10**1000, 3),
         Decimal("1e4000"),
-        np.longdouble("1e4000"),
+        pytest.param(
+            np.longdouble("1e4000"),
+            marks=pytest.mark.skipif(
+                not np.isfinite(float(np.longdouble("1e4000"))),
+                reason="longdouble overflows to inf on float64 platforms",
+            ),
+        ),
     ],
 )
 def test_extract_hyperparameter_results_keeps_wide_finite_numeric_coordinates(
@@ -932,3 +934,30 @@ def test_get_final_performance_rejects_nonfinite_samples() -> None:
     poisoned.metric_arrays["squared_error"][1, -1] = np.nan
     with pytest.raises(ValueError, match="non-finite samples"):
         get_final_performance({"candidate": poisoned}, window=1)
+
+
+def test_run_multi_seed_experiment_seeds_and_window_validation() -> None:
+    # seeds count validation
+    with pytest.raises(ValueError, match="seeds"):
+        run_multi_seed_experiment([], seeds=True)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="seeds"):
+        run_multi_seed_experiment([], seeds=False)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="seeds"):
+        run_multi_seed_experiment([], seeds=0)
+    with pytest.raises(ValueError, match="seeds"):
+        run_multi_seed_experiment([], seeds=-1)
+
+    # explicit seeds validation
+    with pytest.raises(ValueError, match="seeds"):
+        run_multi_seed_experiment([], seeds=[True])  # type: ignore[list-item]
+    with pytest.raises(ValueError, match="seeds"):
+        run_multi_seed_experiment([], seeds=[-1])
+
+    # window validation in get_final_performance
+    results = {"candidate": _two_seed_trace()}
+    with pytest.raises(ValueError, match="window"):
+        get_final_performance(results, window=True)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="window"):
+        get_final_performance(results, window=0)
+    with pytest.raises(ValueError, match="window"):
+        get_final_performance(results, window=-5)

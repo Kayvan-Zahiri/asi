@@ -24,6 +24,7 @@ import jax.random as jr
 import numpy as np
 from numpy.typing import NDArray
 
+from alberta_framework._seed_validation import require_jax_seed
 from alberta_framework.core.learners import (
     LinearLearner,
     metrics_to_dicts,
@@ -354,10 +355,14 @@ def run_multi_seed_experiment(
         )
 
     # Convert seeds to list
+    if isinstance(seeds, (bool, np.bool_)):
+        raise ValueError("seeds must not be a boolean")
     if isinstance(seeds, int):
+        if seeds < 1:
+            raise ValueError(f"seeds count must be positive (got {seeds})")
         seed_list = list(range(seeds))
     else:
-        seed_list = list(seeds)
+        seed_list = [require_jax_seed(s, name="seeds") for s in seeds]
 
     seen_seeds: set[int] = set()
     duplicate_seeds: set[int] = set()
@@ -481,7 +486,7 @@ def get_final_performance(
             trace, so the helper refuses rather than silently reporting a
             full-horizon mean.
     """
-    if window <= 0:
+    if type(window) is not int or window <= 0:
         raise ValueError(f"window must be positive (got {window})")
 
     metric_arrays: dict[str, NDArray[np.float64]] = {}
@@ -489,8 +494,7 @@ def get_final_performance(
         arr = agg.metric_arrays[metric]
         if arr.shape[1] == 0:
             raise ValueError(
-                f"AggregatedResults {name!r} must contain at least one metric step "
-                f"for {metric!r}"
+                f"AggregatedResults {name!r} must contain at least one metric step for {metric!r}"
             )
         _require_finite_metric_array(arr, metric)
         metric_arrays[name] = arr
@@ -583,9 +587,7 @@ def extract_hyperparameter_results(
     collisions = [(value, names) for value, names in coordinate_groups if len(names) > 1]
     if collisions:
         described = "; ".join(f"{value!r} <- {names}" for value, names in collisions)
-        raise ValueError(
-            f"param_extractor maps several configurations to one value: {described}"
-        )
+        raise ValueError(f"param_extractor maps several configurations to one value: {described}")
     try:
         return {value: performance[names[0]] for value, names in coordinate_groups}
     except Exception as exc:
@@ -655,11 +657,7 @@ def _require_hyperparameter_coordinate(
             denominator = fraction.denominator
         except AttributeError:
             reject()
-        if (
-            type(numerator) is not int
-            or type(denominator) is not int
-            or denominator <= 0
-        ):
+        if type(numerator) is not int or type(denominator) is not int or denominator <= 0:
             reject()
         return _CanonicalFractionCoordinate(numerator, denominator)
 
@@ -683,9 +681,7 @@ def _require_hyperparameter_coordinate(
         return value
 
     if _type_identity_in(value_type, _NUMPY_COORDINATE_TYPES):
-        if np.dtype(value_type).kind in ("f", "c") and not bool(
-            np.isfinite(cast(Any, value))
-        ):
+        if np.dtype(value_type).kind in ("f", "c") and not bool(np.isfinite(cast(Any, value))):
             reject()
         return value
 
@@ -708,9 +704,7 @@ def _is_python_numeric_coordinate_type(value_type: type[object]) -> bool:
 
 
 def _is_numpy_numeric_coordinate_type(value_type: type[object]) -> bool:
-    return _type_identity_in(value_type, _NUMPY_COORDINATE_TYPES) and np.dtype(
-        value_type
-    ).kind in (
+    return _type_identity_in(value_type, _NUMPY_COORDINATE_TYPES) and np.dtype(value_type).kind in (
         "b",
         "i",
         "u",
