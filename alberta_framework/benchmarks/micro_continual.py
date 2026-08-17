@@ -698,9 +698,12 @@ def bayes_predict(component_means: Array, dim_sigma: Array, x: Array) -> Array:
     c, k, d = component_means.shape
     whitened_x = x / dim_sigma[None, :]
     whitened_means = (component_means / dim_sigma[None, None, :]).reshape(c * k, d)
-    cross = whitened_x @ whitened_means.T
-    x_norms = jnp.sum(whitened_x * whitened_x, axis=1)
-    mean_norms = jnp.sum(whitened_means * whitened_means, axis=1)
+    origin = whitened_means[0:1]
+    centered_x = whitened_x - origin
+    centered_means = whitened_means - origin
+    cross = centered_x @ centered_means.T
+    x_norms = jnp.sum(centered_x * centered_x, axis=1)
+    mean_norms = jnp.sum(centered_means * centered_means, axis=1)
     d2 = (x_norms[:, None] - 2.0 * cross + mean_norms[None, :]).reshape(-1, c, k)
     scores = jax.scipy.special.logsumexp(-0.5 * d2, axis=2)
     return jnp.argmax(scores, axis=1).astype(jnp.int32)

@@ -1978,3 +1978,20 @@ def test_micro_run_result_rejects_leftover_identities() -> None:
     assert '"family": true' not in dumped
     assert '"seed": true' not in dumped
     assert '"hidden1": true' not in dumped
+
+
+def test_bayes_predict_large_offset_catastrophic_cancellation() -> None:
+    from alberta_framework.benchmarks.micro_continual import bayes_predict
+
+    # Component means with a large common offset:
+    # Class 0: mean [10000.0, 10000.0]
+    # Class 1: mean [10002.0, 10000.0]
+    component_means = jnp.array([[[10000.0, 10000.0]], [[10002.0, 10000.0]]], dtype=jnp.float32)
+    dim_sigma = jnp.array([1.0, 1.0], dtype=jnp.float32)
+
+    # Observation exactly matches class 1 mean
+    x = jnp.array([[10002.0, 10000.0]], dtype=jnp.float32)
+    predictions = bayes_predict(component_means, dim_sigma, x)
+
+    # Must predict class 1, not class 0
+    assert int(predictions[0]) == 1
