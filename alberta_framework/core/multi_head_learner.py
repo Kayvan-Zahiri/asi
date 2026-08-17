@@ -471,8 +471,17 @@ class MultiHeadMLPLearner:
             raise ValueError(
                 "per_head_gamma_lamda must be an actual tuple when constructed directly"
             )
-        if not 0.0 <= utility_decay < 1.0:
-            raise ValueError("utility_decay must be in [0, 1)")
+        sparsity = validated_float32_scalar("sparsity", sparsity, lower=0.0, upper=1.0)
+        leaky_relu_slope = validated_float32_scalar("leaky_relu_slope", leaky_relu_slope, lower=0.0)
+        gamma = validated_float32_scalar("gamma", gamma, lower=0.0, upper=1.0)
+        lamda = validated_float32_scalar("lamda", lamda, lower=0.0, upper=1.0)
+        utility_decay = validated_float32_scalar(
+            "utility_decay", utility_decay, lower=0.0, upper=1.0, upper_inclusive=False
+        )
+        if type(use_layer_norm) is not bool:
+            raise ValueError("use_layer_norm must be an actual bool")
+        if not isinstance(trace_mode, TraceMode):
+            raise ValueError("trace_mode must be a TraceMode")
 
         self._n_heads = n_heads
         self._hidden_sizes = hidden_sizes
@@ -558,13 +567,9 @@ class MultiHeadMLPLearner:
             "hidden_sizes": list(self._hidden_sizes),
             "optimizer": self._optimizer.to_config(),
             "bounder": self._bounder.to_config() if self._bounder is not None else None,
-            "normalizer": (
-                self._normalizer.to_config() if self._normalizer is not None else None
-            ),
+            "normalizer": (self._normalizer.to_config() if self._normalizer is not None else None),
             "head_optimizer": (
-                self._head_optimizer.to_config()
-                if self._head_optimizer is not None
-                else None
+                self._head_optimizer.to_config() if self._head_optimizer is not None else None
             ),
             "sparsity": self._sparsity,
             "leaky_relu_slope": self._leaky_relu_slope,
@@ -621,13 +626,9 @@ class MultiHeadMLPLearner:
         bounder_cfg = config.pop("bounder", None)
         bounder = bounder_from_config(bounder_cfg) if bounder_cfg is not None else None
         normalizer_cfg = config.pop("normalizer", None)
-        normalizer = (
-            normalizer_from_config(normalizer_cfg) if normalizer_cfg is not None else None
-        )
+        normalizer = normalizer_from_config(normalizer_cfg) if normalizer_cfg is not None else None
         head_opt_cfg = config.pop("head_optimizer", None)
-        head_optimizer = (
-            optimizer_from_config(head_opt_cfg) if head_opt_cfg is not None else None
-        )
+        head_optimizer = optimizer_from_config(head_opt_cfg) if head_opt_cfg is not None else None
 
         per_head_gl = config.pop("per_head_gamma_lamda")
         if per_head_gl is not None:
@@ -663,13 +664,9 @@ class MultiHeadMLPLearner:
             Initial state with sparse trunk weights, zero biases, and
             per-head output layers
         """
-        feature_dim = _require_int(
-            "feature_dim", feature_dim, minimum=1, maximum=_INT32_MAX
-        )
+        feature_dim = _require_int("feature_dim", feature_dim, minimum=1, maximum=_INT32_MAX)
         if self._hidden_sizes:
-            _require_int32_product(
-                "input_layer_scalars", feature_dim, self._hidden_sizes[0]
-            )
+            _require_int32_product("input_layer_scalars", feature_dim, self._hidden_sizes[0])
         else:
             _require_int32_product("linear_head_weight_scalars", self._n_heads, feature_dim)
         _validate_direct_state_resources(self._n_heads, self._hidden_sizes, feature_dim)
@@ -716,10 +713,12 @@ class MultiHeadMLPLearner:
             head_weights.append(w)
             head_biases.append(b)
             head_traces_list.append((jnp.zeros_like(w), jnp.zeros_like(b)))
-            head_opt_states_list.append((
-                head_opt.init_for_shape(w.shape),
-                head_opt.init_for_shape(b.shape),
-            ))
+            head_opt_states_list.append(
+                (
+                    head_opt.init_for_shape(w.shape),
+                    head_opt.init_for_shape(b.shape),
+                )
+            )
 
         head_params = MLPParams(
             weights=tuple(head_weights),
@@ -738,8 +737,7 @@ class MultiHeadMLPLearner:
             trunk_traces=tuple(trunk_traces),
             head_traces=tuple(head_traces_list),
             hidden_unit_utilities=tuple(
-                jnp.zeros(hidden_size, dtype=jnp.float32)
-                for hidden_size in self._hidden_sizes
+                jnp.zeros(hidden_size, dtype=jnp.float32) for hidden_size in self._hidden_sizes
             ),
             normalizer_state=normalizer_state,
             step_count=jnp.array(0, dtype=jnp.int32),
@@ -821,9 +819,7 @@ class MultiHeadMLPLearner:
     ) -> _MultiHeadCounterStatus:
         """Validate the outer clock and optional normalizer clock alignment."""
 
-        proposed_words, outer_capacity = _checked_lifetime_words_increment(
-            state.step_words
-        )
+        proposed_words, outer_capacity = _checked_lifetime_words_increment(state.step_words)
         outer_valid = _lifetime_counter_valid(
             state.step_words,
             state.step_count,
@@ -834,42 +830,24 @@ class MultiHeadMLPLearner:
         nested_estimator_capacity = jnp.asarray(True, dtype=jnp.bool_)
         if self._normalizer is None:
             if state.normalizer_state is not None:
-                raise ValueError(
-                    "state has normalizer_state but learner has no normalizer"
-                )
+                raise ValueError("state has normalizer_state but learner has no normalizer")
         else:
             if state.normalizer_state is None:
-                raise ValueError(
-                    "learner has a normalizer but state.normalizer_state is absent"
-                )
-            nested_status = self._normalizer.counter_status(
-                state.normalizer_state
-            )
-            aligned = jnp.all(
-                state.normalizer_state.sample_count_words == state.step_words
-            )
+                raise ValueError("learner has a normalizer but state.normalizer_state is absent")
+            nested_status = self._normalizer.counter_status(state.normalizer_state)
+            aligned = jnp.all(state.normalizer_state.sample_count_words == state.step_words)
             nested_valid = nested_status.counter_valid
-            nested_lifetime_capacity = (
-                nested_status.lifetime_capacity_available
-            )
-            nested_estimator_capacity = (
-                nested_status.estimator_capacity_available
-            )
+            nested_lifetime_capacity = nested_status.lifetime_capacity_available
+            nested_estimator_capacity = nested_status.estimator_capacity_available
         counter_valid = outer_valid & nested_valid & aligned
         lifetime_capacity = outer_capacity & nested_lifetime_capacity
-        update_available = (
-            counter_valid
-            & lifetime_capacity
-            & nested_estimator_capacity
-        )
+        update_available = counter_valid & lifetime_capacity & nested_estimator_capacity
         return _MultiHeadCounterStatus(
             proposed_step_words=proposed_words,
             lifetime_counter_valid=counter_valid,
             lifetime_capacity_available=lifetime_capacity,
             normalizer_counter_aligned=aligned,
-            normalizer_estimator_capacity_available=(
-                nested_estimator_capacity
-            ),
+            normalizer_estimator_capacity_available=(nested_estimator_capacity),
             update_available=update_available,
         )
 
@@ -950,9 +928,7 @@ class MultiHeadMLPLearner:
         n_heads = self._n_heads
         targets = jnp.asarray(targets, dtype=jnp.float32)
         if targets.shape != (n_heads,):
-            raise ValueError(
-                f"targets must have shape ({n_heads},), got {targets.shape}"
-            )
+            raise ValueError(f"targets must have shape ({n_heads},), got {targets.shape}")
         counter_status = self._counter_status(state)
         inputs_valid = jnp.all(jnp.isfinite(observation)) & jnp.all(
             jnp.isfinite(targets) | jnp.isnan(targets)
@@ -962,16 +938,12 @@ class MultiHeadMLPLearner:
         previous_checked = state
         if self._gamma * self._lamda == 0.0:
             previous_checked = previous_checked.replace(  # type: ignore[attr-defined]
-                trunk_traces=tuple(
-                    jnp.zeros_like(trace) for trace in state.trunk_traces
-                ),
+                trunk_traces=tuple(jnp.zeros_like(trace) for trace in state.trunk_traces),
             )
         checked_head_traces = []
         for i, (old_w_trace, old_b_trace) in enumerate(state.head_traces):
             head_decay_value = (
-                self._per_head_gl[i]
-                if self._per_head_gl is not None
-                else self._gamma * self._lamda
+                self._per_head_gl[i] if self._per_head_gl is not None else self._gamma * self._lamda
             )
             if head_decay_value == 0.0:
                 checked_head_traces.append(
@@ -1005,9 +977,7 @@ class MultiHeadMLPLearner:
             def update_normalizer(
                 _: None,
             ) -> tuple[Array, AnyNormalizerState, Bool[Array, ""]]:
-                result = normalizer.normalize_with_diagnostics(
-                    normalizer_state, observation
-                )
+                result = normalizer.normalize_with_diagnostics(normalizer_state, observation)
                 return result.normalized, result.state, result.update_applied
 
             def preserve_normalizer(
@@ -1066,9 +1036,7 @@ class MultiHeadMLPLearner:
             # gradients are error-weighted. This is safe because trunk
             # gamma*lamda=0 (validated in __init__), so traces reset each
             # step and the error-gradient coupling doesn't accumulate.
-            cotangent = cotangent + masked_error_i * jnp.squeeze(
-                state.head_params.weights[i]
-            )
+            cotangent = cotangent + masked_error_i * jnp.squeeze(state.head_params.weights[i])
 
         predictions_arr = jnp.array(predictions_list)
         errors_arr = jnp.array(errors_list)
@@ -1107,15 +1075,12 @@ class MultiHeadMLPLearner:
             old_wt = state.trunk_traces[2 * i]
             if replacing:
                 # Replacing: use grad where nonzero, else decay old trace
-                new_wt = jnp.where(
-                    w_grad_i != 0.0, w_grad_i, _skip_zero_scale(gamma_lamda, old_wt)
-                )
+                new_wt = jnp.where(w_grad_i != 0.0, w_grad_i, _skip_zero_scale(gamma_lamda, old_wt))
             else:
                 new_wt = _skip_zero_scale(gamma_lamda, old_wt) + w_grad_i
             new_trunk_traces.append(new_wt)
             w_step, new_w_opt, w_update_applied = _update_from_gradient_with_diagnostics(
-                self._optimizer,
-                state.trunk_optimizer_states[2 * i], new_wt, error=None
+                self._optimizer, state.trunk_optimizer_states[2 * i], new_wt, error=None
             )
             trunk_steps.append(w_step)
             new_trunk_opt_states.append(new_w_opt)
@@ -1125,15 +1090,12 @@ class MultiHeadMLPLearner:
             b_grad_i = trunk_bias_grads[i]
             old_bt = state.trunk_traces[2 * i + 1]
             if replacing:
-                new_bt = jnp.where(
-                    b_grad_i != 0.0, b_grad_i, _skip_zero_scale(gamma_lamda, old_bt)
-                )
+                new_bt = jnp.where(b_grad_i != 0.0, b_grad_i, _skip_zero_scale(gamma_lamda, old_bt))
             else:
                 new_bt = _skip_zero_scale(gamma_lamda, old_bt) + b_grad_i
             new_trunk_traces.append(new_bt)
             b_step, new_b_opt, b_update_applied = _update_from_gradient_with_diagnostics(
-                self._optimizer,
-                state.trunk_optimizer_states[2 * i + 1], new_bt, error=None
+                self._optimizer, state.trunk_optimizer_states[2 * i + 1], new_bt, error=None
             )
             trunk_steps.append(b_step)
             new_trunk_opt_states.append(new_b_opt)
@@ -1157,12 +1119,8 @@ class MultiHeadMLPLearner:
         new_trunk_weights: list[Array] = []
         new_trunk_biases: list[Array] = []
         for i in range(n_trunk_layers):
-            new_trunk_weights.append(
-                state.trunk_params.weights[i] + trunk_steps[2 * i]
-            )
-            new_trunk_biases.append(
-                state.trunk_params.biases[i] + trunk_steps[2 * i + 1]
-            )
+            new_trunk_weights.append(state.trunk_params.weights[i] + trunk_steps[2 * i])
+            new_trunk_biases.append(state.trunk_params.biases[i] + trunk_steps[2 * i + 1])
 
         new_trunk_params = MLPParams(
             weights=tuple(new_trunk_weights),
@@ -1204,9 +1162,7 @@ class MultiHeadMLPLearner:
                 new_b_trace = _skip_zero_scale(head_gl, old_b_trace) + b_grad
 
             # Error for this head (masked to 0 for inactive)
-            error_i = jnp.where(
-                active_mask[i], safe_targets[i] - predictions_list[i], 0.0
-            )
+            error_i = jnp.where(active_mask[i], safe_targets[i] - predictions_list[i], 0.0)
 
             # Optimizer step (with error for meta-learning)
             head_opt = self._head_optimizer if self._head_optimizer is not None else self._optimizer
@@ -1260,9 +1216,7 @@ class MultiHeadMLPLearner:
             raw_error_i = jnp.where(active_mask[i], error_i, jnp.nan)
             mean_ss_i = _extract_mean_step_size(new_w_opt)
             mean_ss_i = jnp.where(active_mask[i], mean_ss_i, jnp.nan)
-            per_head_metrics_list.append(
-                jnp.array([se_i, raw_error_i, mean_ss_i])
-            )
+            per_head_metrics_list.append(jnp.array([se_i, raw_error_i, mean_ss_i]))
 
         new_head_params = MLPParams(
             weights=tuple(new_head_weights),
@@ -1323,15 +1277,9 @@ class MultiHeadMLPLearner:
             ),
             pre_step_words=state.step_words,
             post_step_words=new_state.step_words,
-            lifetime_counter_valid=(
-                counter_status.lifetime_counter_valid
-            ),
-            lifetime_capacity_available=(
-                counter_status.lifetime_capacity_available
-            ),
-            normalizer_counter_aligned=(
-                counter_status.normalizer_counter_aligned
-            ),
+            lifetime_counter_valid=(counter_status.lifetime_counter_valid),
+            lifetime_capacity_available=(counter_status.lifetime_capacity_available),
+            normalizer_counter_aligned=(counter_status.normalizer_counter_aligned),
             normalizer_estimator_capacity_available=(
                 counter_status.normalizer_estimator_capacity_available
             ),
@@ -1422,18 +1370,14 @@ def migrate_legacy_multi_head_mlp_state(
     """
 
     fields = _host_field_mapping(legacy_state)
-    current_names = {
-        field.name
-        for field in dataclasses.fields(MultiHeadMLPState)
-    }
+    current_names = {field.name for field in dataclasses.fields(MultiHeadMLPState)}
     legacy_names = current_names - {"step_words"}
     supplied_names = set(fields)
     if supplied_names != legacy_names:
         missing = sorted(legacy_names - supplied_names)
         extra = sorted(supplied_names - legacy_names)
         raise ValueError(
-            "legacy MultiHeadMLP field manifest is not exact; "
-            f"missing={missing}, extra={extra}"
+            f"legacy MultiHeadMLP field manifest is not exact; missing={missing}, extra={extra}"
         )
     step_array = jnp.asarray(fields["step_count"])
     if step_array.shape != () or step_array.dtype != jnp.dtype(jnp.int32):
@@ -1451,9 +1395,7 @@ def migrate_legacy_multi_head_mlp_state(
             normalizer_type=_legacy_normalizer_type(legacy_normalizer),
         )
         if int(normalizer_state.sample_count) != step:
-            raise ValueError(
-                "legacy learner and normalizer sample counters are not aligned"
-            )
+            raise ValueError("legacy learner and normalizer sample counters are not aligned")
         fields["normalizer_state"] = normalizer_state
     fields["step_words"] = jnp.asarray((0, step), dtype=jnp.uint32)
     return MultiHeadMLPState(**fields)
@@ -1537,9 +1479,7 @@ def run_multi_head_learning_loop_batched(
 
     def single_run(key: Array) -> tuple[MultiHeadMLPState, Array, Array]:
         init_state = learner.init(feature_dim, key)
-        result = run_multi_head_learning_loop(
-            learner, init_state, observations, targets
-        )
+        result = run_multi_head_learning_loop(learner, init_state, observations, targets)
         return result.state, result.per_head_metrics, result.updates_applied
 
     t0 = time.time()

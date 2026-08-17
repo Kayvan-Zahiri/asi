@@ -44,6 +44,7 @@ class _HostileDict(dict[str, object]):
     def __iter__(self):
         raise AssertionError("dict subclass hook must not run")
 
+
 # =============================================================================
 # Init tests
 # =============================================================================
@@ -122,9 +123,7 @@ class TestMultiHeadInit:
         assert type(config["hidden_sizes"][0]) is int
 
     @pytest.mark.parametrize("feature_dim", [True, np.bool_(True), 1.5, "2", 0, -1, 2**31])
-    def test_init_rejects_invalid_feature_dimension_before_allocation(
-        self, feature_dim: object
-    ):
+    def test_init_rejects_invalid_feature_dimension_before_allocation(self, feature_dim: object):
         learner = MultiHeadMLPLearner(n_heads=1, hidden_sizes=())
         with pytest.raises(ValueError, match="feature_dim"):
             learner.init(feature_dim, jr.key(0))  # type: ignore[arg-type]
@@ -226,9 +225,7 @@ class TestMultiHeadInit:
 
     def test_trunk_shapes_single_hidden(self):
         """Trunk with one hidden layer has correct shapes."""
-        learner = MultiHeadMLPLearner(
-            n_heads=3, hidden_sizes=(32,), sparsity=0.0
-        )
+        learner = MultiHeadMLPLearner(n_heads=3, hidden_sizes=(32,), sparsity=0.0)
         state = learner.init(feature_dim=10, key=jr.key(42))
 
         # Trunk: 10 -> 32
@@ -238,9 +235,7 @@ class TestMultiHeadInit:
 
     def test_trunk_shapes_two_hidden(self):
         """Trunk with two hidden layers has correct shapes."""
-        learner = MultiHeadMLPLearner(
-            n_heads=2, hidden_sizes=(64, 32), sparsity=0.0
-        )
+        learner = MultiHeadMLPLearner(n_heads=2, hidden_sizes=(64, 32), sparsity=0.0)
         state = learner.init(feature_dim=5, key=jr.key(42))
 
         assert len(state.trunk_params.weights) == 2
@@ -251,9 +246,7 @@ class TestMultiHeadInit:
 
     def test_head_shapes(self):
         """Each head has a (1, H_last) weight and (1,) bias."""
-        learner = MultiHeadMLPLearner(
-            n_heads=4, hidden_sizes=(64, 32), sparsity=0.0
-        )
+        learner = MultiHeadMLPLearner(n_heads=4, hidden_sizes=(64, 32), sparsity=0.0)
         state = learner.init(feature_dim=5, key=jr.key(42))
 
         assert len(state.head_params.weights) == 4
@@ -264,9 +257,7 @@ class TestMultiHeadInit:
 
     def test_traces_initialized_to_zero(self):
         """All trunk and head traces should be zero."""
-        learner = MultiHeadMLPLearner(
-            n_heads=2, hidden_sizes=(16,), sparsity=0.0
-        )
+        learner = MultiHeadMLPLearner(n_heads=2, hidden_sizes=(16,), sparsity=0.0)
         state = learner.init(feature_dim=5, key=jr.key(42))
 
         for trace in state.trunk_traces:
@@ -278,9 +269,7 @@ class TestMultiHeadInit:
 
     def test_biases_initialized_to_zero(self):
         """All trunk and head biases should be zero."""
-        learner = MultiHeadMLPLearner(
-            n_heads=3, hidden_sizes=(16,), sparsity=0.0
-        )
+        learner = MultiHeadMLPLearner(n_heads=3, hidden_sizes=(16,), sparsity=0.0)
         state = learner.init(feature_dim=5, key=jr.key(42))
 
         for bias in state.trunk_params.biases:
@@ -291,9 +280,7 @@ class TestMultiHeadInit:
 
     def test_sparsity_applied(self):
         """Trunk and head weights should be sparse when sparsity > 0."""
-        learner = MultiHeadMLPLearner(
-            n_heads=2, hidden_sizes=(32,), sparsity=0.9
-        )
+        learner = MultiHeadMLPLearner(n_heads=2, hidden_sizes=(32,), sparsity=0.9)
         state = learner.init(feature_dim=10, key=jr.key(42))
 
         # Trunk layer: expect ~90% sparse
@@ -304,16 +291,16 @@ class TestMultiHeadInit:
 
     def test_step_count_starts_at_zero(self):
         """step_count should be 0 after init."""
-        learner = MultiHeadMLPLearner(
-            n_heads=2, hidden_sizes=(16,), sparsity=0.0
-        )
+        learner = MultiHeadMLPLearner(n_heads=2, hidden_sizes=(16,), sparsity=0.0)
         state = learner.init(feature_dim=5, key=jr.key(42))
         assert int(state.step_count) == 0
 
     def test_normalizer_state_init(self):
         """Normalizer state should be created when normalizer is provided."""
         learner = MultiHeadMLPLearner(
-            n_heads=2, hidden_sizes=(16,), sparsity=0.0,
+            n_heads=2,
+            hidden_sizes=(16,),
+            sparsity=0.0,
             normalizer=EMANormalizer(),
         )
         state = learner.init(feature_dim=5, key=jr.key(42))
@@ -333,9 +320,7 @@ class TestMultiHeadPredict:
 
     def test_returns_n_heads_scalars(self):
         """predict should return array of shape (n_heads,)."""
-        learner = MultiHeadMLPLearner(
-            n_heads=4, hidden_sizes=(16,), sparsity=0.0
-        )
+        learner = MultiHeadMLPLearner(n_heads=4, hidden_sizes=(16,), sparsity=0.0)
         state = learner.init(feature_dim=5, key=jr.key(42))
 
         obs = jnp.ones(5)
@@ -346,9 +331,7 @@ class TestMultiHeadPredict:
 
     def test_deterministic(self):
         """Same state and observation should give same predictions."""
-        learner = MultiHeadMLPLearner(
-            n_heads=3, hidden_sizes=(16,), sparsity=0.0
-        )
+        learner = MultiHeadMLPLearner(n_heads=3, hidden_sizes=(16,), sparsity=0.0)
         state = learner.init(feature_dim=5, key=jr.key(42))
 
         obs = jnp.array([1.0, 0.5, -0.3, 0.2, 0.8])
@@ -369,7 +352,9 @@ class TestMultiHeadUpdateAllActive:
     def test_correct_result_types(self):
         """Update should return MultiHeadMLPUpdateResult."""
         learner = MultiHeadMLPLearner(
-            n_heads=3, hidden_sizes=(16,), sparsity=0.0,
+            n_heads=3,
+            hidden_sizes=(16,),
+            sparsity=0.0,
             bounder=ObGDBounding(kappa=2.0),
         )
         state = learner.init(feature_dim=5, key=jr.key(42))
@@ -385,7 +370,9 @@ class TestMultiHeadUpdateAllActive:
         """Metrics, predictions, errors should have correct shapes."""
         n_heads = 4
         learner = MultiHeadMLPLearner(
-            n_heads=n_heads, hidden_sizes=(16,), sparsity=0.0,
+            n_heads=n_heads,
+            hidden_sizes=(16,),
+            sparsity=0.0,
             bounder=ObGDBounding(kappa=2.0),
         )
         state = learner.init(feature_dim=5, key=jr.key(42))
@@ -403,7 +390,9 @@ class TestMultiHeadUpdateAllActive:
     def test_no_nan_when_all_active(self):
         """All metrics should be finite when all heads are active."""
         learner = MultiHeadMLPLearner(
-            n_heads=3, hidden_sizes=(16,), sparsity=0.0,
+            n_heads=3,
+            hidden_sizes=(16,),
+            sparsity=0.0,
             bounder=ObGDBounding(kappa=2.0),
         )
         state = learner.init(feature_dim=5, key=jr.key(42))
@@ -420,7 +409,10 @@ class TestMultiHeadUpdateAllActive:
     def test_error_reduction(self):
         """Multiple updates should reduce error on a fixed target."""
         learner = MultiHeadMLPLearner(
-            n_heads=2, hidden_sizes=(16,), step_size=0.1, sparsity=0.0,
+            n_heads=2,
+            hidden_sizes=(16,),
+            step_size=0.1,
+            sparsity=0.0,
             bounder=ObGDBounding(kappa=2.0),
         )
         state = learner.init(feature_dim=5, key=jr.key(42))
@@ -443,7 +435,9 @@ class TestMultiHeadUpdateAllActive:
     def test_step_count_increments(self):
         """step_count should increment by 1 each update."""
         learner = MultiHeadMLPLearner(
-            n_heads=2, hidden_sizes=(16,), sparsity=0.0,
+            n_heads=2,
+            hidden_sizes=(16,),
+            sparsity=0.0,
         )
         state = learner.init(feature_dim=5, key=jr.key(42))
 
@@ -532,7 +526,10 @@ class TestMultiHeadUpdateValidation:
     @pytest.mark.parametrize("shape", [(1,), (), (4, 1), (5,)])
     def test_update_rejects_targets_that_are_not_one_per_head(self, shape):
         learner = MultiHeadMLPLearner(
-            n_heads=4, hidden_sizes=(8,), sparsity=0.0, step_size=0.01,
+            n_heads=4,
+            hidden_sizes=(8,),
+            sparsity=0.0,
+            step_size=0.01,
         )
         state = learner.init(feature_dim=3, key=jr.key(0))
         obs = jnp.array([1.0, -0.5, 0.25])
@@ -550,7 +547,10 @@ class TestMultiHeadUpdateValidation:
         instead of raising).
         """
         learner = MultiHeadMLPLearner(
-            n_heads=4, hidden_sizes=(8,), sparsity=0.0, step_size=0.01,
+            n_heads=4,
+            hidden_sizes=(8,),
+            sparsity=0.0,
+            step_size=0.01,
         )
         state = learner.init(feature_dim=3, key=jr.key(0))
         obs = jnp.array([1.0, -0.5, 0.25])
@@ -569,7 +569,9 @@ class TestMultiHeadUpdatePartialActive:
     def test_nan_metrics_for_inactive(self):
         """Inactive heads should have NaN in errors and metrics."""
         learner = MultiHeadMLPLearner(
-            n_heads=3, hidden_sizes=(16,), sparsity=0.0,
+            n_heads=3,
+            hidden_sizes=(16,),
+            sparsity=0.0,
             bounder=ObGDBounding(kappa=2.0),
         )
         state = learner.init(feature_dim=5, key=jr.key(42))
@@ -590,7 +592,9 @@ class TestMultiHeadUpdatePartialActive:
     def test_inactive_head_params_unchanged(self):
         """Inactive head params should not change."""
         learner = MultiHeadMLPLearner(
-            n_heads=3, hidden_sizes=(16,), sparsity=0.0,
+            n_heads=3,
+            hidden_sizes=(16,),
+            sparsity=0.0,
             bounder=ObGDBounding(kappa=2.0),
         )
         state = learner.init(feature_dim=5, key=jr.key(42))
@@ -619,7 +623,9 @@ class TestMultiHeadUpdatePartialActive:
     def test_predictions_always_computed(self):
         """Predictions should be computed for all heads, even inactive ones."""
         learner = MultiHeadMLPLearner(
-            n_heads=3, hidden_sizes=(16,), sparsity=0.0,
+            n_heads=3,
+            hidden_sizes=(16,),
+            sparsity=0.0,
         )
         state = learner.init(feature_dim=5, key=jr.key(42))
 
@@ -643,7 +649,9 @@ class TestMultiHeadUpdateNoneActive:
     def test_head_params_unchanged(self):
         """All head params should remain unchanged when no heads are active."""
         learner = MultiHeadMLPLearner(
-            n_heads=2, hidden_sizes=(16,), sparsity=0.0,
+            n_heads=2,
+            hidden_sizes=(16,),
+            sparsity=0.0,
         )
         state = learner.init(feature_dim=5, key=jr.key(42))
 
@@ -665,7 +673,9 @@ class TestMultiHeadUpdateNoneActive:
     def test_normalizer_still_updates(self):
         """Normalizer should update even when no heads are active."""
         learner = MultiHeadMLPLearner(
-            n_heads=2, hidden_sizes=(16,), sparsity=0.0,
+            n_heads=2,
+            hidden_sizes=(16,),
+            sparsity=0.0,
             normalizer=EMANormalizer(),
         )
         state = learner.init(feature_dim=5, key=jr.key(42))
@@ -684,7 +694,9 @@ class TestMultiHeadUpdateNoneActive:
     def test_step_count_still_increments(self):
         """step_count should still increment even with no active heads."""
         learner = MultiHeadMLPLearner(
-            n_heads=2, hidden_sizes=(16,), sparsity=0.0,
+            n_heads=2,
+            hidden_sizes=(16,),
+            sparsity=0.0,
         )
         state = learner.init(feature_dim=5, key=jr.key(42))
 
@@ -704,7 +716,9 @@ class TestMultiHeadComposition:
     def test_with_obgd_bounding(self):
         """Should work with ObGDBounding."""
         learner = MultiHeadMLPLearner(
-            n_heads=2, hidden_sizes=(16,), sparsity=0.0,
+            n_heads=2,
+            hidden_sizes=(16,),
+            sparsity=0.0,
             bounder=ObGDBounding(kappa=2.0),
         )
         state = learner.init(feature_dim=5, key=jr.key(42))
@@ -719,7 +733,9 @@ class TestMultiHeadComposition:
     def test_with_agc_bounding(self):
         """Should work with AGCBounding."""
         learner = MultiHeadMLPLearner(
-            n_heads=2, hidden_sizes=(16,), sparsity=0.0,
+            n_heads=2,
+            hidden_sizes=(16,),
+            sparsity=0.0,
             bounder=AGCBounding(clip_factor=0.01),
         )
         state = learner.init(feature_dim=5, key=jr.key(42))
@@ -733,7 +749,9 @@ class TestMultiHeadComposition:
     def test_with_ema_normalizer(self):
         """Should work with EMANormalizer."""
         learner = MultiHeadMLPLearner(
-            n_heads=2, hidden_sizes=(16,), sparsity=0.0,
+            n_heads=2,
+            hidden_sizes=(16,),
+            sparsity=0.0,
             normalizer=EMANormalizer(decay=0.95),
             bounder=ObGDBounding(kappa=2.0),
         )
@@ -749,7 +767,9 @@ class TestMultiHeadComposition:
     def test_with_welford_normalizer(self):
         """Should work with WelfordNormalizer."""
         learner = MultiHeadMLPLearner(
-            n_heads=2, hidden_sizes=(16,), sparsity=0.0,
+            n_heads=2,
+            hidden_sizes=(16,),
+            sparsity=0.0,
             normalizer=WelfordNormalizer(),
         )
         state = learner.init(feature_dim=5, key=jr.key(42))
@@ -763,7 +783,9 @@ class TestMultiHeadComposition:
     def test_with_autostep_optimizer(self):
         """Should work with Autostep optimizer."""
         learner = MultiHeadMLPLearner(
-            n_heads=2, hidden_sizes=(16,), sparsity=0.0,
+            n_heads=2,
+            hidden_sizes=(16,),
+            sparsity=0.0,
             optimizer=Autostep(initial_step_size=0.01),
             bounder=ObGDBounding(kappa=2.0),
         )
@@ -788,7 +810,9 @@ class TestMultiHeadGradientCorrectness:
     def test_vjp_matches_separate_grads(self):
         """Accumulated VJP cotangent should match sum of per-head grads."""
         learner = MultiHeadMLPLearner(
-            n_heads=3, hidden_sizes=(16,), sparsity=0.0,
+            n_heads=3,
+            hidden_sizes=(16,),
+            sparsity=0.0,
         )
         state = learner.init(feature_dim=5, key=jr.key(42))
 
@@ -799,21 +823,13 @@ class TestMultiHeadGradientCorrectness:
         ln = learner._use_layer_norm
 
         # Compute via N separate jax.grad calls
-        accumulated_w_grads = [
-            jnp.zeros_like(w) for w in state.trunk_params.weights
-        ]
-        accumulated_b_grads = [
-            jnp.zeros_like(b) for b in state.trunk_params.biases
-        ]
+        accumulated_w_grads = [jnp.zeros_like(w) for w in state.trunk_params.weights]
+        accumulated_b_grads = [jnp.zeros_like(b) for b in state.trunk_params.biases]
 
         for i in range(3):
             # Full forward: trunk + head_i
-            def full_forward_i(
-                trunk_w: tuple, trunk_b: tuple, head_idx: int = i
-            ) -> jax.Array:
-                hidden = MultiHeadMLPLearner._trunk_forward(
-                    trunk_w, trunk_b, obs, slope, ln
-                )
+            def full_forward_i(trunk_w: tuple, trunk_b: tuple, head_idx: int = i) -> jax.Array:
+                hidden = MultiHeadMLPLearner._trunk_forward(trunk_w, trunk_b, obs, slope, ln)
                 return MultiHeadMLPLearner._head_forward(
                     state.head_params.weights[head_idx],
                     state.head_params.biases[head_idx],
@@ -829,18 +845,12 @@ class TestMultiHeadGradientCorrectness:
             )
 
             for j in range(len(accumulated_w_grads)):
-                accumulated_w_grads[j] = (
-                    accumulated_w_grads[j] + error_i * w_grads[j]
-                )
-                accumulated_b_grads[j] = (
-                    accumulated_b_grads[j] + error_i * b_grads[j]
-                )
+                accumulated_w_grads[j] = accumulated_w_grads[j] + error_i * w_grads[j]
+                accumulated_b_grads[j] = accumulated_b_grads[j] + error_i * b_grads[j]
 
         # Compute via VJP (as the learner does)
         def trunk_fn(weights, biases):
-            return MultiHeadMLPLearner._trunk_forward(
-                weights, biases, obs, slope, ln
-            )
+            return MultiHeadMLPLearner._trunk_forward(weights, biases, obs, slope, ln)
 
         hidden, trunk_vjp_fn = jax.vjp(
             trunk_fn,
@@ -858,20 +868,14 @@ class TestMultiHeadGradientCorrectness:
                 hidden,
             )
             error_i = targets[i] - pred_i
-            cotangent = cotangent + error_i * jnp.squeeze(
-                state.head_params.weights[i]
-            )
+            cotangent = cotangent + error_i * jnp.squeeze(state.head_params.weights[i])
 
         vjp_w_grads, vjp_b_grads = trunk_vjp_fn(cotangent)
 
         # Compare
         for j in range(len(accumulated_w_grads)):
-            chex.assert_trees_all_close(
-                vjp_w_grads[j], accumulated_w_grads[j], atol=1e-5
-            )
-            chex.assert_trees_all_close(
-                vjp_b_grads[j], accumulated_b_grads[j], atol=1e-5
-            )
+            chex.assert_trees_all_close(vjp_w_grads[j], accumulated_w_grads[j], atol=1e-5)
+            chex.assert_trees_all_close(vjp_b_grads[j], accumulated_b_grads[j], atol=1e-5)
 
 
 # =============================================================================
@@ -885,7 +889,9 @@ class TestMultiHeadMetricsToDicts:
     def test_all_active(self):
         """All active heads should produce dicts."""
         learner = MultiHeadMLPLearner(
-            n_heads=3, hidden_sizes=(16,), sparsity=0.0,
+            n_heads=3,
+            hidden_sizes=(16,),
+            sparsity=0.0,
         )
         state = learner.init(feature_dim=5, key=jr.key(42))
 
@@ -905,7 +911,9 @@ class TestMultiHeadMetricsToDicts:
     def test_partial_active(self):
         """Inactive heads should produce None."""
         learner = MultiHeadMLPLearner(
-            n_heads=3, hidden_sizes=(16,), sparsity=0.0,
+            n_heads=3,
+            hidden_sizes=(16,),
+            sparsity=0.0,
         )
         state = learner.init(feature_dim=5, key=jr.key(42))
 
@@ -922,7 +930,9 @@ class TestMultiHeadMetricsToDicts:
     def test_none_active(self):
         """All NaN targets should produce all None."""
         learner = MultiHeadMLPLearner(
-            n_heads=2, hidden_sizes=(16,), sparsity=0.0,
+            n_heads=2,
+            hidden_sizes=(16,),
+            sparsity=0.0,
         )
         state = learner.init(feature_dim=5, key=jr.key(42))
 
@@ -951,7 +961,9 @@ class TestRunMultiHeadLearningLoop:
         feature_dim = 5
 
         learner = MultiHeadMLPLearner(
-            n_heads=n_heads, hidden_sizes=(16,), sparsity=0.0,
+            n_heads=n_heads,
+            hidden_sizes=(16,),
+            sparsity=0.0,
             bounder=ObGDBounding(kappa=2.0),
         )
         state = learner.init(feature_dim=feature_dim, key=jr.key(0))
@@ -962,19 +974,17 @@ class TestRunMultiHeadLearningLoop:
         observations = jr.normal(k1, (num_steps, feature_dim))
         targets = jr.normal(k2, (num_steps, n_heads))
 
-        result = run_multi_head_learning_loop(
-            learner, state, observations, targets
-        )
+        result = run_multi_head_learning_loop(learner, state, observations, targets)
 
         assert isinstance(result, MultiHeadLearningResult)
-        chex.assert_shape(
-            result.per_head_metrics, (num_steps, n_heads, 3)
-        )
+        chex.assert_shape(result.per_head_metrics, (num_steps, n_heads, 3))
 
     def test_deterministic(self):
         """Same inputs should give identical results."""
         learner = MultiHeadMLPLearner(
-            n_heads=2, hidden_sizes=(16,), sparsity=0.0,
+            n_heads=2,
+            hidden_sizes=(16,),
+            sparsity=0.0,
             bounder=ObGDBounding(kappa=2.0),
         )
         state = learner.init(feature_dim=5, key=jr.key(0))
@@ -984,21 +994,17 @@ class TestRunMultiHeadLearningLoop:
         observations = jr.normal(k1, (30, 5))
         targets = jr.normal(k2, (30, 2))
 
-        result1 = run_multi_head_learning_loop(
-            learner, state, observations, targets
-        )
-        result2 = run_multi_head_learning_loop(
-            learner, state, observations, targets
-        )
+        result1 = run_multi_head_learning_loop(learner, state, observations, targets)
+        result2 = run_multi_head_learning_loop(learner, state, observations, targets)
 
-        chex.assert_trees_all_close(
-            result1.per_head_metrics, result2.per_head_metrics
-        )
+        chex.assert_trees_all_close(result1.per_head_metrics, result2.per_head_metrics)
 
     def test_nan_target_handling(self):
         """Should handle NaN targets correctly in scan loop."""
         learner = MultiHeadMLPLearner(
-            n_heads=2, hidden_sizes=(16,), sparsity=0.0,
+            n_heads=2,
+            hidden_sizes=(16,),
+            sparsity=0.0,
             bounder=ObGDBounding(kappa=2.0),
         )
         state = learner.init(feature_dim=5, key=jr.key(0))
@@ -1008,9 +1014,7 @@ class TestRunMultiHeadLearningLoop:
         targets = jr.normal(jr.key(99), (20, 2))
         targets = targets.at[10:, 1].set(jnp.nan)
 
-        result = run_multi_head_learning_loop(
-            learner, state, observations, targets
-        )
+        result = run_multi_head_learning_loop(learner, state, observations, targets)
 
         # Head 0 metrics should all be finite
         assert jnp.all(jnp.isfinite(result.per_head_metrics[:, 0, :]))
@@ -1022,7 +1026,9 @@ class TestRunMultiHeadLearningLoop:
     def test_with_normalizer(self):
         """Should work with normalizer in scan loop."""
         learner = MultiHeadMLPLearner(
-            n_heads=2, hidden_sizes=(16,), sparsity=0.0,
+            n_heads=2,
+            hidden_sizes=(16,),
+            sparsity=0.0,
             normalizer=EMANormalizer(),
             bounder=ObGDBounding(kappa=2.0),
         )
@@ -1031,9 +1037,7 @@ class TestRunMultiHeadLearningLoop:
         observations = jr.normal(jr.key(42), (30, 5))
         targets = jr.normal(jr.key(99), (30, 2))
 
-        result = run_multi_head_learning_loop(
-            learner, state, observations, targets
-        )
+        result = run_multi_head_learning_loop(learner, state, observations, targets)
 
         chex.assert_shape(result.per_head_metrics, (30, 2, 3))
         # Normalizer should have updated
@@ -1056,7 +1060,9 @@ class TestRunMultiHeadLearningLoopBatched:
         n_seeds = 4
 
         learner = MultiHeadMLPLearner(
-            n_heads=n_heads, hidden_sizes=(16,), sparsity=0.0,
+            n_heads=n_heads,
+            hidden_sizes=(16,),
+            sparsity=0.0,
             bounder=ObGDBounding(kappa=2.0),
         )
 
@@ -1066,14 +1072,10 @@ class TestRunMultiHeadLearningLoopBatched:
         targets = jr.normal(k2, (num_steps, n_heads))
         keys = jr.split(k3, n_seeds)
 
-        result = run_multi_head_learning_loop_batched(
-            learner, observations, targets, keys
-        )
+        result = run_multi_head_learning_loop_batched(learner, observations, targets, keys)
 
         assert isinstance(result, BatchedMultiHeadResult)
-        chex.assert_shape(
-            result.per_head_metrics, (n_seeds, num_steps, n_heads, 3)
-        )
+        chex.assert_shape(result.per_head_metrics, (n_seeds, num_steps, n_heads, 3))
 
     def test_matches_sequential(self):
         """Batched results should match sequential for each seed."""
@@ -1083,7 +1085,9 @@ class TestRunMultiHeadLearningLoopBatched:
         n_seeds = 3
 
         learner = MultiHeadMLPLearner(
-            n_heads=n_heads, hidden_sizes=(16,), sparsity=0.0,
+            n_heads=n_heads,
+            hidden_sizes=(16,),
+            sparsity=0.0,
             bounder=ObGDBounding(kappa=2.0),
         )
 
@@ -1094,16 +1098,12 @@ class TestRunMultiHeadLearningLoopBatched:
         keys = jr.split(k3, n_seeds)
 
         # Batched
-        batched_result = run_multi_head_learning_loop_batched(
-            learner, observations, targets, keys
-        )
+        batched_result = run_multi_head_learning_loop_batched(learner, observations, targets, keys)
 
         # Sequential
         for i in range(n_seeds):
             state_i = learner.init(feature_dim, keys[i])
-            seq_result = run_multi_head_learning_loop(
-                learner, state_i, observations, targets
-            )
+            seq_result = run_multi_head_learning_loop(learner, state_i, observations, targets)
             chex.assert_trees_all_close(
                 batched_result.per_head_metrics[i],
                 seq_result.per_head_metrics,
@@ -1113,7 +1113,9 @@ class TestRunMultiHeadLearningLoopBatched:
     def test_different_seeds_different_results(self):
         """Different seeds should produce different metrics."""
         learner = MultiHeadMLPLearner(
-            n_heads=2, hidden_sizes=(16,), sparsity=0.0,
+            n_heads=2,
+            hidden_sizes=(16,),
+            sparsity=0.0,
             bounder=ObGDBounding(kappa=2.0),
         )
 
@@ -1123,14 +1125,10 @@ class TestRunMultiHeadLearningLoopBatched:
         targets = jr.normal(k2, (30, 2))
         keys = jr.split(k3, 3)
 
-        result = run_multi_head_learning_loop_batched(
-            learner, observations, targets, keys
-        )
+        result = run_multi_head_learning_loop_batched(learner, observations, targets, keys)
 
         # Different seeds should give different final metrics
-        assert not jnp.allclose(
-            result.per_head_metrics[0], result.per_head_metrics[1]
-        )
+        assert not jnp.allclose(result.per_head_metrics[0], result.per_head_metrics[1])
 
 
 class TestMultiHeadLifecycleTracking:
@@ -1190,9 +1188,7 @@ class TestMultiHeadLifecycleTracking:
 
         obs2 = jr.normal(k4, (50, 5))
         tgt2 = jr.normal(k5, (50, 2))
-        result2 = run_multi_head_learning_loop(
-            learner, result1.state, obs2, tgt2
-        )
+        result2 = run_multi_head_learning_loop(learner, result1.state, obs2, tgt2)
         assert result2.state.uptime_s > uptime_after_first
 
 
@@ -1209,7 +1205,9 @@ class TestMultiHeadHybridOptimizer:
         from alberta_framework.core.types import AutostepParamState, LMSState
 
         learner = MultiHeadMLPLearner(
-            n_heads=2, hidden_sizes=(16,), sparsity=0.0,
+            n_heads=2,
+            hidden_sizes=(16,),
+            sparsity=0.0,
             step_size=1.0,
             head_optimizer=Autostep(initial_step_size=0.01),
             bounder=ObGDBounding(kappa=2.0),
@@ -1228,7 +1226,9 @@ class TestMultiHeadHybridOptimizer:
     def test_hybrid_update_runs(self):
         """Update with hybrid optimizer should work."""
         learner = MultiHeadMLPLearner(
-            n_heads=2, hidden_sizes=(16,), sparsity=0.0,
+            n_heads=2,
+            hidden_sizes=(16,),
+            sparsity=0.0,
             step_size=1.0,
             head_optimizer=Autostep(initial_step_size=0.01),
             bounder=ObGDBounding(kappa=2.0),
@@ -1246,7 +1246,9 @@ class TestMultiHeadHybridOptimizer:
     def test_hybrid_scan_loop(self):
         """Full scan loop with hybrid optimizer should work."""
         learner = MultiHeadMLPLearner(
-            n_heads=2, hidden_sizes=(16,), sparsity=0.0,
+            n_heads=2,
+            hidden_sizes=(16,),
+            sparsity=0.0,
             step_size=1.0,
             head_optimizer=Autostep(initial_step_size=0.01),
             bounder=ObGDBounding(kappa=2.0),
@@ -1258,9 +1260,7 @@ class TestMultiHeadHybridOptimizer:
         observations = jr.normal(k2, (50, 5))
         targets = jr.normal(k3, (50, 2))
 
-        result = run_multi_head_learning_loop(
-            learner, state, observations, targets
-        )
+        result = run_multi_head_learning_loop(learner, state, observations, targets)
 
         assert isinstance(result, MultiHeadLearningResult)
         chex.assert_shape(result.per_head_metrics, (50, 2, 3))
@@ -1273,12 +1273,18 @@ class TestMultiHeadHybridOptimizer:
         targets = jr.normal(k3, (30, 2))
 
         learner_default = MultiHeadMLPLearner(
-            n_heads=2, hidden_sizes=(16,), sparsity=0.0,
-            step_size=1.0, bounder=ObGDBounding(kappa=2.0),
+            n_heads=2,
+            hidden_sizes=(16,),
+            sparsity=0.0,
+            step_size=1.0,
+            bounder=ObGDBounding(kappa=2.0),
         )
         learner_explicit = MultiHeadMLPLearner(
-            n_heads=2, hidden_sizes=(16,), sparsity=0.0,
-            step_size=1.0, head_optimizer=None,
+            n_heads=2,
+            hidden_sizes=(16,),
+            sparsity=0.0,
+            step_size=1.0,
+            head_optimizer=None,
             bounder=ObGDBounding(kappa=2.0),
         )
 
@@ -1308,9 +1314,7 @@ class TestMultiHeadLinearBaseline:
 
     def test_init_succeeds(self):
         """hidden_sizes=() should init without error."""
-        learner = MultiHeadMLPLearner(
-            n_heads=3, hidden_sizes=(), sparsity=0.0
-        )
+        learner = MultiHeadMLPLearner(n_heads=3, hidden_sizes=(), sparsity=0.0)
         state = learner.init(feature_dim=5, key=jr.key(42))
 
         # No trunk layers
@@ -1321,9 +1325,7 @@ class TestMultiHeadLinearBaseline:
 
     def test_head_shapes_match_input(self):
         """Heads should project from feature_dim directly."""
-        learner = MultiHeadMLPLearner(
-            n_heads=3, hidden_sizes=(), sparsity=0.0
-        )
+        learner = MultiHeadMLPLearner(n_heads=3, hidden_sizes=(), sparsity=0.0)
         state = learner.init(feature_dim=5, key=jr.key(42))
 
         assert len(state.head_params.weights) == 3
@@ -1333,9 +1335,7 @@ class TestMultiHeadLinearBaseline:
 
     def test_predict_correct_shape(self):
         """predict should return (n_heads,) array."""
-        learner = MultiHeadMLPLearner(
-            n_heads=4, hidden_sizes=(), sparsity=0.0
-        )
+        learner = MultiHeadMLPLearner(n_heads=4, hidden_sizes=(), sparsity=0.0)
         state = learner.init(feature_dim=5, key=jr.key(42))
 
         obs = jnp.ones(5)
@@ -1347,7 +1347,9 @@ class TestMultiHeadLinearBaseline:
     def test_update_correct_shape(self):
         """update should return correct shapes."""
         learner = MultiHeadMLPLearner(
-            n_heads=3, hidden_sizes=(), sparsity=0.0,
+            n_heads=3,
+            hidden_sizes=(),
+            sparsity=0.0,
             bounder=ObGDBounding(kappa=2.0),
         )
         state = learner.init(feature_dim=5, key=jr.key(42))
@@ -1366,7 +1368,10 @@ class TestMultiHeadLinearBaseline:
     def test_state_updates(self):
         """Head params should change after update."""
         learner = MultiHeadMLPLearner(
-            n_heads=2, hidden_sizes=(), step_size=0.1, sparsity=0.0,
+            n_heads=2,
+            hidden_sizes=(),
+            step_size=0.1,
+            sparsity=0.0,
             bounder=ObGDBounding(kappa=2.0),
         )
         state = learner.init(feature_dim=5, key=jr.key(42))
@@ -1386,7 +1391,10 @@ class TestMultiHeadLinearBaseline:
     def test_error_reduction(self):
         """Multiple updates on fixed target should reduce error."""
         learner = MultiHeadMLPLearner(
-            n_heads=2, hidden_sizes=(), step_size=0.1, sparsity=0.0,
+            n_heads=2,
+            hidden_sizes=(),
+            step_size=0.1,
+            sparsity=0.0,
             bounder=ObGDBounding(kappa=2.0),
         )
         state = learner.init(feature_dim=5, key=jr.key(42))
@@ -1409,7 +1417,9 @@ class TestMultiHeadLinearBaseline:
     def test_nan_masking(self):
         """NaN targets should leave inactive heads unchanged."""
         learner = MultiHeadMLPLearner(
-            n_heads=3, hidden_sizes=(), sparsity=0.0,
+            n_heads=3,
+            hidden_sizes=(),
+            sparsity=0.0,
             bounder=ObGDBounding(kappa=2.0),
         )
         state = learner.init(feature_dim=5, key=jr.key(42))
@@ -1429,7 +1439,9 @@ class TestMultiHeadLinearBaseline:
     def test_scan_loop(self):
         """Should work in scan-based learning loop."""
         learner = MultiHeadMLPLearner(
-            n_heads=2, hidden_sizes=(), sparsity=0.0,
+            n_heads=2,
+            hidden_sizes=(),
+            sparsity=0.0,
             bounder=ObGDBounding(kappa=2.0),
         )
         state = learner.init(feature_dim=5, key=jr.key(0))
@@ -1439,9 +1451,7 @@ class TestMultiHeadLinearBaseline:
         observations = jr.normal(k1, (30, 5))
         targets = jr.normal(k2, (30, 2))
 
-        result = run_multi_head_learning_loop(
-            learner, state, observations, targets
-        )
+        result = run_multi_head_learning_loop(learner, state, observations, targets)
 
         assert isinstance(result, MultiHeadLearningResult)
         chex.assert_shape(result.per_head_metrics, (30, 2, 3))
@@ -1449,7 +1459,9 @@ class TestMultiHeadLinearBaseline:
     def test_with_normalizer(self):
         """Should work with EMANormalizer."""
         learner = MultiHeadMLPLearner(
-            n_heads=2, hidden_sizes=(), sparsity=0.0,
+            n_heads=2,
+            hidden_sizes=(),
+            sparsity=0.0,
             normalizer=EMANormalizer(),
             bounder=ObGDBounding(kappa=2.0),
         )
@@ -1464,13 +1476,10 @@ class TestMultiHeadLinearBaseline:
 
     def test_zero_trace_decay_does_not_multiply_inf_head_traces(self) -> None:
         """Default gamma*lamda is 0; 0 * inf head traces is NaN and would freeze."""
-        learner = MultiHeadMLPLearner(
-            n_heads=2, hidden_sizes=(), sparsity=0.0, optimizer=LMS(0.1)
-        )
+        learner = MultiHeadMLPLearner(n_heads=2, hidden_sizes=(), sparsity=0.0, optimizer=LMS(0.1))
         state = learner.init(feature_dim=3, key=jr.key(2))
         poisoned = [
-            (jnp.full_like(w, jnp.inf), jnp.full_like(b, jnp.inf))
-            for w, b in state.head_traces
+            (jnp.full_like(w, jnp.inf), jnp.full_like(b, jnp.inf)) for w, b in state.head_traces
         ]
         state = state.replace(head_traces=tuple(poisoned))
         raw = jnp.asarray(0.0, dtype=jnp.float32) * jnp.asarray(jnp.inf, dtype=jnp.float32)
@@ -1495,9 +1504,7 @@ class TestMultiHeadLinearBaseline:
         )
         state = learner.init(feature_dim=3, key=jr.key(3))
         state = state.replace(
-            trunk_traces=tuple(
-                jnp.full_like(trace, jnp.inf) for trace in state.trunk_traces
-            )
+            trunk_traces=tuple(jnp.full_like(trace, jnp.inf) for trace in state.trunk_traces)
         )
 
         result = learner.update(
@@ -1520,9 +1527,7 @@ class TestMultiHeadLinearBaseline:
         )
         state = learner.init(feature_dim=3, key=jr.key(4))
         old_w, old_b = state.head_traces[0]
-        state = state.replace(
-            head_traces=((jnp.full_like(old_w, jnp.inf), old_b),)
-        )
+        state = state.replace(head_traces=((jnp.full_like(old_w, jnp.inf), old_b),))
 
         result = learner.update(
             state,
@@ -1583,8 +1588,7 @@ class TestMultiHeadLinearBaseline:
         state = learner.init(feature_dim=3, key=jr.key(6))
         state = state.replace(
             hidden_unit_utilities=tuple(
-                jnp.full_like(utility, jnp.inf)
-                for utility in state.hidden_unit_utilities
+                jnp.full_like(utility, jnp.inf) for utility in state.hidden_unit_utilities
             )
         )
 
@@ -1597,3 +1601,68 @@ class TestMultiHeadLinearBaseline:
         assert bool(result.update_applied)
         for utility in result.state.hidden_unit_utilities:
             assert bool(jnp.all(jnp.isfinite(utility)))
+
+
+def test_multi_head_mlp_leftover_scalars_validation() -> None:
+    # sparsity validation
+    with pytest.raises(ValueError, match="sparsity"):
+        MultiHeadMLPLearner(n_heads=2, sparsity=True)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="sparsity"):
+        MultiHeadMLPLearner(n_heads=2, sparsity=float("nan"))
+    with pytest.raises(ValueError, match="sparsity"):
+        MultiHeadMLPLearner(n_heads=2, sparsity=-0.1)
+    with pytest.raises(ValueError, match="sparsity"):
+        MultiHeadMLPLearner(n_heads=2, sparsity=1.5)
+
+    # leaky_relu_slope validation
+    with pytest.raises(ValueError, match="leaky_relu_slope"):
+        MultiHeadMLPLearner(n_heads=2, leaky_relu_slope=True)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="leaky_relu_slope"):
+        MultiHeadMLPLearner(n_heads=2, leaky_relu_slope=float("nan"))
+    with pytest.raises(ValueError, match="leaky_relu_slope"):
+        MultiHeadMLPLearner(n_heads=2, leaky_relu_slope=-0.01)
+
+    # gamma / lamda validation
+    with pytest.raises(ValueError, match="gamma"):
+        MultiHeadMLPLearner(n_heads=2, hidden_sizes=(), gamma=True)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="gamma"):
+        MultiHeadMLPLearner(n_heads=2, hidden_sizes=(), gamma=float("nan"))
+    with pytest.raises(ValueError, match="lamda"):
+        MultiHeadMLPLearner(n_heads=2, hidden_sizes=(), lamda=True)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="lamda"):
+        MultiHeadMLPLearner(n_heads=2, hidden_sizes=(), lamda=float("nan"))
+
+    # utility_decay validation
+    with pytest.raises(ValueError, match="utility_decay"):
+        MultiHeadMLPLearner(n_heads=2, utility_decay=True)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="utility_decay"):
+        MultiHeadMLPLearner(n_heads=2, utility_decay=1.0)
+    with pytest.raises(ValueError, match="utility_decay"):
+        MultiHeadMLPLearner(n_heads=2, utility_decay=-0.1)
+
+    # use_layer_norm validation
+    with pytest.raises(ValueError, match="use_layer_norm"):
+        MultiHeadMLPLearner(n_heads=2, use_layer_norm=1)  # type: ignore[arg-type]
+
+    # trace_mode validation
+    with pytest.raises(ValueError, match="trace_mode"):
+        MultiHeadMLPLearner(n_heads=2, trace_mode="accumulating")  # type: ignore[arg-type]
+
+    learner = MultiHeadMLPLearner(
+        n_heads=2,
+        sparsity=np.float32(0.5),
+        leaky_relu_slope=np.float64(0.02),
+        gamma=np.float32(0.0),
+        lamda=np.float32(0.0),
+        utility_decay=np.float32(0.95),
+    )
+    assert learner._sparsity == 0.5
+    assert type(learner._sparsity) is float
+    assert learner._leaky_relu_slope == pytest.approx(0.02)
+    assert type(learner._leaky_relu_slope) is float
+    assert learner._gamma == 0.0
+    assert type(learner._gamma) is float
+    assert learner._lamda == 0.0
+    assert type(learner._lamda) is float
+    assert learner._utility_decay == pytest.approx(0.95)
+    assert type(learner._utility_decay) is float
