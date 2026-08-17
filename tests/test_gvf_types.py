@@ -349,3 +349,76 @@ class TestHordeSpec:
         ]
         spec = create_horde_spec(demons)
         assert isinstance(spec.demons, tuple)
+
+
+def test_gvf_spec_name_demon_type_cumulant_index_terminal_reward_validation() -> None:
+    # name validation
+    with pytest.raises(ValueError, match="name"):
+        GVFSpec(name="", demon_type=DemonType.PREDICTION, gamma=0.0, lamda=0.0, cumulant_index=0)
+    with pytest.raises(ValueError, match="name"):
+        GVFSpec(name=123, demon_type=DemonType.PREDICTION, gamma=0.0, lamda=0.0, cumulant_index=0)  # type: ignore[arg-type]
+
+    # demon_type validation
+    with pytest.raises(ValueError, match="demon_type"):
+        GVFSpec(name="d", demon_type="prediction", gamma=0.0, lamda=0.0, cumulant_index=0)  # type: ignore[arg-type]
+
+    # cumulant_index validation
+    with pytest.raises(ValueError, match="cumulant_index"):
+        GVFSpec(
+            name="d", demon_type=DemonType.PREDICTION, gamma=0.0, lamda=0.0, cumulant_index=True
+        )  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="cumulant_index"):
+        GVFSpec(name="d", demon_type=DemonType.PREDICTION, gamma=0.0, lamda=0.0, cumulant_index=-2)
+
+    spec_idx = GVFSpec(
+        name="d", demon_type=DemonType.PREDICTION, gamma=0.0, lamda=0.0, cumulant_index=np.int64(-1)
+    )
+    assert spec_idx.cumulant_index == -1
+    assert type(spec_idx.cumulant_index) is int
+
+    # terminal_reward validation
+    with pytest.raises(ValueError, match="terminal_reward"):
+        GVFSpec(
+            name="d",
+            demon_type=DemonType.PREDICTION,
+            gamma=0.0,
+            lamda=0.0,
+            cumulant_index=0,
+            terminal_reward=float("nan"),
+        )
+    with pytest.raises(ValueError, match="terminal_reward"):
+        GVFSpec(
+            name="d",
+            demon_type=DemonType.PREDICTION,
+            gamma=0.0,
+            lamda=0.0,
+            cumulant_index=0,
+            terminal_reward=float("inf"),
+        )
+    with pytest.raises(ValueError, match="terminal_reward"):
+        GVFSpec(
+            name="d",
+            demon_type=DemonType.PREDICTION,
+            gamma=0.0,
+            lamda=0.0,
+            cumulant_index=0,
+            terminal_reward=True,
+        )  # type: ignore[arg-type]
+
+    spec_tr = GVFSpec(
+        name="d",
+        demon_type=DemonType.PREDICTION,
+        gamma=0.0,
+        lamda=0.0,
+        cumulant_index=0,
+        terminal_reward=np.float32(2.5),
+    )
+    assert spec_tr.terminal_reward == 2.5
+    assert type(spec_tr.terminal_reward) is float
+
+
+def test_horde_spec_rejects_empty_or_non_gvf_demons() -> None:
+    with pytest.raises(ValueError, match="demons"):
+        create_horde_spec([])
+    with pytest.raises(ValueError, match="demons"):
+        create_horde_spec([123])  # type: ignore[list-item]

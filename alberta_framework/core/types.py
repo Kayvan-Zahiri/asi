@@ -6,10 +6,11 @@ using chex dataclasses for JAX compatibility and jaxtyping for shape annotations
 
 import enum
 import math
+import operator
 import time
 from collections.abc import Sequence
 from numbers import Real
-from typing import Any, cast
+from typing import Any, SupportsIndex, cast
 
 import chex
 import jax.numpy as jnp
@@ -17,6 +18,7 @@ import numpy as np
 from jax import Array
 from jaxtyping import Float, Int
 
+from alberta_framework.core._float32_scalars import validated_float32_scalar
 from alberta_framework.core.normalizers import (
     AnyNormalizerState,
 )
@@ -245,9 +247,7 @@ class LearnerState:
 
     weights: Float[Array, " feature_dim"]
     bias: Float[Array, ""]
-    optimizer_state: (
-        LMSState | IDBDState | AutostepState | AutostepGTDLambdaState | ObGDState
-    )
+    optimizer_state: LMSState | IDBDState | AutostepState | AutostepGTDLambdaState | ObGDState
     normalizer_state: AnyNormalizerState | None = None
     step_count: Int[Array, ""] = None  # type: ignore[assignment]
     birth_timestamp: float = 0.0
@@ -685,6 +685,33 @@ def _normalized_gvf_probability(name: str, value: object) -> float:
     return normalized
 
 
+_INT32_MAX = 2**31 - 1
+_ACTUAL_INT_TYPES = frozenset(
+    {
+        int,
+        np.int8,
+        np.int16,
+        np.int32,
+        np.int64,
+        np.uint8,
+        np.uint16,
+        np.uint32,
+        np.uint64,
+        np.longlong,
+        np.ulonglong,
+    }
+)
+
+
+def _require_int32(name: str, value: object, *, minimum: int, maximum: int = _INT32_MAX) -> int:
+    if type(value) not in _ACTUAL_INT_TYPES:
+        raise ValueError(f"{name} must be an integer in [{minimum}, {maximum}]")
+    canonical = operator.index(cast(SupportsIndex, value))
+    if not minimum <= canonical <= maximum:
+        raise ValueError(f"{name} must be an integer in [{minimum}, {maximum}]")
+    return canonical
+
+
 @chex.dataclass(frozen=True)
 class GVFSpec:
     """One GVF demon's question functions (Sutton et al. 2011).
@@ -710,10 +737,18 @@ class GVFSpec:
 
     def __post_init__(self) -> None:
         """Reject invalid discount and trace-decay parameters."""
+        if type(self.name) is not str or not self.name:
+            raise ValueError("name must be a non-empty string")
+        if not isinstance(self.demon_type, DemonType):
+            raise ValueError("demon_type must be a DemonType")
         gamma = _normalized_gvf_probability("gamma", self.gamma)
         lamda = _normalized_gvf_probability("lamda", self.lamda)
+        cumulant_index = _require_int32("cumulant_index", self.cumulant_index, minimum=-1)
+        terminal_reward = validated_float32_scalar("terminal_reward", self.terminal_reward)
         object.__setattr__(self, "gamma", gamma)
         object.__setattr__(self, "lamda", lamda)
+        object.__setattr__(self, "cumulant_index", cumulant_index)
+        object.__setattr__(self, "terminal_reward", terminal_reward)
 
     def to_config(self) -> dict[str, Any]:
         """Serialize to dict.
@@ -759,6 +794,13 @@ class HordeSpec:
     gammas: Float[Array, " n_demons"]
     lamdas: Float[Array, " n_demons"]
 
+    def __post_init__(self) -> None:
+        if not self.demons:
+            raise ValueError("demons must be non-empty")
+        for i, d in enumerate(self.demons):
+            if not isinstance(d, GVFSpec):
+                raise ValueError(f"demons[{i}] must be a GVFSpec")
+
     def to_config(self) -> dict[str, Any]:
         """Serialize to dict.
 
@@ -794,7 +836,12 @@ def create_horde_spec(demons: Sequence[GVFSpec]) -> HordeSpec:
     Returns:
         HordeSpec with pre-computed arrays
     """
+    if not demons:
+        raise ValueError("demons must be non-empty")
     demons_tuple = tuple(demons)
+    for i, d in enumerate(demons_tuple):
+        if not isinstance(d, GVFSpec):
+            raise ValueError(f"demons[{i}] must be a GVFSpec")
     gammas = jnp.array([d.gamma for d in demons_tuple], dtype=jnp.float32)
     lamdas = jnp.array([d.lamda for d in demons_tuple], dtype=jnp.float32)
     return HordeSpec(demons=demons_tuple, gammas=gammas, lamdas=lamdas)
