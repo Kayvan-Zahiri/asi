@@ -26,6 +26,7 @@ from alberta_framework.core.oak import OaKConfig
 from alberta_framework.core.options import STOMPConfig, SubtaskSpec
 from alberta_framework.core.prototype_agent import (
     PROTOTYPE_CHECKPOINT_SCHEMA,
+    GRUPerceptionConfig,
     PrototypeAgent,
     PrototypeAgentConfig,
     PrototypeAgentState,
@@ -345,9 +346,7 @@ class TestPrototypeAgentConfigValidation:
             )
 
     def test_scan_rejects_legacy_gamma_zero_without_explicit_boundaries(self) -> None:
-        agent = PrototypeAgent(
-            PrototypeAgentConfig(oak=_oak_cfg(), world_model=_wm_cfg(gamma=0.0))
-        )
+        agent = PrototypeAgent(PrototypeAgentConfig(oak=_oak_cfg(), world_model=_wm_cfg(gamma=0.0)))
         state = agent.start(agent.init(jr.key(43)), jnp.zeros(OBS_DIM))
         with pytest.raises(ValueError, match="use update_transition"):
             agent.scan(
@@ -658,10 +657,13 @@ class TestPrototypeAgentScan:
         init_state = agent.start(agent.init(jr.key(0)), jnp.zeros(OBS_DIM))
         n_steps = 5
         rewards = jnp.array([0.1, 0.2, 0.0, -0.1, 0.5])
-        next_obs = jnp.ones((n_steps, OBS_DIM)) * jnp.arange(
-            n_steps,
-            dtype=jnp.float32,
-        )[:, None]
+        next_obs = (
+            jnp.ones((n_steps, OBS_DIM))
+            * jnp.arange(
+                n_steps,
+                dtype=jnp.float32,
+            )[:, None]
+        )
 
         # Sequential
         state = init_state
@@ -724,9 +726,8 @@ class TestPrototypeAgentCurate:
             state = result.state
         new_agent, new_state = agent.curate(state, jr.key(2))
         # World model state preserved
-        assert (
-            int(new_state.world_model_state.step_count)
-            == int(state.world_model_state.step_count)
+        assert int(new_state.world_model_state.step_count) == int(
+            state.world_model_state.step_count
         )
 
     def test_curate_preserves_dream_next_observation_mode(self) -> None:
@@ -922,9 +923,7 @@ class TestFeatureToSubtaskSpecs:
         new_head_params = head_params.replace(
             weights=tuple(base_row[None, :] for _ in head_params.weights)
         )
-        new_base_learner_state = stomp_state.base_learner_state.replace(
-            head_params=new_head_params
-        )
+        new_base_learner_state = stomp_state.base_learner_state.replace(head_params=new_head_params)
 
         opt_row = jnp.array([0.0, 0.6, 0.1], dtype=jnp.float32)
         new_option_policies = stomp_state.option_policies.replace(
@@ -987,10 +986,7 @@ class TestPrototypeAgentSerializationRoundtrip:
         save_prototype_checkpoint(agent, state, checkpoint_path)
         restored_agent, restored_state = load_prototype_checkpoint(checkpoint_path)
 
-        assert (
-            restored_agent.config.dream_next_observation_mode
-            == "sample_one_hot"
-        )
+        assert restored_agent.config.dream_next_observation_mode == "sample_one_hot"
         chex.assert_trees_all_close(
             _materialize_typed_keys(restored_state),
             _materialize_typed_keys(state),
@@ -1044,9 +1040,7 @@ class TestPrototypeAgentSerializationRoundtrip:
             lambda _path: {
                 "schema": PROTOTYPE_CHECKPOINT_SCHEMA,
                 "agent_config": noncanonical,
-                "config_sha256": prototype_module._prototype_config_digest(
-                    noncanonical
-                ),
+                "config_sha256": prototype_module._prototype_config_digest(noncanonical),
             },
         )
         with pytest.raises(ValueError, match="not canonical"):
@@ -1303,3 +1297,55 @@ class TestAutoCurate:
             state = result.state
         # Fires at step_count 0, 5, 10 → exactly 3
         assert curations == 3
+
+
+def test_prototype_agent_and_gru_integer_validation() -> None:
+    with pytest.raises(ValueError, match="observation_dim"):
+        GRUPerceptionConfig(observation_dim=True)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="observation_dim"):
+        GRUPerceptionConfig(observation_dim=0)
+    with pytest.raises(ValueError, match="hidden_dim"):
+        GRUPerceptionConfig(observation_dim=4, hidden_dim=0)
+
+    gru = GRUPerceptionConfig(observation_dim=np.int32(4), hidden_dim=np.int64(16))
+    assert gru.observation_dim == 4
+    assert gru.hidden_dim == 16
+    assert type(gru.observation_dim) is int
+    assert type(gru.hidden_dim) is int
+
+    with pytest.raises(ValueError, match="buffer_capacity"):
+        PrototypeAgentConfig(buffer_capacity=True)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="buffer_capacity"):
+        PrototypeAgentConfig(buffer_capacity=0)
+
+    with pytest.raises(ValueError, match="n_dreams_per_step"):
+        PrototypeAgentConfig(n_dreams_per_step=True)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="n_dreams_per_step"):
+        PrototypeAgentConfig(n_dreams_per_step=-1)
+
+    with pytest.raises(ValueError, match="auto_curate_every"):
+        PrototypeAgentConfig(auto_curate_every=True)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="auto_curate_every"):
+        PrototypeAgentConfig(auto_curate_every=-1)
+
+    with pytest.raises(ValueError, match="horde_hidden_sizes"):
+        PrototypeAgentConfig(horde_hidden_sizes=[64, 64])  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="horde_hidden_sizes"):
+        PrototypeAgentConfig(horde_hidden_sizes=(True, 64))  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="horde_hidden_sizes"):
+        PrototypeAgentConfig(horde_hidden_sizes=(64, 0))
+
+    cfg = PrototypeAgentConfig(
+        buffer_capacity=np.int32(100),
+        n_dreams_per_step=np.int64(0),
+        auto_curate_every=np.int32(50),
+        horde_hidden_sizes=(np.int32(32), np.int64(32)),
+    )
+    assert cfg.buffer_capacity == 100
+    assert cfg.n_dreams_per_step == 0
+    assert cfg.auto_curate_every == 50
+    assert cfg.horde_hidden_sizes == (32, 32)
+    assert type(cfg.buffer_capacity) is int
+    assert type(cfg.n_dreams_per_step) is int
+    assert type(cfg.auto_curate_every) is int
+    assert type(cfg.horde_hidden_sizes[0]) is int
