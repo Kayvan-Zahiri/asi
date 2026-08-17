@@ -185,9 +185,7 @@ def _freeze_micro_hyperparameters(value: object, *, context: str) -> Mapping[str
     try:
         items = list(cast(Mapping[object, object], value).items())
     except Exception as exc:
-        raise ValueError(
-            f"{context} must be an object with non-empty string keys"
-        ) from exc
+        raise ValueError(f"{context} must be an object with non-empty string keys") from exc
     frozen: dict[str, float] = {}
     for key, raw_value in items:
         if type(key) is not str or not key:
@@ -324,18 +322,12 @@ class MicroStreamConfig:
                 name,
                 _require_positive_int32(getattr(self, name), name=name),
             )
-        sparsity = _require_positive_int32(
-            self.component_sparsity, name="component_sparsity"
-        )
-        pool = _require_positive_int32(
-            self.recurrence_pool, name="recurrence_pool", minimum=2
-        )
+        sparsity = _require_positive_int32(self.component_sparsity, name="component_sparsity")
+        pool = _require_positive_int32(self.recurrence_pool, name="recurrence_pool", minimum=2)
         object.__setattr__(self, "component_sparsity", sparsity)
         object.__setattr__(self, "recurrence_pool", pool)
         if sparsity > self.dim:
-            raise ValueError(
-                f"component_sparsity ({sparsity}) must not exceed dim ({self.dim})"
-            )
+            raise ValueError(f"component_sparsity ({sparsity}) must not exceed dim ({self.dim})")
         float_domains: dict[str, dict[str, object]] = {
             "spectrum_decades": {"lower": 0.0},
             "mean_separation": {"positive": True},
@@ -364,12 +356,9 @@ class MicroStreamConfig:
         if self.family == "recurrence":
             if pool > self.n_regimes:
                 raise ValueError(
-                    f"recurrence_pool ({pool}) must not exceed n_regimes "
-                    f"({self.n_regimes})"
+                    f"recurrence_pool ({pool}) must not exceed n_regimes ({self.n_regimes})"
                 )
-        _require_float32_resource(
-            "GaussianMicroStream outputs", self.materialized_stream_scalars
-        )
+        _require_float32_resource("GaussianMicroStream outputs", self.materialized_stream_scalars)
 
     @property
     def n_steps(self) -> int:
@@ -419,9 +408,7 @@ class MicroStreamConfig:
         }
 
     @classmethod
-    def from_mapping(
-        cls, mapping: object, *, source: str = "stream_config"
-    ) -> MicroStreamConfig:
+    def from_mapping(cls, mapping: object, *, source: str = "stream_config") -> MicroStreamConfig:
         """Reconstruct a stream config from a serialized object.
 
         The mapping must contain exactly the :meth:`to_config` key set.
@@ -453,8 +440,7 @@ class MicroStreamConfig:
             if extra:
                 details.append(f"unexpected {extra}")
             raise ValueError(
-                f"{source} must contain exactly the serialized key set; "
-                + "; ".join(details)
+                f"{source} must contain exactly the serialized key set; " + "; ".join(details)
             )
         return cls(**payload)
 
@@ -476,9 +462,7 @@ def dim_scale_spectrum(config: MicroStreamConfig) -> Array:
     return jnp.power(10.0, exponents).astype(jnp.float32)
 
 
-def _stream_keys(
-    config: MicroStreamConfig, seed: int
-) -> tuple[Array, Array, Array, Array, Array]:
+def _stream_keys(config: MicroStreamConfig, seed: int) -> tuple[Array, Array, Array, Array, Array]:
     if type(config) is not MicroStreamConfig:
         raise TypeError("config must be a MicroStreamConfig")
     seed = require_jax_seed(seed, name="seed")
@@ -509,22 +493,22 @@ def class_geometry(config: MicroStreamConfig, seed: int) -> tuple[Array, Array]:
     scales = dim_scale_spectrum(config)
     c, k, d = config.n_classes, config.n_components, config.dim
     offsets = config.offset_scale * scales * jr.normal(key_offset, (d,), jnp.float32)
-    class_mask = (
-        jr.uniform(key_class_mask, (c, d)) < config.class_sparsity
-    ).astype(jnp.float32)
-    class_means = offsets + config.mean_separation * scales * jr.normal(
-        key_means, (c, d), jnp.float32
-    ) * class_mask
+    class_mask = (jr.uniform(key_class_mask, (c, d)) < config.class_sparsity).astype(jnp.float32)
+    class_means = (
+        offsets
+        + config.mean_separation * scales * jr.normal(key_means, (c, d), jnp.float32) * class_mask
+    )
     if config.component_sparsity >= d:
         component_mask = jnp.ones((c, k, d), dtype=jnp.float32)
     else:
         scores = jr.uniform(key_component_mask, (c, k, d))
-        component_mask = stable_smallest_mask(scores, config.component_sparsity).astype(
-            jnp.float32
-        )
-    displacements = config.component_scale * scales * jr.normal(
-        key_displacement, (c, k, d), jnp.float32
-    ) * component_mask
+        component_mask = stable_smallest_mask(scores, config.component_sparsity).astype(jnp.float32)
+    displacements = (
+        config.component_scale
+        * scales
+        * jr.normal(key_displacement, (c, k, d), jnp.float32)
+        * component_mask
+    )
     component_means = class_means[:, None, :] + displacements
     dim_sigma = (config.noise_scale * scales).astype(jnp.float32)
     return component_means.astype(jnp.float32), dim_sigma
@@ -573,35 +557,25 @@ def assemble_observed(
 
 
 def _identity_permutations(config: MicroStreamConfig) -> Array:
-    return jnp.tile(
-        jnp.arange(config.dim, dtype=jnp.int32), (config.n_regimes, 1)
-    )
+    return jnp.tile(jnp.arange(config.dim, dtype=jnp.int32), (config.n_regimes, 1))
 
 
 def _identity_label_maps(config: MicroStreamConfig) -> Array:
-    return jnp.tile(
-        jnp.arange(config.n_classes, dtype=jnp.int32), (config.n_regimes, 1)
-    )
+    return jnp.tile(jnp.arange(config.n_classes, dtype=jnp.int32), (config.n_regimes, 1))
 
 
 def generate_stream(config: MicroStreamConfig, seed: int) -> GaussianMicroStream:
     """Materialize the deterministic stream for one ``(config, seed)``."""
     _, key_labels, key_components, key_noise, key_regime = _stream_keys(config, seed)
-    key_perm, key_label_map, key_scale, key_pool, key_pool_schedule = jr.split(
-        key_regime, 5
-    )
+    key_perm, key_label_map, key_scale, key_pool, key_pool_schedule = jr.split(key_regime, 5)
     component_means, dim_sigma = class_geometry(config, seed)
 
     n_steps = config.n_steps
     base_y = jr.randint(key_labels, (n_steps,), 0, config.n_classes).astype(jnp.int32)
     base_z = jr.randint(key_components, (n_steps,), 0, config.n_components)
     noise = jr.normal(key_noise, (n_steps, config.dim), jnp.float32)
-    base_x = (
-        component_means[base_y, base_z] + dim_sigma[None, :] * noise
-    ).astype(jnp.float32)
-    regime_ids = (
-        jnp.arange(n_steps, dtype=jnp.int32) // config.regime_length
-    ).astype(jnp.int32)
+    base_x = (component_means[base_y, base_z] + dim_sigma[None, :] * noise).astype(jnp.float32)
+    regime_ids = (jnp.arange(n_steps, dtype=jnp.int32) // config.regime_length).astype(jnp.int32)
 
     permutations = _identity_permutations(config)
     label_maps = _identity_label_maps(config)
@@ -610,9 +584,9 @@ def generate_stream(config: MicroStreamConfig, seed: int) -> GaussianMicroStream
 
     regimes = jnp.arange(config.n_regimes)
     if config.family == "input_permutation":
-        permutations = jax.vmap(
-            lambda r: jr.permutation(jr.fold_in(key_perm, r), config.dim)
-        )(regimes).astype(jnp.int32)
+        permutations = jax.vmap(lambda r: jr.permutation(jr.fold_in(key_perm, r), config.dim))(
+            regimes
+        ).astype(jnp.int32)
     elif config.family == "label_permutation":
         label_maps = jax.vmap(
             lambda r: jr.permutation(jr.fold_in(key_label_map, r), config.n_classes)
@@ -629,18 +603,16 @@ def generate_stream(config: MicroStreamConfig, seed: int) -> GaussianMicroStream
         ).astype(jnp.float32)
     elif config.family == "recurrence":
         pool = config.recurrence_pool
-        pool_permutations = jax.vmap(
-            lambda p: jr.permutation(jr.fold_in(key_pool, p), config.dim)
-        )(jnp.arange(pool)).astype(jnp.int32)
+        pool_permutations = jax.vmap(lambda p: jr.permutation(jr.fold_in(key_pool, p), config.dim))(
+            jnp.arange(pool)
+        ).astype(jnp.int32)
         introduction = jnp.arange(pool, dtype=jnp.int32)
         n_tail = config.n_regimes - pool
         tail = jr.randint(key_pool_schedule, (n_tail,), 0, pool).astype(jnp.int32)
         regime_pool_ids = jnp.concatenate([introduction, tail])
         permutations = pool_permutations[regime_pool_ids]
 
-    x, y = assemble_observed(
-        base_x, base_y, regime_ids, permutations, label_maps, scale_factors
-    )
+    x, y = assemble_observed(base_x, base_y, regime_ids, permutations, label_maps, scale_factors)
     return GaussianMicroStream(
         x=x,
         y=y,
@@ -811,9 +783,7 @@ def _make_sgd_raw_learner(
         params: dict[str, Array], state: Array, grads: dict[str, Array], key: Array
     ) -> tuple[dict[str, Array], Array]:
         del key  # deterministic
-        new_params = {
-            name: params[name] * decay - step_size * grads[name] for name in params
-        }
+        new_params = {name: params[name] * decay - step_size * grads[name] for name in params}
         return new_params, state
 
     return _wrap_grad_learner(init_fn, step_fn)
@@ -992,9 +962,7 @@ def run_micro_arm(
             step_params, step_state, key = carry
             x, y = step_xy
             key, step_key = jr.split(key)
-            new_params, new_state, metrics = step_fn(
-                step_params, step_state, x, y, step_key
-            )
+            new_params, new_state, metrics = step_fn(step_params, step_state, x, y, step_key)
             return (new_params, new_state, key), metrics
 
         _, (accuracies, losses, plasticities) = jax.lax.scan(
@@ -1004,15 +972,11 @@ def run_micro_arm(
 
     run_jit = jax.jit(run_stream)
     started = time.monotonic()
-    accuracies, losses, plasticities = run_jit(
-        params, state, key_steps, stream.x, stream.y
-    )
+    accuracies, losses, plasticities = run_jit(params, state, key_steps, stream.x, stream.y)
     shape = (config.n_regimes, config.regime_length)
     per_regime_accuracy = np.asarray(accuracies, dtype=np.float64).reshape(shape).mean(axis=1)
     per_regime_loss = np.asarray(losses, dtype=np.float64).reshape(shape).mean(axis=1)
-    per_regime_plasticity = (
-        np.asarray(plasticities, dtype=np.float64).reshape(shape).mean(axis=1)
-    )
+    per_regime_plasticity = np.asarray(plasticities, dtype=np.float64).reshape(shape).mean(axis=1)
     wall_clock = time.monotonic() - started
     return MicroRunResult(
         family=config.family,
@@ -1062,9 +1026,7 @@ def micro_shard_payload(result: MicroRunResult) -> dict[str, Any]:
         "stream_config": result.stream_config.to_config(),
         "per_regime_accuracy": [round(float(v), 8) for v in result.per_regime_accuracy],
         "per_regime_loss": [round(float(v), 8) for v in result.per_regime_loss],
-        "per_regime_plasticity": [
-            round(float(v), 8) for v in result.per_regime_plasticity
-        ],
+        "per_regime_plasticity": [round(float(v), 8) for v in result.per_regime_plasticity],
         "overall_average_online_accuracy": float(result.overall_accuracy),
         "wall_clock_seconds": round(result.wall_clock_seconds, 3),
         "created_unix": time.time(),
@@ -1079,7 +1041,9 @@ def micro_shard_payload(result: MicroRunResult) -> dict[str, Any]:
 
 def write_micro_shard(path: Path | str, payload: dict[str, Any]) -> None:
     """Atomically publish one immutable shard (refuses an occupied path)."""
-    encoded = (json.dumps(payload, indent=1, sort_keys=True) + "\n").encode("utf-8")
+    encoded = (json.dumps(payload, indent=1, sort_keys=True, allow_nan=False) + "\n").encode(
+        "utf-8"
+    )
     atomic_write_new(Path(path), encoded)
 
 
@@ -1204,9 +1168,7 @@ def _micro_shard_batch_contract(
             f"separately (mismatched: {environment_mismatches})"
         )
     return (
-        MicroStreamConfig.from_mapping(
-            shards[0]["stream_config"], source="stream_config"
-        ),
+        MicroStreamConfig.from_mapping(shards[0]["stream_config"], source="stream_config"),
         dict(reference_environment),
     )
 
@@ -1219,9 +1181,7 @@ def _validate_micro_arm_contract(
     seeds = sorted(per_seed)
     for fieldname in ("hyperparameters", "mechanism"):
         reference = per_seed[seeds[0]][fieldname]
-        mismatched = [
-            seed for seed in seeds if per_seed[seed][fieldname] != reference
-        ]
+        mismatched = [seed for seed in seeds if per_seed[seed][fieldname] != reference]
         if mismatched:
             raise ValueError(
                 f"arm {arm_name!r} has inconsistent {fieldname} across seeds: "
@@ -1230,9 +1190,7 @@ def _validate_micro_arm_contract(
             )
 
 
-def merge_micro_shards(
-    paths: Sequence[Path | str], bayes_samples: int = 200_000
-) -> dict[str, Any]:
+def merge_micro_shards(paths: Sequence[Path | str], bayes_samples: int = 200_000) -> dict[str, Any]:
     """Merge shards of one (family, config) into a ranked summary with the
     analytic Bayes reference attached.
 
@@ -1252,9 +1210,7 @@ def merge_micro_shards(
     for shard in shards:
         per_seed = by_arm.setdefault(shard["arm_name"], {})
         if shard["seed"] in per_seed:
-            raise ValueError(
-                f"duplicate shard for arm={shard['arm_name']} seed={shard['seed']}"
-            )
+            raise ValueError(f"duplicate shard for arm={shard['arm_name']} seed={shard['seed']}")
         per_seed[shard["seed"]] = shard
     seed_sets = {arm: tuple(sorted(per_seed)) for arm, per_seed in sorted(by_arm.items())}
     if len(set(seed_sets.values())) != 1:
@@ -1275,15 +1231,10 @@ def merge_micro_shards(
             context=f"arm {arm_name!r}",
         )
         curves = np.stack(
-            [
-                np.asarray(per_seed[s]["per_regime_accuracy"], dtype=np.float64)
-                for s in seeds
-            ]
+            [np.asarray(per_seed[s]["per_regime_accuracy"], dtype=np.float64) for s in seeds]
         )
         per_seed_avg = curves.mean(axis=1)
-        slopes = np.asarray(
-            [_late_window_slope(curves[i], quarter) for i in range(len(seeds))]
-        )
+        slopes = np.asarray([_late_window_slope(curves[i], quarter) for i in range(len(seeds))])
         entries.append(
             {
                 "arm_name": arm_name,
@@ -1297,9 +1248,7 @@ def merge_micro_shards(
                     if len(seeds) > 1
                     else 0.0
                 ),
-                "per_seed_average_online_accuracy": [
-                    round(float(v), 6) for v in per_seed_avg
-                ],
+                "per_seed_average_online_accuracy": [round(float(v), 6) for v in per_seed_avg],
                 "first_regime_accuracy_mean": float(curves[:, 0].mean()),
                 "first_window_accuracy_mean": float(curves[:, :quarter].mean()),
                 "late_window_accuracy_mean": float(curves[:, -quarter:].mean()),
@@ -1315,15 +1264,12 @@ def merge_micro_shards(
 
     reference_seeds = sorted(all_seeds)
     references = [
-        bayes_reference(config, seed, n_samples=bayes_samples)
-        for seed in reference_seeds
+        bayes_reference(config, seed, n_samples=bayes_samples) for seed in reference_seeds
     ]
     bayes_payload = {
         "seeds": reference_seeds,
         "n_samples": bayes_samples,
-        "per_seed_bayes_accuracy": [
-            round(reference.bayes_accuracy, 6) for reference in references
-        ],
+        "per_seed_bayes_accuracy": [round(reference.bayes_accuracy, 6) for reference in references],
         "per_seed_mc_sem": [round(reference.mc_sem, 8) for reference in references],
         "bayes_accuracy_mean": float(
             np.mean([reference.bayes_accuracy for reference in references])
@@ -1387,9 +1333,7 @@ def transfer_validation(
     seeds = list(seed_sets[LADDER_ARMS[0]])
     if not seeds:
         raise ValueError("no seeds given")
-    lengths = {
-        np.asarray(per_arm[arm][seed]).shape[0] for arm in LADDER_ARMS for seed in seeds
-    }
+    lengths = {np.asarray(per_arm[arm][seed]).shape[0] for arm in LADDER_ARMS for seed in seeds}
     if len(lengths) != 1:
         raise ValueError(f"per-regime curves differ in length: {sorted(lengths)}")
     n_regimes = lengths.pop()
@@ -1404,9 +1348,7 @@ def transfer_validation(
     first_window = {arm: curves[arm][:, :quarter].mean(axis=1) for arm in LADDER_ARMS}
     late_window = {arm: curves[arm][:, -quarter:].mean(axis=1) for arm in LADDER_ARMS}
     slopes = {
-        arm: np.asarray(
-            [_late_window_slope(curves[arm][i], quarter) for i in range(len(seeds))]
-        )
+        arm: np.asarray([_late_window_slope(curves[arm][i], quarter) for i in range(len(seeds))])
         for arm in LADDER_ARMS
     }
 
@@ -1449,10 +1391,7 @@ def transfer_validation(
     )
     add_check(
         "gate_small_positive",
-        bool(
-            gate_delta.mean() > 0.0
-            and gate_delta.mean() <= conditioning_delta.mean() / 2.0
-        ),
+        bool(gate_delta.mean() > 0.0 and gate_delta.mean() <= conditioning_delta.mean() / 2.0),
         "full protocol: gate +0.011, an order below conditioning +0.061",
         {
             "gate_delta_mean": float(gate_delta.mean()),
@@ -1496,9 +1435,7 @@ def transfer_validation(
     add_check(
         "naive_bayes_placement",
         bool(
-            overall["upgd_raw"].mean()
-            < overall["naive_bayes"].mean()
-            < overall["sgd_norm"].mean()
+            overall["upgd_raw"].mean() < overall["naive_bayes"].mean() < overall["sgd_norm"].mean()
         ),
         "V3 development validation: naive Bayes 0.7851 beats published UPGD-W "
         "0.7778 but stays below conditioned SGD 0.8399",
@@ -1561,9 +1498,7 @@ def transfer_validation_from_shards(paths: Sequence[Path | str]) -> dict[str, An
     for shard in shards:
         per_seed = raw_per_arm.setdefault(shard["arm_name"], {})
         if shard["seed"] in per_seed:
-            raise ValueError(
-                f"duplicate shard for arm={shard['arm_name']} seed={shard['seed']}"
-            )
+            raise ValueError(f"duplicate shard for arm={shard['arm_name']} seed={shard['seed']}")
         per_seed[shard["seed"]] = shard
     per_arm: dict[str, dict[int, np.ndarray]] = {}
     for arm_name, raw_per_seed in raw_per_arm.items():
@@ -1590,10 +1525,8 @@ def _atomic_replace_json(path: Path, payload: dict[str, Any]) -> None:
     """Atomically (re)write one derived JSON artifact (summaries are
     regenerable from immutable shards, so replacement is allowed here)."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    encoded = json.dumps(payload, indent=1, sort_keys=True) + "\n"
-    fd, temporary = tempfile.mkstemp(
-        dir=path.parent, prefix=f".{path.name}.", suffix=".tmp"
-    )
+    encoded = json.dumps(payload, indent=1, sort_keys=True, allow_nan=False) + "\n"
+    fd, temporary = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
             handle.write(encoded)
@@ -1613,28 +1546,16 @@ def _add_stream_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--dim", type=int, default=defaults.dim)
     parser.add_argument("--n-classes", type=int, default=defaults.n_classes)
     parser.add_argument("--n-components", type=int, default=defaults.n_components)
-    parser.add_argument(
-        "--spectrum-decades", type=float, default=defaults.spectrum_decades
-    )
-    parser.add_argument(
-        "--mean-separation", type=float, default=defaults.mean_separation
-    )
-    parser.add_argument(
-        "--component-scale", type=float, default=defaults.component_scale
-    )
-    parser.add_argument(
-        "--component-sparsity", type=int, default=defaults.component_sparsity
-    )
-    parser.add_argument(
-        "--class-sparsity", type=float, default=defaults.class_sparsity
-    )
+    parser.add_argument("--spectrum-decades", type=float, default=defaults.spectrum_decades)
+    parser.add_argument("--mean-separation", type=float, default=defaults.mean_separation)
+    parser.add_argument("--component-scale", type=float, default=defaults.component_scale)
+    parser.add_argument("--component-sparsity", type=int, default=defaults.component_sparsity)
+    parser.add_argument("--class-sparsity", type=float, default=defaults.class_sparsity)
     parser.add_argument("--noise-scale", type=float, default=defaults.noise_scale)
     parser.add_argument("--offset-scale", type=float, default=defaults.offset_scale)
     parser.add_argument("--scale-min", type=float, default=defaults.scale_shift_min)
     parser.add_argument("--scale-max", type=float, default=defaults.scale_shift_max)
-    parser.add_argument(
-        "--recurrence-pool", type=int, default=defaults.recurrence_pool
-    )
+    parser.add_argument("--recurrence-pool", type=int, default=defaults.recurrence_pool)
     parser.add_argument("--hidden1", type=int, default=75)
     parser.add_argument("--hidden2", type=int, default=38)
 
@@ -1721,9 +1642,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     run_p.add_argument("--out", type=Path, required=True)
     _add_stream_arguments(run_p)
 
-    ladder_p = sub.add_parser(
-        "ladder", help="run the method ladder, merge, and validate the proxy"
-    )
+    ladder_p = sub.add_parser("ladder", help="run the method ladder, merge, and validate the proxy")
     ladder_p.add_argument("--family", required=True, choices=FAMILIES)
     ladder_p.add_argument("--seeds", type=int, nargs="+", required=True)
     ladder_p.add_argument(
@@ -1741,9 +1660,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.command == "run":
         seed = require_jax_seed(args.seed, name="seed")
-        _run_or_skip_shard(
-            config, args.arm, seed, args.out, args.hidden1, args.hidden2
-        )
+        _run_or_skip_shard(config, args.arm, seed, args.out, args.hidden1, args.hidden2)
         return 0
 
     # ladder
@@ -1752,9 +1669,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     for arm_name in args.arms:
         for seed in seeds:
             paths.append(
-                _run_or_skip_shard(
-                    config, arm_name, seed, args.out, args.hidden1, args.hidden2
-                )
+                _run_or_skip_shard(config, arm_name, seed, args.out, args.hidden1, args.hidden2)
             )
     summary = merge_micro_shards(paths, bayes_samples=args.bayes_samples)
     summary_path = args.out / f"summary_{config.family}.json"
@@ -1773,8 +1688,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         if not report["transfer_valid"]:
             logger.error(
-                "micro proxy did NOT reproduce the full-protocol ordering; "
-                "receipt preserved at %s", transfer_path,
+                "micro proxy did NOT reproduce the full-protocol ordering; receipt preserved at %s",
+                transfer_path,
             )
             return 2
     return 0
@@ -1830,29 +1745,64 @@ class MicroTaskConfig:
 
 MICRO_SUITE: dict[str, MicroTaskConfig] = {
     "M1": MicroTaskConfig(
-        name="M1", kind="input_permutation", role="search",
-        input_dim=64, n_classes=10, n_tasks=8, task_length=500,
-        hidden1=32, hidden2=16, crop=False,
+        name="M1",
+        kind="input_permutation",
+        role="search",
+        input_dim=64,
+        n_classes=10,
+        n_tasks=8,
+        task_length=500,
+        hidden1=32,
+        hidden2=16,
+        crop=False,
     ),
     "M2": MicroTaskConfig(
-        name="M2", kind="label_permutation", role="search",
-        input_dim=64, n_classes=10, n_tasks=8, task_length=500,
-        hidden1=32, hidden2=16, crop=False,
+        name="M2",
+        kind="label_permutation",
+        role="search",
+        input_dim=64,
+        n_classes=10,
+        n_tasks=8,
+        task_length=500,
+        hidden1=32,
+        hidden2=16,
+        crop=False,
     ),
     "M3": MicroTaskConfig(
-        name="M3", kind="affine_drift", role="search",
-        input_dim=64, n_classes=10, n_tasks=8, task_length=500,
-        hidden1=32, hidden2=16, crop=False,
+        name="M3",
+        kind="affine_drift",
+        role="search",
+        input_dim=64,
+        n_classes=10,
+        n_tasks=8,
+        task_length=500,
+        hidden1=32,
+        hidden2=16,
+        crop=False,
     ),
     "M4": MicroTaskConfig(
-        name="M4", kind="permutation_affine", role="holdout",
-        input_dim=64, n_classes=10, n_tasks=8, task_length=500,
-        hidden1=32, hidden2=16, crop=False,
+        name="M4",
+        kind="permutation_affine",
+        role="holdout",
+        input_dim=64,
+        n_classes=10,
+        n_tasks=8,
+        task_length=500,
+        hidden1=32,
+        hidden2=16,
+        crop=False,
     ),
     "M1p": MicroTaskConfig(
-        name="M1p", kind="input_permutation", role="holdout",
-        input_dim=49, n_classes=10, n_tasks=12, task_length=300,
-        hidden1=32, hidden2=16, crop=True,
+        name="M1p",
+        kind="input_permutation",
+        role="holdout",
+        input_dim=49,
+        n_classes=10,
+        n_tasks=12,
+        task_length=300,
+        hidden1=32,
+        hidden2=16,
+        crop=True,
     ),
 }
 
@@ -1911,9 +1861,9 @@ def build_micro_stream(config: MicroTaskConfig, seed: int) -> MicroStream:
     for task in range(config.n_tasks):
         task_key = jr.fold_in(root, task)
         k_examples, k_perm, k_scale, k_offset, k_labels = jr.split(task_key, 5)
-        indices = np.asarray(
-            jr.randint(k_examples, (config.task_length,), 0, n_rows)
-        ).astype(np.int32)
+        indices = np.asarray(jr.randint(k_examples, (config.task_length,), 0, n_rows)).astype(
+            np.int32
+        )
         x_task = x_base[indices].copy()
         y_task = y_base[indices].copy()
         if config.kind in ("input_permutation", "permutation_affine"):
@@ -1929,14 +1879,10 @@ def build_micro_stream(config: MicroTaskConfig, seed: int) -> MicroStream:
                     float(np.log(3.0)),
                 )
             )
-            offset = np.asarray(
-                jr.uniform(k_offset, (config.input_dim,), jnp.float32, -0.5, 0.5)
-            )
+            offset = np.asarray(jr.uniform(k_offset, (config.input_dim,), jnp.float32, -0.5, 0.5))
             x_task = x_task * np.exp(log_scale, dtype=np.float32) + offset
         if config.kind == "label_permutation":
-            label_map = np.asarray(jr.permutation(k_labels, config.n_classes)).astype(
-                np.int32
-            )
+            label_map = np.asarray(jr.permutation(k_labels, config.n_classes)).astype(np.int32)
             y_task = label_map[y_task]
         xs_blocks.append(np.asarray(x_task, dtype=np.float32))
         ys_blocks.append(np.asarray(y_task, dtype=np.int32))

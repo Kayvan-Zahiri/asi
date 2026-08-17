@@ -267,9 +267,7 @@ class TestConfig:
         stream = generate_stream(TINY, seed=0)
         exact_bytes = sum(
             int(leaf.size) * int(leaf.dtype.itemsize)
-            for leaf in (
-                getattr(stream, field.name) for field in dataclasses.fields(stream)
-            )
+            for leaf in (getattr(stream, field.name) for field in dataclasses.fields(stream))
         )
         assert exact_bytes == TINY.materialized_stream_bytes
 
@@ -557,9 +555,7 @@ class TestGenerator:
         b = generate_stream(TINY, seed=0)
         np.testing.assert_array_equal(np.asarray(a.x), np.asarray(b.x))
         np.testing.assert_array_equal(np.asarray(a.y), np.asarray(b.y))
-        np.testing.assert_array_equal(
-            np.asarray(a.permutations), np.asarray(b.permutations)
-        )
+        np.testing.assert_array_equal(np.asarray(a.permutations), np.asarray(b.permutations))
 
     def test_seeds_differ(self):
         a = generate_stream(TINY, seed=0)
@@ -578,9 +574,7 @@ class TestGenerator:
         assert stream.label_maps.shape == (TINY.n_regimes, TINY.n_classes)
         assert stream.scale_factors.shape == (TINY.n_regimes,)
         assert stream.regime_pool_ids.shape == (TINY.n_regimes,)
-        assert stream.component_means.shape == (
-            TINY.n_classes, TINY.n_components, d
-        )
+        assert stream.component_means.shape == (TINY.n_classes, TINY.n_components, d)
         assert stream.dim_sigma.shape == (d,)
 
     def test_regime_ids(self):
@@ -621,9 +615,7 @@ class TestGenerator:
             np.asarray(stream.label_maps),
             np.tile(np.arange(TINY.n_classes), (TINY.n_regimes, 1)),
         )
-        np.testing.assert_allclose(
-            np.asarray(stream.scale_factors), np.ones(TINY.n_regimes)
-        )
+        np.testing.assert_allclose(np.asarray(stream.scale_factors), np.ones(TINY.n_regimes))
         # x really is the coordinate-relabeled base stream
         t = TINY.regime_length  # first step of regime 1
         np.testing.assert_array_equal(
@@ -635,9 +627,7 @@ class TestGenerator:
         maps = np.asarray(stream.label_maps)
         for row in maps:
             assert sorted(row.tolist()) == list(range(TINY.n_classes))
-        np.testing.assert_array_equal(
-            np.asarray(stream.x), np.asarray(stream.base_x)
-        )
+        np.testing.assert_array_equal(np.asarray(stream.x), np.asarray(stream.base_x))
         regime_ids = np.asarray(stream.regime_ids)
         np.testing.assert_array_equal(
             np.asarray(stream.y), maps[regime_ids, np.asarray(stream.base_y)]
@@ -655,9 +645,7 @@ class TestGenerator:
             scales[regime_ids][:, None] * np.asarray(stream.base_x),
             rtol=1e-6,
         )
-        np.testing.assert_array_equal(
-            np.asarray(stream.y), np.asarray(stream.base_y)
-        )
+        np.testing.assert_array_equal(np.asarray(stream.y), np.asarray(stream.base_y))
 
     def test_m4_recurrence_axis(self):
         config = tiny("recurrence", n_regimes=8, recurrence_pool=3)
@@ -681,8 +669,12 @@ class TestGenerator:
         identity_maps = jnp.tile(jnp.arange(c, dtype=jnp.int32), (n_regimes, 1))
         ones = jnp.ones(n_regimes, dtype=jnp.float32)
         x, y = assemble_observed(
-            stream.base_x, stream.base_y, stream.regime_ids,
-            identity_perms, identity_maps, ones,
+            stream.base_x,
+            stream.base_y,
+            stream.regime_ids,
+            identity_perms,
+            identity_maps,
+            ones,
         )
         np.testing.assert_array_equal(np.asarray(x), np.asarray(stream.base_x))
         np.testing.assert_array_equal(np.asarray(y), np.asarray(stream.base_y))
@@ -700,9 +692,7 @@ class TestBayesReference:
         mu1 = jnp.array([-1.0, 0.0], dtype=jnp.float32)
         sigma = jnp.ones(2, dtype=jnp.float32)
         expected = 0.5 * (1.0 + math.erf(1.0 / math.sqrt(2.0)))
-        assert two_class_bayes_accuracy(mu0, mu1, sigma) == pytest.approx(
-            expected, abs=1e-6
-        )
+        assert two_class_bayes_accuracy(mu0, mu1, sigma) == pytest.approx(expected, abs=1e-6)
 
     def test_two_class_scale_invariance(self):
         mu0 = jnp.array([0.3, -0.2, 0.1], dtype=jnp.float32)
@@ -723,9 +713,7 @@ class TestBayesReference:
         assert reference.n_samples == 200_000
         assert reference.chance == pytest.approx(0.5)
         # 5 sigma of MC noise plus float slack
-        assert reference.bayes_accuracy == pytest.approx(
-            exact, abs=5.0 * reference.mc_sem + 1e-4
-        )
+        assert reference.bayes_accuracy == pytest.approx(exact, abs=5.0 * reference.mc_sem + 1e-4)
 
     def test_reference_deterministic_and_bounded(self):
         a = bayes_reference(TINY, seed=0, n_samples=20_000)
@@ -752,22 +740,14 @@ class TestBayesReference:
         base_predictions = bayes_predict(means, dim_sigma, x)
         perm = jr.permutation(jr.key(9), config.dim)
         c = 3.7
-        transformed = bayes_predict(
-            c * means[:, :, perm], c * dim_sigma[perm], c * x[:, perm]
-        )
-        np.testing.assert_array_equal(
-            np.asarray(base_predictions), np.asarray(transformed)
-        )
+        transformed = bayes_predict(c * means[:, :, perm], c * dim_sigma[perm], c * x[:, perm])
+        np.testing.assert_array_equal(np.asarray(base_predictions), np.asarray(transformed))
 
     def test_stream_geometry_matches_reference_geometry(self):
         stream = generate_stream(TINY, seed=5)
         means, dim_sigma = class_geometry(TINY, seed=5)
-        np.testing.assert_array_equal(
-            np.asarray(stream.component_means), np.asarray(means)
-        )
-        np.testing.assert_array_equal(
-            np.asarray(stream.dim_sigma), np.asarray(dim_sigma)
-        )
+        np.testing.assert_array_equal(np.asarray(stream.component_means), np.asarray(means))
+        np.testing.assert_array_equal(np.asarray(stream.dim_sigma), np.asarray(dim_sigma))
 
     def test_component_sparsity_is_localized(self):
         config = tiny("input_permutation", dim=6, component_sparsity=2)
@@ -817,14 +797,14 @@ class TestBayesReference:
                 return jnp.broadcast_to(jnp.asarray(scores, dtype=dtype), shape)
             return jnp.zeros(shape, dtype=dtype)
 
-        monkeypatch.setattr(
-            "alberta_framework.benchmarks.micro_continual.jr.normal", fixed_normal
-        )
+        monkeypatch.setattr("alberta_framework.benchmarks.micro_continual.jr.normal", fixed_normal)
         monkeypatch.setattr(
             "alberta_framework.benchmarks.micro_continual.jr.uniform", fixed_uniform
         )
-        generate = jax.jit(lambda: class_geometry(config, seed=3)) if compiled else (
-            lambda: class_geometry(config, seed=3)
+        generate = (
+            jax.jit(lambda: class_geometry(config, seed=3))
+            if compiled
+            else (lambda: class_geometry(config, seed=3))
         )
         component_means, _ = generate()
 
@@ -835,9 +815,7 @@ class TestBayesReference:
     def test_zero_component_scale_collapses_to_unimodal(self):
         config = tiny("input_permutation", component_scale=0.0)
         means, _ = class_geometry(config, seed=1)
-        np.testing.assert_array_equal(
-            np.asarray(means[:, 0, :]), np.asarray(means[:, 1, :])
-        )
+        np.testing.assert_array_equal(np.asarray(means[:, 0, :]), np.asarray(means[:, 1, :]))
 
 
 # =============================================================================
@@ -860,21 +838,15 @@ class TestArms:
             spec = micro_arm_spec(name)
             assert spec.name == name
             assert spec.description
-            assert all(
-                isinstance(v, int | float) for v in spec.hyperparameters.values()
-            )
+            assert all(isinstance(v, int | float) for v in spec.hyperparameters.values())
 
     def test_unknown_arm_rejected(self):
         with pytest.raises(KeyError, match="unknown micro arm"):
             micro_arm_spec("rff_rls")
 
     def test_raw_arms_use_published_protocol_hyperparameters(self):
-        assert micro_arm_spec("upgd_raw").hyperparameters == dict(
-            UPGD_W_PROTOCOL_HYPERPARAMETERS
-        )
-        assert micro_arm_spec("adamw").hyperparameters == dict(
-            ADAMW_PROTOCOL_HYPERPARAMETERS
-        )
+        assert micro_arm_spec("upgd_raw").hyperparameters == dict(UPGD_W_PROTOCOL_HYPERPARAMETERS)
+        assert micro_arm_spec("adamw").hyperparameters == dict(ADAMW_PROTOCOL_HYPERPARAMETERS)
 
     def test_sgd_norm_matches_campaign_conditioned_floor(self):
         """sgd_norm is the campaign's sgd_ema_norm_d099 row, key for key."""
@@ -901,10 +873,7 @@ class TestArms:
 
     def test_naive_bayes_decay_matches_campaign(self):
         ours = micro_arm_spec("naive_bayes").hyperparameters
-        assert (
-            ours["nb_decay"]
-            == SCREENING_REGISTRY["naive_bayes"].hyperparameters["nb_decay"]
-        )
+        assert ours["nb_decay"] == SCREENING_REGISTRY["naive_bayes"].hyperparameters["nb_decay"]
         # the variance floor is rescaled to the micro spectrum (documented
         # design choice, not a campaign transplant)
         assert ours["nb_var_epsilon"] < 0.1
@@ -919,9 +888,7 @@ class TestArms:
         state = init_fn(params)
         x = jnp.array([0.5, -1.0, 2.0, 0.0], dtype=jnp.float32)
         y = jnp.array(1, dtype=jnp.int32)
-        (_, logits), grads = jax.value_and_grad(cross_entropy_loss, has_aux=True)(
-            params, x, y
-        )
+        (_, logits), grads = jax.value_and_grad(cross_entropy_loss, has_aux=True)(params, x, y)
         lr = spec.hyperparameters["step_size"]
         new_params, _, (accuracy, loss, _) = step_fn(params, state, x, y, jr.key(1))
         for name in params:
@@ -973,9 +940,7 @@ class TestRunner:
         assert result.per_regime_plasticity.shape == (TINY.n_regimes,)
         assert np.all(result.per_regime_accuracy >= 0.0)
         assert np.all(result.per_regime_accuracy <= 1.0)
-        assert result.overall_accuracy == pytest.approx(
-            float(result.per_regime_accuracy.mean())
-        )
+        assert result.overall_accuracy == pytest.approx(float(result.per_regime_accuracy.mean()))
         assert result.wall_clock_seconds >= 0.0
         assert result.family == TINY.family
         assert result.arm_name == "sgd_raw"
@@ -1068,9 +1033,7 @@ class TestShards:
             {"step_size": _FloatClassSpoof()},
         ],
     )
-    def test_arm_specs_reject_noncanonical_hyperparameters(
-        self, hyperparameters: object
-    ) -> None:
+    def test_arm_specs_reject_noncanonical_hyperparameters(self, hyperparameters: object) -> None:
         with pytest.raises(ValueError, match="hyperparameters"):
             dataclasses.replace(
                 micro_arm_spec("sgd_raw"),
@@ -1199,9 +1162,7 @@ class TestShards:
         assert result.seed == seed
 
     @pytest.mark.parametrize("location", ["top-level", "nested"])
-    def test_load_rejects_duplicate_top_level_and_nested_keys(
-        self, tmp_path: Path, location: str
-    ):
+    def test_load_rejects_duplicate_top_level_and_nested_keys(self, tmp_path: Path, location: str):
         payload = micro_shard_payload(self._result())
         encoded = json.dumps(payload, separators=(",", ":"))
         encoded_config = json.dumps(payload["stream_config"], separators=(",", ":"))
@@ -1388,9 +1349,7 @@ class TestShards:
             {"jax": "", "numpy": "test", "python": "test", "platform": "test"},
         ],
     )
-    def test_load_rejects_incomplete_environment(
-        self, tmp_path: Path, environment: object
-    ):
+    def test_load_rejects_incomplete_environment(self, tmp_path: Path, environment: object):
         payload = micro_shard_payload(self._result())
         payload["environment"] = environment
         path = tmp_path / "bad.json"
@@ -1479,9 +1438,7 @@ class TestShards:
         ):
             merge_micro_shards([path_a, path_b], bayes_samples=1_000)
 
-    def test_merge_rejects_environment_drift_and_records_environment(
-        self, tmp_path: Path
-    ):
+    def test_merge_rejects_environment_drift_and_records_environment(self, tmp_path: Path):
         payload_a = micro_shard_payload(self._result(seed=0))
         payload_b = json.loads(json.dumps(payload_a))
         payload_b["seed"] = 1
@@ -1521,10 +1478,7 @@ def _synthetic_ladder(n_regimes=8, seeds=(0, 1)):
         "gated_norm": np.full(n_regimes, 0.862),
         "naive_bayes": np.full(n_regimes, 0.790),
     }
-    return {
-        arm: {seed: curve + 0.001 * seed for seed in seeds}
-        for arm, curve in curves.items()
-    }
+    return {arm: {seed: curve + 0.001 * seed for seed in seeds} for arm, curve in curves.items()}
 
 
 class TestTransferValidation:
@@ -1548,9 +1502,7 @@ class TestTransferValidation:
 
     def test_gate_negative_fails(self):
         ladder = _synthetic_ladder()
-        ladder["gated_norm"] = {
-            seed: curve - 0.05 for seed, curve in ladder["gated_norm"].items()
-        }
+        ladder["gated_norm"] = {seed: curve - 0.05 for seed, curve in ladder["gated_norm"].items()}
         report = transfer_validation(ladder)
         checks = {c["name"]: c for c in report["checks"]}
         assert checks["gate_small_positive"]["passed"] is False
@@ -1674,15 +1626,38 @@ class TestTransferValidation:
 @pytest.mark.integration
 class TestCLI:
     ARGS = [
-        "--n-regimes", "3", "--regime-length", "20", "--dim", "6",
-        "--n-classes", "3", "--n-components", "2", "--component-sparsity", "2",
-        "--class-sparsity", "0.5", "--hidden1", "8", "--hidden2", "6",
+        "--n-regimes",
+        "3",
+        "--regime-length",
+        "20",
+        "--dim",
+        "6",
+        "--n-classes",
+        "3",
+        "--n-components",
+        "2",
+        "--component-sparsity",
+        "2",
+        "--class-sparsity",
+        "0.5",
+        "--hidden1",
+        "8",
+        "--hidden2",
+        "6",
     ]
 
     def test_run_writes_shard_and_is_idempotent(self, tmp_path: Path):
         argv = [
-            "run", "--family", "input_permutation", "--arm", "sgd_raw",
-            "--seed", "0", "--out", str(tmp_path), *self.ARGS,
+            "run",
+            "--family",
+            "input_permutation",
+            "--arm",
+            "sgd_raw",
+            "--seed",
+            "0",
+            "--out",
+            str(tmp_path),
+            *self.ARGS,
         ]
         assert main(argv) == 0
         path = micro_shard_path(tmp_path, "input_permutation", "sgd_raw", 0)
@@ -1694,8 +1669,16 @@ class TestCLI:
     def test_run_refuses_to_skip_a_shard_from_a_different_network_size(self, tmp_path: Path):
         """The idempotent skip must bind hidden1/hidden2, not only the stream config."""
         base = [
-            "run", "--family", "input_permutation", "--arm", "sgd_raw",
-            "--seed", "0", "--out", str(tmp_path), *self.ARGS[:-4],
+            "run",
+            "--family",
+            "input_permutation",
+            "--arm",
+            "sgd_raw",
+            "--seed",
+            "0",
+            "--out",
+            str(tmp_path),
+            *self.ARGS[:-4],
         ]
         assert main([*base, "--hidden1", "8", "--hidden2", "6"]) == 0
         path = micro_shard_path(tmp_path, "input_permutation", "sgd_raw", 0)
@@ -1711,9 +1694,19 @@ class TestCLI:
 
     def test_ladder_partial_arms_writes_summary_only(self, tmp_path: Path):
         argv = [
-            "ladder", "--family", "input_permutation", "--seeds", "0",
-            "--arms", "sgd_raw", "naive_bayes",
-            "--out", str(tmp_path), "--bayes-samples", "5000", *self.ARGS,
+            "ladder",
+            "--family",
+            "input_permutation",
+            "--seeds",
+            "0",
+            "--arms",
+            "sgd_raw",
+            "naive_bayes",
+            "--out",
+            str(tmp_path),
+            "--bayes-samples",
+            "5000",
+            *self.ARGS,
         ]
         assert main(argv) == 0
         assert (tmp_path / "summary_input_permutation.json").exists()
@@ -1721,8 +1714,16 @@ class TestCLI:
 
     def test_ladder_full_writes_validation(self, tmp_path: Path):
         argv = [
-            "ladder", "--family", "input_permutation", "--seeds", "0",
-            "--out", str(tmp_path), "--bayes-samples", "5000", *self.ARGS,
+            "ladder",
+            "--family",
+            "input_permutation",
+            "--seeds",
+            "0",
+            "--out",
+            str(tmp_path),
+            "--bayes-samples",
+            "5000",
+            *self.ARGS,
         ]
         code = main(argv)
         transfer_path = tmp_path / "transfer_input_permutation.json"
@@ -1734,16 +1735,32 @@ class TestCLI:
 
     def test_run_rejects_seed_outside_jax_domain(self, tmp_path: Path):
         argv = [
-            "run", "--family", "input_permutation", "--arm", "sgd_raw",
-            "--seed", str(JAX_KEY_SEED_MAX + 1), "--out", str(tmp_path), *self.ARGS,
+            "run",
+            "--family",
+            "input_permutation",
+            "--arm",
+            "sgd_raw",
+            "--seed",
+            str(JAX_KEY_SEED_MAX + 1),
+            "--out",
+            str(tmp_path),
+            *self.ARGS,
         ]
         with pytest.raises(ValueError, match="seed"):
             main(argv)
 
     def test_ladder_rejects_seed_outside_jax_domain(self, tmp_path: Path):
         argv = [
-            "ladder", "--family", "input_permutation", "--seeds", str(JAX_KEY_SEED_MAX + 1),
-            "--arms", "sgd_raw", "--out", str(tmp_path), *self.ARGS,
+            "ladder",
+            "--family",
+            "input_permutation",
+            "--seeds",
+            str(JAX_KEY_SEED_MAX + 1),
+            "--arms",
+            "sgd_raw",
+            "--out",
+            str(tmp_path),
+            *self.ARGS,
         ]
         with pytest.raises(ValueError, match="seeds"):
             main(argv)
@@ -1824,9 +1841,7 @@ def test_m1_blocks_are_permutations_of_the_base_features() -> None:
     # labels are untouched.
     for step in (0, 30, 70):
         idx = int(stream.example_indices[step])
-        np.testing.assert_allclose(
-            np.sort(stream.xs[step]), np.sort(x_base[idx]), rtol=0, atol=0
-        )
+        np.testing.assert_allclose(np.sort(stream.xs[step]), np.sort(x_base[idx]), rtol=0, atol=0)
         assert int(stream.ys[step]) == int(y_base[idx])
     # Tasks use different permutations: same example transformed differently
     # in different task blocks (with overwhelming probability).
@@ -1860,3 +1875,28 @@ def test_m3_applies_per_task_affine_transform() -> None:
     # two steps in the same task sharing an example agree exactly; across
     # tasks the transform differs.
     assert not np.array_equal(stream.xs[0], x_base[idx0])
+
+
+def test_write_micro_shard_and_atomic_replace_reject_non_finite_json(tmp_path: Path) -> None:
+    from alberta_framework.benchmarks.micro_continual import _atomic_replace_json, write_micro_shard
+
+    shard_path = tmp_path / "shard.json"
+    summary_path = tmp_path / "summary.json"
+
+    # NaN / Inf in write_micro_shard
+    with pytest.raises(ValueError, match="Out of range float values are not JSON compliant"):
+        write_micro_shard(shard_path, {"wall_clock_seconds": float("nan")})
+
+    with pytest.raises(ValueError, match="Out of range float values are not JSON compliant"):
+        write_micro_shard(shard_path, {"wall_clock_seconds": float("inf")})
+
+    assert not shard_path.exists()
+
+    # NaN / Inf in _atomic_replace_json
+    with pytest.raises(ValueError, match="Out of range float values are not JSON compliant"):
+        _atomic_replace_json(summary_path, {"mean_accuracy": float("nan")})
+
+    with pytest.raises(ValueError, match="Out of range float values are not JSON compliant"):
+        _atomic_replace_json(summary_path, {"mean_accuracy": float("inf")})
+
+    assert not summary_path.exists()
