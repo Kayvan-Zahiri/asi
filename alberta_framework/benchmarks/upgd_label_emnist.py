@@ -164,8 +164,7 @@ PROTOCOL_DEVIATIONS: tuple[dict[str, str], ...] = (
         "code": "seeded_streams",
         "scope": "rng_schedule",
         "description": (
-            "label-permutation and example streams are seed-derived; upstream streams "
-            "are unseeded"
+            "label-permutation and example streams are seed-derived; upstream streams are unseeded"
         ),
     },
     {
@@ -239,9 +238,7 @@ def _validated_hyperparameter(name: str, value: object) -> float:
     if name in {"step_size", "eps", "norm_epsilon"}:
         return validated_float32_scalar(label, value, positive=True)
     if name in {"utility_decay", "beta1", "beta2", "norm_decay"}:
-        return validated_float32_scalar(
-            label, value, lower=0.0, upper=1.0, upper_inclusive=False
-        )
+        return validated_float32_scalar(label, value, lower=0.0, upper=1.0, upper_inclusive=False)
     return validated_float32_scalar(label, value, lower=0.0)
 
 
@@ -684,9 +681,7 @@ def load_emnist_balanced_train(
     x_all = np.asarray(raw.data, dtype=np.float32)
     y_all = np.asarray(raw.target, dtype=np.int32)
     if x_all.shape != (EMNIST_TOTAL_ROWS, 784) or y_all.shape != (EMNIST_TOTAL_ROWS,):
-        raise RuntimeError(
-            f"unexpected EMNIST_Balanced shape: x={x_all.shape} y={y_all.shape}"
-        )
+        raise RuntimeError(f"unexpected EMNIST_Balanced shape: x={x_all.shape} y={y_all.shape}")
     counts_first = np.bincount(y_all[:EMNIST_TRAIN_ROWS], minlength=47)
     counts_tail = np.bincount(y_all[EMNIST_TRAIN_ROWS:], minlength=47)
     ordering_consistent = bool(
@@ -725,12 +720,17 @@ def load_emnist_balanced_train(
 
 def _stderr(values: np.ndarray) -> float:
     if values.shape[0] < 2:
-        return 0.0
+        raise ValueError("sample standard error requires at least two observations")
     return float(values.std(ddof=1) / math.sqrt(values.shape[0]))
 
 
 def summarize_result(result: LabelEMNISTRunResult) -> dict[str, Any]:
     """Reduce one learner's run to JSON-serializable summary statistics."""
+    if len(result.seeds) < 2:
+        raise ValueError(
+            f"summarize_result requires at least two seeds to compute sample standard error; "
+            f"got {len(result.seeds)}"
+        )
     accuracy = result.average_online_accuracy
     quarter = max(1, result.config.n_tasks // 4)
     per_seed_first = result.per_task_accuracy[:, :quarter].mean(axis=1)
@@ -751,8 +751,7 @@ def summarize_result(result: LabelEMNISTRunResult) -> dict[str, Any]:
             round(float(v), 6) for v in result.per_task_accuracy.mean(axis=0)
         ],
         "per_task_accuracy_stderr": [
-            round(_stderr(result.per_task_accuracy[:, t]), 6)
-            for t in range(result.config.n_tasks)
+            round(_stderr(result.per_task_accuracy[:, t]), 6) for t in range(result.config.n_tasks)
         ],
         "per_seed_per_task_accuracy": [
             [round(float(v), 6) for v in row] for row in result.per_task_accuracy
@@ -955,9 +954,7 @@ def load_plan(path: Path) -> dict[str, Any]:
         if sorted(resolved) != sorted(provided) or any(
             resolved[name].hex() != provided[name].hex() for name in provided
         ):
-            raise ValueError(
-                f"{path}: {learner} hyperparameters must list the complete arm"
-            )
+            raise ValueError(f"{path}: {learner} hyperparameters must list the complete arm")
     raw_seeds = body.get("seed_ids")
     if not isinstance(raw_seeds, list):
         raise ValueError(f"{path}: plan seed_ids must be a list")
@@ -969,9 +966,7 @@ def load_plan(path: Path) -> dict[str, Any]:
     return payload
 
 
-def partial_payload(
-    result: LabelEMNISTRunResult, plan_sha256: str
-) -> dict[str, Any]:
+def partial_payload(result: LabelEMNISTRunResult, plan_sha256: str) -> dict[str, Any]:
     """Serialize one single-seed run shard bound to its plan hash."""
     seeds = require_unique_jax_seeds(result.seeds, name="result seeds")
     if len(seeds) != 1:
@@ -1060,9 +1055,7 @@ def merge_partials(
     if not paths:
         raise ValueError("no partial result files given")
     body = plan["plan"]
-    config = LabelEMNISTConfig(
-        **{k: v for k, v in body["config"].items() if k != "n_steps"}
-    )
+    config = LabelEMNISTConfig(**{k: v for k, v in body["config"].items() if k != "n_steps"})
     seen: dict[tuple[str, int], dict[str, Any]] = {}
     for path in paths:
         payload = _validated_partial(Path(path), plan)
@@ -1070,9 +1063,7 @@ def merge_partials(
         if identity in seen:
             raise ValueError(f"duplicate shard for learner={identity[0]} seed={identity[1]}")
         seen[identity] = payload
-    planned = {
-        (learner, seed) for learner in body["learner_ids"] for seed in body["seed_ids"]
-    }
+    planned = {(learner, seed) for learner in body["learner_ids"] for seed in body["seed_ids"]}
     missing = sorted(planned - set(seen))
     if missing and not allow_incomplete:
         raise ValueError(f"missing planned shards: {missing}")
@@ -1178,9 +1169,7 @@ def _cmd_shard(args: argparse.Namespace) -> None:
     for field in ("x_sha256", "y_sha256"):
         if meta[field] != body["dataset"][field]:
             raise SystemExit(f"dataset {field} differs from the plan; refusing to run")
-    config = LabelEMNISTConfig(
-        **{k: v for k, v in body["config"].items() if k != "n_steps"}
-    )
+    config = LabelEMNISTConfig(**{k: v for k, v in body["config"].items() if k != "n_steps"})
     hp = {k: float(v) for k, v in body["hyperparameters"][args.learner_id].items()}
     logger.info(
         "shard learner=%s seed=%d tasks=%d task_length=%d",
@@ -1209,12 +1198,8 @@ def _cmd_shard(args: argparse.Namespace) -> None:
 
 def _cmd_merge(args: argparse.Namespace) -> None:
     plan = load_plan(args.plan)
-    results, coverage = merge_partials(
-        plan, args.partials, allow_incomplete=args.allow_incomplete
-    )
-    artifact = build_artifact(
-        plan, results, coverage, partial_paths=args.partials, notes=args.note
-    )
+    results, coverage = merge_partials(plan, args.partials, allow_incomplete=args.allow_incomplete)
+    artifact = build_artifact(plan, results, coverage, partial_paths=args.partials, notes=args.note)
     atomic_write_new_json(args.output, artifact)
     logger.info(
         "merged %d shards -> %s (coverage complete=%s)",
@@ -1233,8 +1218,9 @@ def main(argv: Sequence[str] | None = None) -> None:
 
     plan_parser = sub.add_parser("plan", help="issue an immutable pre-run plan")
     plan_parser.add_argument("--plan-out", type=Path, required=True)
-    plan_parser.add_argument("--seed-list", required=True,
-                             help="explicit comma-separated sorted unique seeds")
+    plan_parser.add_argument(
+        "--seed-list", required=True, help="explicit comma-separated sorted unique seeds"
+    )
     plan_parser.add_argument("--learners", default="upgd_w,adamw")
     plan_parser.add_argument("--n-tasks", type=int, default=400)
     plan_parser.add_argument("--task-length", type=int, default=2500)
@@ -1255,8 +1241,11 @@ def main(argv: Sequence[str] | None = None) -> None:
     merge_parser.add_argument("--plan", type=Path, required=True)
     merge_parser.add_argument("--partials", type=Path, nargs="+", required=True)
     merge_parser.add_argument("--output", type=Path, required=True)
-    merge_parser.add_argument("--allow-incomplete", action="store_true",
-                              help="permit missing planned shards; coverage records them")
+    merge_parser.add_argument(
+        "--allow-incomplete",
+        action="store_true",
+        help="permit missing planned shards; coverage records them",
+    )
     merge_parser.add_argument("--note", action="append", default=[])
     merge_parser.set_defaults(func=_cmd_merge)
 

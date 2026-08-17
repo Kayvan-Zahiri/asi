@@ -35,9 +35,7 @@ from alberta_framework.benchmarks.upgd_label_emnist import (
     task_index_for_step,
 )
 
-TINY = LabelEMNISTConfig(
-    n_tasks=3, task_length=8, input_dim=6, hidden1=8, hidden2=4, n_classes=5
-)
+TINY = LabelEMNISTConfig(n_tasks=3, task_length=8, input_dim=6, hidden1=8, hidden2=4, n_classes=5)
 
 DATASET_META = {
     "source": "synthetic:test",
@@ -225,9 +223,7 @@ class TestScheduleExactness:
         for task in range(config.n_tasks):
             fresh = np.asarray(jr.permutation(jr.fold_in(key_perm, task), config.n_classes))
             expected = fresh[previous]
-            np.testing.assert_array_equal(
-                np.asarray(schedule.label_permutations[task]), expected
-            )
+            np.testing.assert_array_equal(np.asarray(schedule.label_permutations[task]), expected)
             previous = expected
 
     def test_example_indices_sample_without_replacement(self):
@@ -291,9 +287,7 @@ class TestSeedBoundary:
             )
 
     @pytest.mark.parametrize("seeds", [(True,), (np.int64(0),), (-1,), (2**32,)])
-    def test_plan_rejects_noncanonical_seed_identities(
-        self, seeds: tuple[object, ...]
-    ) -> None:
+    def test_plan_rejects_noncanonical_seed_identities(self, seeds: tuple[object, ...]) -> None:
         with pytest.raises(ValueError, match="seed IDs"):
             build_plan_payload(
                 TINY,
@@ -308,9 +302,7 @@ class TestSeedBoundary:
             del args, kwargs
             raise AssertionError("invalid CLI seeds reached dataset loading")
 
-        monkeypatch.setattr(
-            upgd_label_emnist, "load_emnist_balanced_train", unexpected_load
-        )
+        monkeypatch.setattr(upgd_label_emnist, "load_emnist_balanced_train", unexpected_load)
         with pytest.raises(ValueError, match=r"seed IDs\[1\].*uint32"):
             upgd_label_emnist.main(
                 [
@@ -346,9 +338,7 @@ class TestEMNISTArrayCache:
         metadata = self._metadata(x, y)
         self._write_cache(tmp_path, x, y, json.dumps(metadata))
 
-        loaded_x, loaded_y, loaded_metadata = (
-            upgd_label_emnist.load_emnist_balanced_train(tmp_path)
-        )
+        loaded_x, loaded_y, loaded_metadata = upgd_label_emnist.load_emnist_balanced_train(tmp_path)
 
         np.testing.assert_array_equal(loaded_x, x)
         np.testing.assert_array_equal(loaded_y, y)
@@ -449,13 +439,10 @@ def test_run_label_emnist_rejects_boundary_gaps_before_setup(
 def debug_run():
     """Run the shared tiny diagnostic once for this test module."""
     x, y = _tiny_data()
-    return run_label_emnist(
-        x, y, "upgd_w", seeds=[0, 1], config=TINY, return_per_step=True
-    )
+    return run_label_emnist(x, y, "upgd_w", seeds=[0, 1], config=TINY, return_per_step=True)
 
 
 class TestTinySmokeRun:
-
     def test_shapes_and_bounds(self, debug_run):
         assert debug_run.per_task_accuracy.shape == (2, TINY.n_tasks)
         assert debug_run.per_step_accuracy.shape == (2, TINY.n_tasks, TINY.task_length)
@@ -491,9 +478,7 @@ class TestTinySmokeRun:
                 for name, value in debug_run.initial_params.items()
             }
             example = int(debug_run.example_indices[seed_row, 0, 0])
-            permuted_label = int(
-                debug_run.label_permutations[seed_row, 0, int(y[example])]
-            )
+            permuted_label = int(debug_run.label_permutations[seed_row, 0, int(y[example])])
             logits = mlp_logits(params, jnp.asarray(x[example]))
             expected = float(int(np.argmax(np.asarray(logits))) == permuted_label)
             assert debug_run.per_step_accuracy[seed_row, 0, 0] == expected
@@ -569,12 +554,14 @@ class TestNormalizedTransferArms:
         x, y = _tiny_data()
         sigma0 = run_label_emnist(x, y, "upgd_ema_norm_sigma0", seeds=[3], config=TINY)
         override = run_label_emnist(
-            x, y, "upgd_ema_norm", seeds=[3], config=TINY,
+            x,
+            y,
+            "upgd_ema_norm",
+            seeds=[3],
+            config=TINY,
             hyperparameters={"noise_std": 0.0},
         )
-        np.testing.assert_array_equal(
-            sigma0.per_task_accuracy, override.per_task_accuracy
-        )
+        np.testing.assert_array_equal(sigma0.per_task_accuracy, override.per_task_accuracy)
         np.testing.assert_array_equal(sigma0.per_task_loss, override.per_task_loss)
 
     def test_sgd_ema_norm_runs_and_is_deterministic(self):
@@ -703,8 +690,9 @@ class TestPlanShardMergeAccounting:
             merge_partials(plan, [path], allow_incomplete=True)
 
     def test_summary_and_comparison_flag_logic(self):
-        upgd = self._result("upgd_w", 0)
-        adam = self._result("adamw", 0)
+        x, y = _tiny_data()
+        upgd = run_label_emnist(x, y, "upgd_w", seeds=[0, 1], config=TINY)
+        adam = run_label_emnist(x, y, "adamw", seeds=[0, 1], config=TINY)
         summaries = {"upgd_w": summarize_result(upgd), "adamw": summarize_result(adam)}
         comparison = build_comparison(summaries)
         assert set(comparison["learners"]) == {"upgd_w", "adamw"}
@@ -731,9 +719,7 @@ class TestPlanShardFloatAliasIntake:
         payload = build_plan_payload(TINY, [0, 1], DATASET_META)
         if mutate is not None:
             mutate(payload["plan"])
-            payload["plan_sha256"] = upgd_label_emnist.canonical_json_sha256(
-                payload["plan"]
-            )
+            payload["plan_sha256"] = upgd_label_emnist.canonical_json_sha256(payload["plan"])
         path = tmp_path / "plan.json"
         atomic_write_new_json(path, payload)
         return path
@@ -818,3 +804,19 @@ class TestPlanShardFloatAliasIntake:
         atomic_write_new_json(path, payload)
         with pytest.raises(ValueError, match="differ from the plan"):
             merge_partials(plan, [path], allow_incomplete=True)
+
+
+def test_stderr_and_summarize_result_reject_one_seed() -> None:
+    from alberta_framework.benchmarks.upgd_label_emnist import _stderr, summarize_result
+
+    with pytest.raises(ValueError, match="at least two observations"):
+        _stderr(np.asarray([0.5]))
+    with pytest.raises(ValueError, match="at least two observations"):
+        _stderr(np.asarray([]))
+
+    assert _stderr(np.asarray([0.25, 0.75])) == pytest.approx(0.25)
+
+    x, y = _tiny_data()
+    one_seed_result = run_label_emnist(x, y, "upgd_w", seeds=[0], config=TINY)
+    with pytest.raises(ValueError, match="at least two seeds"):
+        summarize_result(one_seed_result)
