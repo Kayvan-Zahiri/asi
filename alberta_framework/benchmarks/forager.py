@@ -633,6 +633,17 @@ class ForagerFeatureState:
     last_reward: float
     reward_traces: tuple[float, ...]
 
+    def __post_init__(self) -> None:
+        if type(self.last_action) is not int or isinstance(self.last_action, bool):
+            raise ValueError("last_action must be an integer")
+        if not isinstance(self.last_reward, (int, float)) or not math.isfinite(self.last_reward):
+            raise ValueError("last_reward must be a finite float")
+        if type(self.reward_traces) is not tuple:
+            raise ValueError("reward_traces must be a tuple")
+        for trace in self.reward_traces:
+            if not isinstance(trace, (int, float)) or not math.isfinite(trace):
+                raise ValueError("reward_traces values must be finite floats")
+
 
 def _observation_parts(observation: Any) -> tuple[Array, Array]:
     """Return ``(image, hint)`` for array and mapping observations."""
@@ -4087,6 +4098,22 @@ class PaperBaseline:
     source: str
     official_config_path: str | None = None
 
+    def __post_init__(self) -> None:
+        for attr in ("name", "family", "state_construction", "source"):
+            val = getattr(self, attr)
+            if type(val) is not str or not val:
+                raise ValueError(f"{attr} must be a non-empty string")
+        if self.role not in ("lower_control", "learning_baseline", "sota", "upper_control"):
+            raise ValueError("role is invalid")
+        if not isinstance(self.selected_hyperparameters, Mapping):
+            raise ValueError("selected_hyperparameters must be a mapping")
+        if type(self.in_tree_implementation) is not bool:
+            raise ValueError("in_tree_implementation must be a boolean")
+        if self.official_config_path is not None and (
+            type(self.official_config_path) is not str or not self.official_config_path
+        ):
+            raise ValueError("official_config_path must be None or a non-empty string")
+
     def to_dict(self) -> dict[str, Any]:
         return dataclasses.asdict(self)
 
@@ -4471,6 +4498,18 @@ class PaperReferenceTarget:
     condition: str = "continuously_learning"
     source: str = FORAGER_PAPER_URL
     precision: str = "figure_digitized_approximation"
+
+    def __post_init__(self) -> None:
+        for attr in ("method", "metric", "condition", "source", "precision"):
+            val = getattr(self, attr)
+            if type(val) is not str or not val:
+                raise ValueError(f"{attr} must be a non-empty string")
+        if not isinstance(self.central_estimate, (int, float)) or not math.isfinite(
+            self.central_estimate
+        ):
+            raise ValueError("central_estimate must be a finite float")
+        if type(self.privileged) is not bool:
+            raise ValueError("privileged must be a boolean")
 
     def to_dict(self) -> dict[str, Any]:
         return dataclasses.asdict(self)
