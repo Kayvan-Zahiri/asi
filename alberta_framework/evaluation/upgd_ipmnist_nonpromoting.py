@@ -50,9 +50,7 @@ V2_PROTOCOL_DEVIATIONS: list[dict[str, str]] = [
     {
         "code": "task_aligned_logging",
         "scope": "metric_blocks",
-        "description": (
-            "task blocks are [t*L, (t+1)*L); upstream logging is shifted by one step"
-        ),
+        "description": ("task blocks are [t*L, (t+1)*L); upstream logging is shifted by one step"),
     },
     {
         "code": "float32_bias_corrections",
@@ -450,9 +448,7 @@ def _parse_partials(
 ) -> tuple[list[_Shard], list[str], tuple[tuple[str, str], ...], tuple[int, ...]]:
     errors: list[str] = []
     try:
-        normalized_seeds = require_unique_jax_seeds(
-            expected_seeds, name="expected_seeds"
-        )
+        normalized_seeds = require_unique_jax_seeds(expected_seeds, name="expected_seeds")
     except ValueError as exc:
         errors.append(str(exc))
         normalized_seeds = ()
@@ -619,9 +615,7 @@ def validate_upgd_ipmnist_artifact(
     expected_seeds: Sequence[int] = EXPECTED_SEEDS,
 ) -> UPGDIPMNISTValidation:
     """Recompute and validate a v1 result artifact from its complete shards."""
-    shards, errors, digests, normalized_seeds = _parse_partials(
-        partial_paths, expected_seeds
-    )
+    shards, errors, digests, normalized_seeds = _parse_partials(partial_paths, expected_seeds)
     artifact_digest: str | None = None
     try:
         artifact, artifact_digest = _strict_json_object_with_sha256(Path(artifact_path))
@@ -865,14 +859,22 @@ def validate_upgd_ipmnist_v2_artifact(
         errors.append("v2 artifact fields do not match the strict schema")
     if artifact.get("schema") != UPGD_IPMNIST_ARTIFACT_SCHEMA_V2:
         errors.append("artifact is not an alberta.upgd_ipmnist.artifact.v2 payload")
-    if artifact.get("schema_version") != 2:
+    if type(artifact.get("schema_version")) is not int or artifact.get("schema_version") != 2:
         errors.append("v2 artifact schema_version must equal 2")
     if artifact.get("benchmark") != UPGD_IPMNIST_BENCHMARK:
         errors.append("v2 artifact benchmark identifier is unsupported")
     created = _finite_number(artifact.get("created_unix"))
     if created is None or created <= 0.0:
         errors.append("v2 artifact created_unix must be finite and positive")
-    if artifact.get("evidence_policy") != V2_NONPROMOTING_POLICY:
+    policy = artifact.get("evidence_policy")
+    if (
+        not isinstance(policy, Mapping)
+        or set(policy) != set(V2_NONPROMOTING_POLICY)
+        or policy.get("evidence_class") != "development_replication_diagnostic"
+        or policy.get("development_only") is not True
+        or policy.get("scientific_promotion_allowed") is not False
+        or policy.get("execution_attestation") is not False
+    ):
         errors.append("v2 artifact evidence policy must remain permanently nonpromoting")
     if artifact.get("deviations") != V2_PROTOCOL_DEVIATIONS:
         errors.append("v2 artifact structured deviations do not match the contract")
@@ -919,6 +921,7 @@ def validate_upgd_ipmnist_v2_artifact(
                     "sha256": hashlib.sha256(raw).hexdigest(),
                 }
             )
+
         def manifest_identity(entry: Mapping[str, object]) -> tuple[str, int]:
             learner = entry["learner"]
             seed = entry["seed_id"]
@@ -944,9 +947,7 @@ def validate_upgd_ipmnist_v2_artifact(
                 "selected_publication_configuration_match_scope": (
                     "network_task_shape_and_horizon_only"
                 ),
-                "dataset": (
-                    "OpenML mnist_784 v1, first 60000 rows (torchvision train split)"
-                ),
+                "dataset": ("OpenML mnist_784 v1, first 60000 rows (torchvision train split)"),
                 "input_scaling": "(x/255 - 0.5) / 0.5",
                 "loss": "softmax cross-entropy, one example per step",
                 "metric": "online accuracy of the pre-update prediction, averaged per task",
@@ -962,12 +963,8 @@ def validate_upgd_ipmnist_v2_artifact(
             "published_seed_count": 20,
             "exact_seed_ids_by_learner": seed_ids,
             "exact_seed_count_by_learner": seed_counts,
-            "all_learners_share_seed_ids": all(
-                seeds == schedules[0] for seeds in schedules[1:]
-            ),
-            "matches_published_seed_count": all(
-                count == 20 for count in seed_counts.values()
-            ),
+            "all_learners_share_seed_ids": all(seeds == schedules[0] for seeds in schedules[1:]),
+            "matches_published_seed_count": all(count == 20 for count in seed_counts.values()),
         }
         if artifact.get("study_design") != expected_study_design:
             errors.append("v2 artifact exact seed ids/counts do not recompute")

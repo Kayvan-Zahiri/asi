@@ -36,13 +36,9 @@ from alberta_framework.evaluation.upgd_ipmnist_nonpromoting import (
 _ROOT = Path(__file__).resolve().parents[1]
 _IMMUTABLE_V1_ARTIFACT = _ROOT / "outputs/upgd_ipmnist/results.v1.json"
 _IMMUTABLE_V1_RECEIPT = _ROOT / "outputs/upgd_ipmnist/nonpromoting_receipt.v1.json"
-_IMMUTABLE_V1_RECEIPT_SHA256 = (
-    "c32595829f93ac86b96c6eefc722291bf365dbf724982a70f207d193bbcfc26e"
-)
+_IMMUTABLE_V1_RECEIPT_SHA256 = "c32595829f93ac86b96c6eefc722291bf365dbf724982a70f207d193bbcfc26e"
 _CURRENT_RECEIPT = _ROOT / "outputs/upgd_ipmnist/nonpromoting_receipt.v2.json"
-_CURRENT_RECEIPT_SHA256 = (
-    "0c36f97c60cf5d10ef5478d83f1de274920335ac592d7d6a16b1374da0c44083"
-)
+_CURRENT_RECEIPT_SHA256 = "0c36f97c60cf5d10ef5478d83f1de274920335ac592d7d6a16b1374da0c44083"
 
 
 def _partial_payload(learner: str, seed: int) -> dict[str, object]:
@@ -107,9 +103,7 @@ def _v2_partial_payload(learner: str, seed: int) -> dict[str, object]:
         "seed_count": 1,
         "config": legacy["config"],
         "matches_selected_publication_configuration": True,
-        "selected_publication_configuration_match_scope": (
-            "network_task_shape_and_horizon_only"
-        ),
+        "selected_publication_configuration_match_scope": ("network_task_shape_and_horizon_only"),
         "deviations": [dict(deviation) for deviation in PROTOCOL_DEVIATIONS],
         "per_task_accuracy": legacy["per_task_accuracy"],
         "per_task_loss": legacy["per_task_loss"],
@@ -362,8 +356,7 @@ def test_v2_validator_recursively_rejects_legacy_protocol_marker(tmp_path: Path)
     artifact_validation = validate_upgd_ipmnist_v2_artifact(artifact, paths)
     assert not artifact_validation.valid
     assert any(
-        "forbidden legacy is_protocol_exact" in error
-        for error in artifact_validation.errors
+        "forbidden legacy is_protocol_exact" in error for error in artifact_validation.errors
     )
 
     partial_payload = json.loads(paths[0].read_text(encoding="utf-8"))
@@ -466,9 +459,7 @@ def test_nonpromoting_receipt_binds_stored_shards_and_summary() -> None:
     assert hashlib.sha256(raw).hexdigest() == _CURRENT_RECEIPT_SHA256
     receipt = json.loads(raw)
 
-    assert receipt["schema_version"] == (
-        "alberta.upgd_ipmnist_nonpromoting_receipt.v2"
-    )
+    assert receipt["schema_version"] == ("alberta.upgd_ipmnist_nonpromoting_receipt.v2")
     assert receipt["receipt_role"] == "versioned_provenance_successor"
     predecessor = receipt["predecessor_receipt"]
     assert _ROOT / predecessor["path"] == _IMMUTABLE_V1_RECEIPT
@@ -478,13 +469,9 @@ def test_nonpromoting_receipt_binds_stored_shards_and_summary() -> None:
     assert predecessor["sha256"] == _IMMUTABLE_V1_RECEIPT_SHA256
     assert predecessor["preserved_byte_for_byte"] is True
     predecessor_payload = json.loads(predecessor_raw)
-    predecessor_runbook = predecessor_payload["post_hoc_reconstructed_provenance"][
-        "runbook"
-    ]
+    predecessor_runbook = predecessor_payload["post_hoc_reconstructed_provenance"]["runbook"]
     predecessor_runbook_raw = (_ROOT / predecessor_runbook["path"]).read_bytes()
-    assert hashlib.sha256(predecessor_runbook_raw).hexdigest() == (
-        predecessor_runbook["sha256"]
-    )
+    assert hashlib.sha256(predecessor_runbook_raw).hexdigest() == (predecessor_runbook["sha256"])
     assert receipt["status"] == "complete_structural_validation"
     assert receipt["development_only"] is True
     assert receipt["scientific_promotion_allowed"] is False
@@ -555,8 +542,9 @@ def test_nonpromoting_receipt_binds_stored_shards_and_summary() -> None:
     assert source_manifest["execution_attestation"] is False
     assert source_manifest["full_import_closure_snapshotted"] is False
     assert len(source_manifest["files"]) == bundle_binding["numeric_file_count"]
-    assert sum(binding["size_bytes"] for binding in source_manifest["files"]) == (
-        bundle_binding["numeric_file_size_bytes"]
+    assert (
+        sum(binding["size_bytes"] for binding in source_manifest["files"])
+        == (bundle_binding["numeric_file_size_bytes"])
     )
     for binding in source_manifest["files"]:
         source_raw = (bundle_root / binding["path"]).read_bytes()
@@ -573,8 +561,9 @@ def test_nonpromoting_receipt_binds_stored_shards_and_summary() -> None:
         sort_keys=True,
         separators=(",", ":"),
     ).encode()
-    assert hashlib.sha256(canonical_source_map).hexdigest() == (
-        provenance["numeric_source_hash_map_sha256"]
+    assert (
+        hashlib.sha256(canonical_source_map).hexdigest()
+        == (provenance["numeric_source_hash_map_sha256"])
     )
     for path_string, expected_sha256 in numeric_source_map.items():
         source_raw = (bundle_root / path_string).read_bytes()
@@ -621,3 +610,33 @@ def test_nonpromoting_receipt_binds_stored_shards_and_summary() -> None:
             "average_plasticity_mean",
         ):
             assert artifact_summary[field] == receipt_summary[field]
+
+
+@pytest.mark.unit
+def test_v2_artifact_rejects_float_schema_version_and_numeric_policy_aliases(
+    tmp_path: Path,
+) -> None:
+    paths = _write_v2_shards(tmp_path, seeds=(0,))
+    artifact = _write_v2_artifact(tmp_path, paths)
+
+    # schema_version: 2.0 (float alias)
+    payload = json.loads(artifact.read_text(encoding="utf-8"))
+    payload["schema_version"] = 2.0
+    artifact.write_text(json.dumps(payload), encoding="utf-8")
+    validation = validate_upgd_ipmnist_v2_artifact(artifact, paths)
+    assert not validation.valid
+    assert any("schema_version" in error for error in validation.errors)
+
+    # numeric policy aliases (development_only: 1, scientific_promotion_allowed: 0)
+    payload = json.loads(artifact.read_text(encoding="utf-8"))
+    payload["schema_version"] = 2
+    payload["evidence_policy"] = {
+        "evidence_class": "development_replication_diagnostic",
+        "development_only": 1,
+        "scientific_promotion_allowed": 0,
+        "execution_attestation": 0,
+    }
+    artifact.write_text(json.dumps(payload), encoding="utf-8")
+    validation = validate_upgd_ipmnist_v2_artifact(artifact, paths)
+    assert not validation.valid
+    assert any("evidence policy" in error for error in validation.errors)
