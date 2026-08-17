@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 from types import SimpleNamespace
 
 import pytest
@@ -71,9 +72,25 @@ def test_parser_exposes_full_alberta_and_recurrent_variant_controls() -> None:
 
 
 def test_parser_exposes_causal_map_policy() -> None:
-    args = forager_cli._parser().parse_args(
-        ["--preset", "field_of_view", "--agent", "causal-map"]
-    )
+    args = forager_cli._parser().parse_args(["--preset", "field_of_view", "--agent", "causal-map"])
 
     assert args.preset == "field_of_view"
     assert args.agents == ["causal-map"]
+
+
+def test_main_rejects_final_window_zero(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "forager_cli.py",
+            "--preset",
+            "field_of_view",
+            "--steps",
+            "10",
+            "--final-window",
+            "0",
+        ],
+    )
+    with pytest.raises(ValueError, match="final_window"):
+        forager_cli.main()

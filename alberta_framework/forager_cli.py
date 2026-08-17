@@ -634,7 +634,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         steps=steps,
         ewm_decay=protocol.ewm_decay,
         record_every=args.record_every,
-        final_window=args.final_window or protocol.final_window_steps,
+        final_window=(
+            protocol.final_window_steps if args.final_window is None else args.final_window
+        ),
         jax_chunk_size=args.jax_chunk_size,
     )
     features = ForagerFeatureConfig(
@@ -687,11 +689,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 )
             )
             continue
-        if (
-            agent_name == "causal-map"
-            and len(seeds) > 1
-            and args.alberta_seed_mode != "sequential"
-        ):
+        if agent_name == "causal-map" and len(seeds) > 1 and args.alberta_seed_mode != "sequential":
             runs.extend(
                 run_causal_map_forager_seeds(
                     causal_map_config,
@@ -735,13 +733,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         try:
             dispatch = json.loads(manifest_path.read_text(encoding="utf-8"))
         except (OSError, UnicodeError, json.JSONDecodeError) as exc:
-            parser.error(
-                f"could not decode --reference-manifest {manifest_path}: {exc}"
-            )
+            parser.error(f"could not decode --reference-manifest {manifest_path}: {exc}")
         if not isinstance(dispatch, Mapping):
-            parser.error(
-                f"--reference-manifest {manifest_path} must contain a JSON object"
-            )
+            parser.error(f"--reference-manifest {manifest_path} must contain a JSON object")
         manifest_kind = dispatch.get("manifest_kind")
         from alberta_framework.benchmarks import (
             official_foragax as official_foragax_module,
@@ -769,9 +763,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             official_foragax_module.OfficialForagaxValidationError,
             FileNotFoundError,
         ) as exc:
-            parser.error(
-                f"--reference-manifest {manifest_path} did not verify: {exc}"
-            )
+            parser.error(f"--reference-manifest {manifest_path} did not verify: {exc}")
         runs.extend(
             import_official_foragax_npz(
                 spec,
@@ -798,11 +790,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     comparison_candidate = (
         "alberta_horde_ac"
         if "alberta_horde_ac" in grouped
-        else (
-            CAUSAL_MAP_VARIANT_KIND
-            if CAUSAL_MAP_VARIANT_KIND in grouped
-            else None
-        )
+        else (CAUSAL_MAP_VARIANT_KIND if CAUSAL_MAP_VARIANT_KIND in grouped else None)
     )
     comparison = (
         build_forager_comparison_report(
