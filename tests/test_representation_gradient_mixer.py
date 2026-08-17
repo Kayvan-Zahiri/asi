@@ -18,6 +18,7 @@ from jax import Array
 from alberta_framework.core.representation_gradient_mixer import (
     GradientMixMode,
     RepresentationGradientMixerConfig,
+    RepresentationGradientMixerResourceBudget,
     RepresentationGradientMixResult,
     mix_representation_gradients,
 )
@@ -728,3 +729,54 @@ def test_gradient_mixer_resource_budget_is_exported_from_public_packages() -> No
     budget = RepresentationGradientMixerConfig(representation_dim=3).resource_budget
     assert isinstance(budget, RootBudget)
     assert RootBudget is CoreBudget
+
+
+def test_representation_gradient_mixer_resource_budget_rejects_leftover_identities() -> None:
+    """Public resource-budget records must not keep leftover bool/int identities."""
+    with pytest.raises(ValueError, match="representation_dim"):
+        RepresentationGradientMixerResourceBudget(
+            representation_dim=True,  # type: ignore[arg-type]
+            persistent_state_scalars=0,
+            persistent_state_bytes=0,
+            output_float32_scalars=0,
+            output_bool_scalars=0,
+            output_scalars=0,
+            output_nbytes=0,
+        )
+
+    with pytest.raises(ValueError, match="output_bool_scalars"):
+        RepresentationGradientMixerResourceBudget(
+            representation_dim=4,
+            persistent_state_scalars=0,
+            persistent_state_bytes=0,
+            output_float32_scalars=0,
+            output_bool_scalars=True,  # type: ignore[arg-type]
+            output_scalars=0,
+            output_nbytes=0,
+        )
+
+    with pytest.raises(ValueError, match="persistent_state_bytes"):
+        RepresentationGradientMixerResourceBudget(
+            representation_dim=4,
+            persistent_state_scalars=0,
+            persistent_state_bytes=float("nan"),  # type: ignore[arg-type]
+            output_float32_scalars=0,
+            output_bool_scalars=0,
+            output_scalars=0,
+            output_nbytes=0,
+        )
+
+    legal = RepresentationGradientMixerResourceBudget(
+        representation_dim=4,
+        persistent_state_scalars=0,
+        persistent_state_bytes=0,
+        output_float32_scalars=12,
+        output_bool_scalars=3,
+        output_scalars=15,
+        output_nbytes=60,
+    )
+    dumped = json.dumps(legal.to_dict(), allow_nan=False)
+    assert '"representation_dim": 4' in dumped
+    assert '"output_bool_scalars": 3' in dumped
+    assert '"representation_dim": true' not in dumped
+    assert '"output_bool_scalars": true' not in dumped

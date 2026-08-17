@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 from pathlib import Path
 from typing import Any
 
@@ -26,6 +27,7 @@ try:
     from alberta_framework.core.behavior_model import (
         BehaviorModel,
         BehaviorModelConfig,
+        BehaviorModelResourceBudget,
         action_log_likelihoods,
         clipped_importance_ratios,
         epsilon_greedy_probabilities,
@@ -580,3 +582,62 @@ def test_behavior_model_preflights_resource_bytes_before_allocation(
     with pytest.raises(AssertionError, match="allocator reached"):
         model.init(max_feature_dim, jax.random.key(0))
     assert calls == 1
+
+
+def test_behavior_model_resource_budget_rejects_leftover_identities() -> None:
+    """Public resource-budget records must not keep leftover bool/int identities."""
+    with pytest.raises(ValueError, match="feature_dim"):
+        BehaviorModelResourceBudget(
+            feature_dim=True,  # type: ignore[arg-type]
+            n_actions=2,
+            trainable_float32_scalars=0,
+            diagnostic_float32_scalars=0,
+            administrative_int32_scalars=0,
+            rng_uint32_scalars=0,
+            state_nbytes=0,
+            learned_float32_scalars_touched_per_update=0,
+            replay_capacity=0,
+        )
+
+    with pytest.raises(ValueError, match="replay_capacity"):
+        BehaviorModelResourceBudget(
+            feature_dim=4,
+            n_actions=2,
+            trainable_float32_scalars=0,
+            diagnostic_float32_scalars=0,
+            administrative_int32_scalars=0,
+            rng_uint32_scalars=0,
+            state_nbytes=0,
+            learned_float32_scalars_touched_per_update=0,
+            replay_capacity=True,  # type: ignore[arg-type]
+        )
+
+    with pytest.raises(ValueError, match="state_nbytes"):
+        BehaviorModelResourceBudget(
+            feature_dim=4,
+            n_actions=2,
+            trainable_float32_scalars=0,
+            diagnostic_float32_scalars=0,
+            administrative_int32_scalars=0,
+            rng_uint32_scalars=0,
+            state_nbytes=float("nan"),  # type: ignore[arg-type]
+            learned_float32_scalars_touched_per_update=0,
+            replay_capacity=0,
+        )
+
+    legal = BehaviorModelResourceBudget(
+        feature_dim=4,
+        n_actions=2,
+        trainable_float32_scalars=8,
+        diagnostic_float32_scalars=0,
+        administrative_int32_scalars=0,
+        rng_uint32_scalars=2,
+        state_nbytes=40,
+        learned_float32_scalars_touched_per_update=4,
+        replay_capacity=0,
+    )
+    dumped = json.dumps(legal.to_dict(), allow_nan=False)
+    assert '"feature_dim": 4' in dumped
+    assert '"replay_capacity": 0' in dumped
+    assert '"feature_dim": true' not in dumped
+    assert '"replay_capacity": true' not in dumped
