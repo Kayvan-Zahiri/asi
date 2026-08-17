@@ -377,6 +377,36 @@ class EvidenceSpec:
     loader: Callable[[Path], Mapping[str, object]]
     validator: Callable[[Mapping[str, object]], ValidationResult]
 
+    def __post_init__(self) -> None:
+        for attr in ("name", "claim_scope", "expected_schema"):
+            val = getattr(self, attr)
+            if type(val) is not str or not val:
+                raise ValueError(f"{attr} must be a non-empty string")
+        if type(self.promotes_scientific_claim) is not bool:
+            raise TypeError("promotes_scientific_claim must be a bool")
+        if not isinstance(self.relative_path, Path):
+            raise TypeError("relative_path must be a pathlib.Path")
+        for attr in (
+            "command_argv",
+            "limitations",
+            "required_environment_fields",
+            "source_paths",
+        ):
+            val = getattr(self, attr)
+            if type(val) is not tuple:
+                raise TypeError(f"{attr} must be a tuple")
+        for path in self.source_paths:
+            if not isinstance(path, Path):
+                raise TypeError("source_paths must contain only pathlib.Path objects")
+        for attr in ("protocol", "configuration", "seeds", "thresholds"):
+            val = getattr(self, attr)
+            if not isinstance(val, Mapping):
+                raise TypeError(f"{attr} must be a Mapping")
+        if not callable(self.loader):
+            raise TypeError("loader must be callable")
+        if not callable(self.validator):
+            raise TypeError("validator must be callable")
+
 
 @dataclass(frozen=True)
 class _HistoricalIAChainValidation:
