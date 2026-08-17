@@ -123,6 +123,17 @@ def _validated_nonnegative_float32_scalar(
     return stored
 
 
+def _validated_float32_scalar_preserving_nonzero(name: str, value: object) -> float:
+    """Validate a signed float32 scalar without erasing an exact nonzero."""
+    stored, numerator, denominator = validated_float32_scalar_with_ratio(name, value)
+    if (
+        numerator != 0
+        and abs(numerator) * _FLOAT32_HALF_MIN_SUBNORMAL_DENOMINATOR <= denominator
+    ):
+        raise ValueError(f"{name} must remain nonzero once narrowed to float32")
+    return stored
+
+
 def _preflight_actor_state(
     n_actions: int,
     observation_dim: int,
@@ -142,7 +153,12 @@ def _preflight_actor_state(
     # every trunk and head weight/bias array, in addition to parameters,
     # traces, utilities, counters, and its average-reward vector.
     critic_lms_state_scalars = 2 * len(hidden_sizes) + 2
-    critic_scalar_count = 2 * critic_parameters + sum(hidden_sizes) + critic_lms_state_scalars + 5
+    critic_scalar_count = (
+        2 * critic_parameters
+        + sum(hidden_sizes)
+        + critic_lms_state_scalars
+        + 5
+    )
     scalar_count = actor_scalar_count + critic_scalar_count
     _require_state_resources(
         "average-reward actor-critic",
@@ -158,6 +174,24 @@ def _preflight_differential_sarsa_state(n_actions: int, feature_dim: int) -> Non
     scalar_count = float32_scalars + 6
     _require_state_resources(
         "differential SARSA",
+        scalars=scalar_count,
+        nbytes=4 * scalar_count,
+    )
+
+
+def _preflight_differential_td_state(feature_dim: int) -> None:
+    scalar_count = 2 * feature_dim + 4
+    _require_state_resources(
+        "differential TD",
+        scalars=scalar_count,
+        nbytes=4 * scalar_count,
+    )
+
+
+def _preflight_differential_gtd_state(feature_dim: int) -> None:
+    scalar_count = 3 * feature_dim + 5
+    _require_state_resources(
+        "differential GTD",
         scalars=scalar_count,
         nbytes=4 * scalar_count,
     )
@@ -701,7 +735,9 @@ class AverageRewardHordeActorCriticAgent:
         """Initialize critic and actor state."""
         observation_dim = _require_int32("observation_dim", observation_dim, minimum=1)
         actor_dim = self._config.hidden_sizes[-1] if self._config.hidden_sizes else observation_dim
-        _preflight_actor_state(self._config.n_actions, observation_dim, self._config.hidden_sizes)
+        _preflight_actor_state(
+            self._config.n_actions, observation_dim, self._config.hidden_sizes
+        )
         key, critic_key = jr.split(key)
         critic_state = self._critic.init(observation_dim, critic_key)
         actor_opt_w = self._actor_optimizer.init_for_shape((self._config.n_actions, actor_dim))
@@ -1210,7 +1246,10 @@ class DifferentialGTDLearner:
     ) -> DifferentialGTDState:
         """Initialize primary weights, secondary weights, and traces."""
         feature_dim = _require_int32("feature_dim", feature_dim, minimum=1)
-        average_reward = validated_float32_scalar("average_reward", average_reward)
+        _preflight_differential_gtd_state(feature_dim)
+        average_reward = _validated_float32_scalar_preserving_nonzero(
+            "average_reward", average_reward
+        )
         return DifferentialGTDState(
             weights=jnp.zeros(feature_dim, dtype=jnp.float32),
             bias=jnp.array(0.0, dtype=jnp.float32),
@@ -1372,7 +1411,10 @@ class DifferentialTDLearner:
     ) -> DifferentialTDState:
         """Initialize value weights, traces, and reward-rate estimate."""
         feature_dim = _require_int32("feature_dim", feature_dim, minimum=1)
-        average_reward = validated_float32_scalar("average_reward", average_reward)
+        _preflight_differential_td_state(feature_dim)
+        average_reward = _validated_float32_scalar_preserving_nonzero(
+            "average_reward", average_reward
+        )
         return DifferentialTDState(
             weights=jnp.zeros(feature_dim, dtype=jnp.float32),
             bias=jnp.array(0.0, dtype=jnp.float32),
