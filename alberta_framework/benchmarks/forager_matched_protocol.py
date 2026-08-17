@@ -256,6 +256,26 @@ class ObservationAccess:
     aperture_size: int
     privileged_fields: tuple[str, ...]
 
+    def __post_init__(self) -> None:
+        if self.access_mode not in (
+            "partial_observation",
+            "privileged_global_objects",
+            "privileged_reward_grid",
+            "historical_legacy",
+        ):
+            raise ForagerMatchedProtocolError("invalid access_mode")
+        if type(self.observation_type) is not str or not self.observation_type:
+            raise ForagerMatchedProtocolError("observation_type must be a non-empty string")
+        if (
+            type(self.aperture_size) is not int
+            or isinstance(self.aperture_size, bool)
+            or self.aperture_size < -1
+            or self.aperture_size == 0
+        ):
+            raise ForagerMatchedProtocolError("aperture_size must be -1 or a positive integer")
+        if type(self.privileged_fields) is not tuple:
+            raise ForagerMatchedProtocolError("privileged_fields must be a tuple")
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "access_mode": self.access_mode,
@@ -271,6 +291,11 @@ class EnvironmentRNGContract:
 
     identity: str
     schedule_sha256: str
+
+    def __post_init__(self) -> None:
+        if type(self.identity) is not str or not self.identity:
+            raise ForagerMatchedProtocolError("identity must be a non-empty string")
+        _require_sha256(self.schedule_sha256, "schedule_sha256")
 
     def to_dict(self) -> dict[str, Any]:
         return {"identity": self.identity, "schedule_sha256": self.schedule_sha256}
@@ -317,6 +342,26 @@ class CandidateRuntimeBinding:
     qualified_capability_descriptor_sha256: str
     capability_qualification_receipt_sha256: str
     qualification_trust_anchor_identity: str
+
+    def __post_init__(self) -> None:
+        _require_sha256(self.image_sha256, "image_sha256")
+        _require_sha256(self.runtime_profile_sha256, "runtime_profile_sha256")
+        _require_sha256(self.task_identity_sha256, "task_identity_sha256")
+        _require_sha256(
+            self.qualified_capability_descriptor_sha256,
+            "qualified_capability_descriptor_sha256",
+        )
+        _require_sha256(
+            self.capability_qualification_receipt_sha256,
+            "capability_qualification_receipt_sha256",
+        )
+        if (
+            type(self.qualification_trust_anchor_identity) is not str
+            or not self.qualification_trust_anchor_identity
+        ):
+            raise ForagerMatchedProtocolError(
+                "qualification_trust_anchor_identity must be a non-empty string"
+            )
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -444,6 +489,44 @@ class MatchedCandidate:
     runtime_binding: CandidateRuntimeBinding
     resources: ResourceAccounting
     pairing: PairingEligibility
+
+    def __post_init__(self) -> None:
+        for attr in (
+            "candidate_id",
+            "selection_group",
+            "implementation_kind",
+            "entrypoint_family",
+        ):
+            val = getattr(self, attr)
+            if type(val) is not str or not val:
+                raise ForagerMatchedProtocolError(f"{attr} must be a non-empty string")
+        if self.stratum not in (
+            "alberta_learning",
+            "external_learning",
+            "privileged_context",
+            "historical_orientation",
+        ):
+            raise ForagerMatchedProtocolError("invalid stratum")
+        if not isinstance(self.source, SourceBinding):
+            raise ForagerMatchedProtocolError("source must be a SourceBinding")
+        if not isinstance(self.configuration, ConfigurationBinding):
+            raise ForagerMatchedProtocolError("configuration must be a ConfigurationBinding")
+        if not isinstance(self.seed_contract, SeedContract):
+            raise ForagerMatchedProtocolError("seed_contract must be a SeedContract")
+        if not isinstance(self.execution_semantics, ExecutionSemantics):
+            raise ForagerMatchedProtocolError("execution_semantics must be an ExecutionSemantics")
+        if not isinstance(self.observation_access, ObservationAccess):
+            raise ForagerMatchedProtocolError("observation_access must be an ObservationAccess")
+        if not isinstance(self.environment_rng, EnvironmentRNGContract):
+            raise ForagerMatchedProtocolError("environment_rng must be an EnvironmentRNGContract")
+        if not isinstance(self.agent_rng, AgentRNGContract):
+            raise ForagerMatchedProtocolError("agent_rng must be an AgentRNGContract")
+        if not isinstance(self.runtime_binding, CandidateRuntimeBinding):
+            raise ForagerMatchedProtocolError("runtime_binding must be a CandidateRuntimeBinding")
+        if not isinstance(self.resources, ResourceAccounting):
+            raise ForagerMatchedProtocolError("resources must be a ResourceAccounting")
+        if not isinstance(self.pairing, PairingEligibility):
+            raise ForagerMatchedProtocolError("pairing must be a PairingEligibility")
 
     def to_dict(self) -> dict[str, Any]:
         return {
