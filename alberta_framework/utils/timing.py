@@ -128,7 +128,10 @@ class Timer:
 
         if self.verbose:
             formatted = format_duration(self.duration)
-            self.print_fn(f"{self.name} completed in {formatted}")
+            if exc_type is None:
+                self.print_fn(f"{self.name} completed in {formatted}")
+            else:
+                self.print_fn(f"{self.name} failed after {formatted}")
 
     def elapsed(self) -> float:
         """Get elapsed time since timer started (can be called during execution).
