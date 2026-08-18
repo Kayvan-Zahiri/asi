@@ -230,9 +230,7 @@ def _sample_finite_box(key: Array, low: Array, high: Array) -> Array:
     return jnp.where(low < high, jnp.minimum(sample, upper_open), low)
 
 
-def _make_random_policy(
-    env: gymnasium.Env[Any, Any], rng: Array
-) -> Callable[[Array], Any]:
+def _make_random_policy(env: gymnasium.Env[Any, Any], rng: Array) -> Callable[[Array], Any]:
     """Build a bounded random policy from one already validated JAX key."""
     import gymnasium
 
@@ -253,11 +251,7 @@ def _make_random_policy(
         low_array = np.asarray(action_space.low, dtype=np.float32)
         high_array = np.asarray(action_space.high, dtype=np.float32)
         if not bool(
-            np.all(
-                np.isfinite(low_array)
-                & np.isfinite(high_array)
-                & (low_array <= high_array)
-            )
+            np.all(np.isfinite(low_array) & np.isfinite(high_array) & (low_array <= high_array))
         ):
             raise ValueError("Box random actions require finite ordered float32 bounds")
         low = jnp.asarray(low_array)
@@ -274,10 +268,7 @@ def _make_random_policy(
         for index in range(action_dim):
             start = int(starts[index])
             count = int(counts[index])
-            if not (
-                1 <= count <= _INT32_MAX
-                and _INT32_MIN <= start < start + count <= _INT32_MAX
-            ):
+            if not (1 <= count <= _INT32_MAX and _INT32_MIN <= start < start + count <= _INT32_MAX):
                 raise ValueError("MultiDiscrete action bounds must fit JAX signed int32")
     else:
         raise ValueError(f"Unsupported action space: {type(action_space).__name__}")
@@ -413,9 +404,7 @@ def collect_trajectory(
     action_dim = _flatten_space(env.action_space)
     feature_dim = observation_dim + action_dim if include_action_in_features else observation_dim
     target_dim = observation_dim if mode is PredictionMode.NEXT_STATE else 1
-    _require_float32_allocation(
-        "trajectory output", num_steps * (feature_dim + target_dim)
-    )
+    _require_float32_allocation("trajectory output", num_steps * (feature_dim + target_dim))
     if policy is None:
         policy = make_random_policy(env, seed)
 
@@ -453,9 +442,7 @@ def collect_trajectory(
                 bootstrap = _discounted_bootstrap(gamma, float(value_estimator(next_obs)))
             else:
                 bootstrap = 0.0
-            target = jnp.atleast_1d(
-                jnp.array(float(reward) + bootstrap, dtype=jnp.float32)
-            )
+            target = jnp.atleast_1d(jnp.array(float(reward) + bootstrap, dtype=jnp.float32))
 
         observations.append(features)
         targets.append(target)
@@ -583,9 +570,7 @@ class GymnasiumStream:
         observation_dim = _flatten_space(env.observation_space)
         action_dim = _flatten_space(env.action_space)
         feature_dim = (
-            observation_dim + action_dim
-            if include_action_in_features
-            else observation_dim
+            observation_dim + action_dim if include_action_in_features else observation_dim
         )
         target_dim = observation_dim if mode is PredictionMode.NEXT_STATE else 1
         _require_float32_allocation("stream feature vector", feature_dim)
@@ -699,10 +684,10 @@ class GymnasiumStream:
         features = self._construct_features(self._current_obs, flat_action)
         target = self._construct_target(float(reward), next_obs, terminated)
 
-        self._step_count += 1
+        self._step_count = min(self._step_count + 1, _INT32_MAX)
 
         if terminated or truncated:
-            self._episode_count += 1
+            self._episode_count = min(self._episode_count + 1, _INT32_MAX)
             self._current_obs = None
         else:
             self._current_obs = next_obs
@@ -754,9 +739,7 @@ class TDStream:
         observation_dim = _flatten_space(env.observation_space)
         action_dim = _flatten_space(env.action_space)
         feature_dim = (
-            observation_dim + action_dim
-            if include_action_in_features
-            else observation_dim
+            observation_dim + action_dim if include_action_in_features else observation_dim
         )
         _require_float32_allocation("TD stream feature vector", feature_dim)
 
@@ -841,10 +824,10 @@ class TDStream:
             target_val = float(reward) + _discounted_bootstrap(self._gamma, float(bootstrap))
             target = jnp.atleast_1d(jnp.array(target_val, dtype=jnp.float32))
 
-        self._step_count += 1
+        self._step_count = min(self._step_count + 1, _INT32_MAX)
 
         if terminated or truncated:
-            self._episode_count += 1
+            self._episode_count = min(self._episode_count + 1, _INT32_MAX)
             self._current_obs = None
             self._current_action = None
         else:
