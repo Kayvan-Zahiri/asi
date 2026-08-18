@@ -168,9 +168,11 @@ class SignificanceResult(_SignificanceResultTuple):
         return cls(*values)
 
     def _replace(self, **changes: object) -> "SignificanceResult":
+        for k in changes:
+            _require_exact_str("field_name", k)
         unexpected = changes.keys() - self._fields
         if unexpected:
-            raise ValueError(f"Got unexpected field names: {sorted(unexpected)!r}")
+            raise ValueError(f"Got unexpected field names: {sorted(unexpected)}")
         values = self._asdict()
         values.update(changes)
         return type(self)(**values)
@@ -224,9 +226,7 @@ def _require_probability(value: object, *, name: str, strict: bool) -> float:
             return validated_float32_scalar(
                 name, value, positive=True, upper=1.0, upper_inclusive=False
             )
-        return validated_float32_scalar(
-            name, value, lower=0.0, upper=1.0, upper_inclusive=True
-        )
+        return validated_float32_scalar(name, value, lower=0.0, upper=1.0, upper_inclusive=True)
     except ValueError:
         domain = "strictly between 0 and 1" if strict else "in [0, 1]"
         raise ValueError(f"{name} must be a finite real {domain}") from None
@@ -391,9 +391,7 @@ def cohens_d(
     n_b = len(b)
 
     if n_a == 0 or n_b == 0:
-        raise ValueError(
-            f"cohens_d requires non-empty groups (got n_a={n_a}, n_b={n_b})"
-        )
+        raise ValueError(f"cohens_d requires non-empty groups (got n_a={n_a}, n_b={n_b})")
 
     pooled_df = n_a + n_b - 2
     if pooled_df <= 0:
@@ -489,9 +487,7 @@ def ttest_comparison(
             test_name = "independent t-test"
         # scipy returns (statistic, pvalue) tuple
         stat_val = float(result[0])
-        p_val = _require_p_value(
-            result[1], name=f"p_value returned by {test_name}"
-        )
+        p_val = _require_p_value(result[1], name=f"p_value returned by {test_name}")
     except ImportError:
         raise ImportError("scipy is required for t-test. Install with: pip install scipy")
 
@@ -557,9 +553,7 @@ def mann_whitney_comparison(
             result = stats.mannwhitneyu(a, b, alternative="two-sided")
             # scipy returns (statistic, pvalue) tuple
             stat_val = float(result[0])
-            p_val = _require_p_value(
-                result[1], name="p_value returned by Mann-Whitney U"
-            )
+            p_val = _require_p_value(result[1], name="p_value returned by Mann-Whitney U")
         except ImportError:
             raise ImportError(
                 "scipy is required for Mann-Whitney test. Install with: pip install scipy"
@@ -622,8 +616,7 @@ def wilcoxon_comparison(
 
     if len(a) != len(b):
         raise ValueError(
-            f"Wilcoxon signed-rank test requires equal-length samples "
-            f"(got {len(a)} and {len(b)})"
+            f"Wilcoxon signed-rank test requires equal-length samples (got {len(a)} and {len(b)})"
         )
     _require_exact_str("method_a", method_a)
     _require_exact_str("method_b", method_b)
@@ -633,9 +626,7 @@ def wilcoxon_comparison(
             "samples; the Wilcoxon signed-rank statistic is undefined"
         )
     if len(a) < 2:
-        raise ValueError(
-            f"Wilcoxon signed-rank test requires at least 2 pairs (got {len(a)})"
-        )
+        raise ValueError(f"Wilcoxon signed-rank test requires at least 2 pairs (got {len(a)})")
 
     try:
         from scipy import stats
@@ -643,9 +634,7 @@ def wilcoxon_comparison(
         result = stats.wilcoxon(a, b, alternative="two-sided")
         # scipy returns (statistic, pvalue) tuple
         stat_val = float(result[0])
-        p_val = _require_p_value(
-            result[1], name="p_value returned by Wilcoxon signed-rank"
-        )
+        p_val = _require_p_value(result[1], name="p_value returned by Wilcoxon signed-rank")
     except ImportError:
         raise ImportError("scipy is required for Wilcoxon test. Install with: pip install scipy")
 
@@ -721,9 +710,7 @@ def holm_correction(
     return significant
 
 
-def _holm_decisions(
-    p_values: list[float], alpha: float
-) -> tuple[list[bool], list[float]]:
+def _holm_decisions(p_values: list[float], alpha: float) -> tuple[list[bool], list[float]]:
     """Return Holm decisions and each record's effective step-down threshold."""
 
     n_tests = len(p_values)
@@ -832,8 +819,7 @@ def pairwise_comparisons(
         _require_exact_str("metric", metric)
         if arr.shape[1] == 0:
             raise ValueError(
-                f"AggregatedResults '{name}' must contain at least one metric step "
-                f"for '{metric}'"
+                f"AggregatedResults '{name}' must contain at least one metric step for '{metric}'"
             )
         metric_arrays[name] = arr
         seeds_by_name[name] = agg.seeds

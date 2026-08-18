@@ -241,9 +241,11 @@ class ExperimentConfig(_ExperimentConfigTuple):
         return cls(*values)
 
     def _replace(self, **changes: object) -> ExperimentConfig:
+        for k in changes:
+            _require_exact_str("field_name", k)
         unexpected = changes.keys() - self._fields
         if unexpected:
-            raise ValueError(f"Got unexpected field names: {sorted(unexpected)!r}")
+            raise ValueError(f"Got unexpected field names: {sorted(unexpected)}")
         values = self._asdict()
         values.update(changes)
         return type(self)(**values)
@@ -295,9 +297,11 @@ class SingleRunResult(_SingleRunResultTuple):
         return cls(*values)
 
     def _replace(self, **changes: object) -> SingleRunResult:
+        for k in changes:
+            _require_exact_str("field_name", k)
         unexpected = changes.keys() - self._fields
         if unexpected:
-            raise ValueError(f"Got unexpected field names: {sorted(unexpected)!r}")
+            raise ValueError(f"Got unexpected field names: {sorted(unexpected)}")
         values = self._asdict()
         values.update(changes)
         return type(self)(**values)
@@ -402,9 +406,7 @@ def aggregate_metrics(results: list[SingleRunResult]) -> AggregatedResults:
     if not results:
         raise ValueError("Cannot aggregate empty results list")
 
-    config_names = sorted(
-        {_require_exact_str("config_name", r.config_name) for r in results}
-    )
+    config_names = sorted({_require_exact_str("config_name", r.config_name) for r in results})
     if len(config_names) != 1:
         raise ValueError(
             f"aggregate_metrics requires runs from one configuration; got {config_names}"
@@ -524,12 +526,9 @@ def run_multi_seed_experiment(
                 "of unique built-in integer seeds"
             ) from exc
         if not raw_seeds:
-            raise ValueError(
-                "seeds must be a non-empty sequence of unique built-in integer seeds"
-            )
+            raise ValueError("seeds must be a non-empty sequence of unique built-in integer seeds")
         seed_list = [
-            require_jax_seed(seed, name=f"seeds[{index}]")
-            for index, seed in enumerate(raw_seeds)
+            require_jax_seed(seed, name=f"seeds[{index}]") for index, seed in enumerate(raw_seeds)
         ]
 
     seen_seeds: set[int] = set()
@@ -763,14 +762,10 @@ def extract_hyperparameter_results(
     if collisions:
         parts: list[str] = []
         for coll_value, coll_names in collisions:
-            safe_coll_names = ", ".join(
-                f"'{_require_exact_str('name', n)}'" for n in coll_names
-            )
+            safe_coll_names = ", ".join(f"'{_require_exact_str('name', n)}'" for n in coll_names)
             parts.append(f"{coll_value} <- [{safe_coll_names}]")
         described = "; ".join(parts)
-        raise ValueError(
-            f"param_extractor maps several configurations to one value: {described}"
-        )
+        raise ValueError(f"param_extractor maps several configurations to one value: {described}")
     try:
         return {value: performance[names[0]] for value, names in coordinate_groups}
     except Exception as exc:
@@ -841,11 +836,7 @@ def _require_hyperparameter_coordinate(
             denominator = fraction.denominator
         except AttributeError:
             reject()
-        if (
-            type(numerator) is not int
-            or type(denominator) is not int
-            or denominator <= 0
-        ):
+        if type(numerator) is not int or type(denominator) is not int or denominator <= 0:
             reject()
         return _CanonicalFractionCoordinate(numerator, denominator)
 
@@ -869,9 +860,7 @@ def _require_hyperparameter_coordinate(
         return value
 
     if _type_identity_in(value_type, _NUMPY_COORDINATE_TYPES):
-        if np.dtype(value_type).kind in ("f", "c") and not bool(
-            np.isfinite(cast(Any, value))
-        ):
+        if np.dtype(value_type).kind in ("f", "c") and not bool(np.isfinite(cast(Any, value))):
             reject()
         return value
 
@@ -895,9 +884,7 @@ def _is_python_numeric_coordinate_type(value_type: type[object]) -> bool:
 
 
 def _is_numpy_numeric_coordinate_type(value_type: type[object]) -> bool:
-    return _type_identity_in(value_type, _NUMPY_COORDINATE_TYPES) and np.dtype(
-        value_type
-    ).kind in (
+    return _type_identity_in(value_type, _NUMPY_COORDINATE_TYPES) and np.dtype(value_type).kind in (
         "b",
         "i",
         "u",
