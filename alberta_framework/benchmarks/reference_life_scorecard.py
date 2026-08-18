@@ -1,16 +1,3 @@
-"""Matched, permanently nonpromoting reference-life development scorecard.
-
-The scorecard is a development-selection instrument, never scientific evidence
-and never a route to ``reference-dev``.  Its plan is intentionally fixed.  A
-different arm, seed, horizon, environment, or gate is a new schema, not a CLI
-override.
-
-Execution streams each accepted event into bounded summaries.  Full event
-objects are never retained by this module.  Wall-clock measurements are kept in
-a separately labelled telemetry block and are excluded from every score and
-gate.
-"""
-
 from __future__ import annotations
 
 import argparse
@@ -64,6 +51,15 @@ from alberta_framework.streams.closed_loop import (
     SwitchingTwoStateMDP,
 )
 
+
+def _require_exact_str(name: object, value: object) -> str:
+    if type(name) is not str:
+        raise ValueError("name must be an exact string")
+    if type(value) is not str:
+        raise ValueError(f"{name} must be an exact string")
+    return value
+
+
 # Importing ReferenceAgentUpdate above is deliberate: the runner/control seam is
 # the state-agnostic update contract, not PrototypeAdapterUpdate.
 _REFERENCE_UPDATE_TYPE = ReferenceAgentUpdate
@@ -85,6 +81,7 @@ def _checkpoint_dependency_identity() -> dict[str, Any]:
     from alberta_framework.reference_life_checkpoint import _dependency_identity
 
     return _dependency_identity()
+
 
 REFERENCE_LIFE_SCORECARD_PLAN_SCHEMA = "asi.reference_life_scorecard.plan.v1"
 REFERENCE_LIFE_SCORECARD_RUN_SCHEMA = "asi.reference_life_scorecard.run.v1"
@@ -424,9 +421,7 @@ def _fixed_plan_payload_without_digest() -> dict[str, Any]:
         "timing_policy": dict(TELEMETRY_POLICY),
         "resource_policy": {
             "persistent_state": "numeric_jax_and_numpy_pytree_leaf_bytes",
-            "static_adapter_numeric_state": (
-                "finite_horizon_oracle_policy_bytes_else_zero"
-            ),
+            "static_adapter_numeric_state": ("finite_horizon_oracle_policy_bytes_else_zero"),
             "trainable_scalars": (
                 "adapter_parameter_tree_when_available_else_floating_leaf_upper_bound"
             ),
@@ -736,18 +731,14 @@ class StreamingRunSummary:
 
     def _payload(self, *, require_complete: bool) -> dict[str, Any]:
         if require_complete and self._accepted_events != self._horizon:
-            raise ValueError(
-                "cannot finalize streaming summary before the configured horizon"
-            )
+            raise ValueError("cannot finalize streaming summary before the configured horizon")
         payload: dict[str, Any] = {
             "summary_mode": "streaming_o1_no_retained_events",
             "configured_horizon": self._horizon,
             "accepted_events": self._accepted_events,
             "reward_sum": self._reward_sum,
             "mean_reward": (
-                None
-                if self._accepted_events == 0
-                else self._reward_sum / self._accepted_events
+                None if self._accepted_events == 0 else self._reward_sum / self._accepted_events
             ),
             "oracle_reward_sum": self._oracle_reward_sum,
             "regret_sum": self._oracle_reward_sum - self._reward_sum,
@@ -759,14 +750,11 @@ class StreamingRunSummary:
             windows: dict[str, Any]
             if require_complete:
                 windows = {
-                    name: window.payload()
-                    for name, window in self._switching_windows.items()
+                    name: window.payload() for name, window in self._switching_windows.items()
                 }
             else:
                 windows = {
-                    name: (
-                        None if window.event_count == 0 else window.payload()
-                    )
+                    name: (None if window.event_count == 0 else window.payload())
                     for name, window in self._switching_windows.items()
                 }
             payload["windows"] = windows
@@ -775,16 +763,8 @@ class StreamingRunSummary:
         else:
             assert self._early is not None and self._late is not None
             payload["windows"] = {
-                "early": (
-                    self._early.payload()
-                    if self._early.event_count > 0
-                    else None
-                ),
-                "late": (
-                    self._late.payload()
-                    if self._late.event_count > 0
-                    else None
-                ),
+                "early": (self._early.payload() if self._early.event_count > 0 else None),
+                "late": (self._late.payload() if self._late.event_count > 0 else None),
             }
             payload["high_end_visit_count"] = self._high_end_visit_count
             payload["high_end_visit_rate"] = (
@@ -991,9 +971,7 @@ def _stderr(values: Sequence[float]) -> float:
 def _paired_lcb(values: Sequence[float]) -> float | None:
     if len(values) != len(SEED_ROSTER):
         return None
-    return _mean(values) - CONTROL_GATE_T_CRITICAL * _sample_sd(values) / math.sqrt(
-        len(values)
-    )
+    return _mean(values) - CONTROL_GATE_T_CRITICAL * _sample_sd(values) / math.sqrt(len(values))
 
 
 def _record_identity(record: Mapping[str, Any]) -> tuple[str, str, int]:
@@ -1062,7 +1040,7 @@ def _summarize_validated_run_records(
             raise ValueError("every run record must be an object")
         identity = _record_identity(record)
         if identity in indexed:
-            raise ValueError(f"duplicate run identity {identity!r}")
+            raise ValueError(f"duplicate run identity '{identity}'")
         status = record.get("status")
         if status not in ("completed", "failed"):
             raise ValueError("run status must be completed or failed")
@@ -1133,9 +1111,7 @@ def _summarize_validated_run_records(
             for seed in paired_baseline_seeds
         ]
         scale = (
-            _mean(baseline_differences)
-            if len(paired_baseline_seeds) == len(SEED_ROSTER)
-            else None
+            _mean(baseline_differences) if len(paired_baseline_seeds) == len(SEED_ROSTER) else None
         )
         scale_valid = scale is not None and math.isfinite(scale) and scale > 0.0
 
@@ -1143,16 +1119,13 @@ def _summarize_validated_run_records(
         for arm in ARM_ROSTER:
             arm_values = [returns[arm][seed] for seed in SEED_ROSTER if seed in returns[arm]]
             paired_seeds = tuple(
-                seed
-                for seed in SEED_ROSTER
-                if seed in returns[arm] and seed in returns["random"]
+                seed for seed in SEED_ROSTER if seed in returns[arm] and seed in returns["random"]
             )
             normalized: list[float] | None = None
             if scale_valid and len(paired_seeds) == len(SEED_ROSTER):
                 assert scale is not None
                 normalized = [
-                    (returns[arm][seed] - returns["random"][seed]) / scale
-                    for seed in paired_seeds
+                    (returns[arm][seed] - returns["random"][seed]) / scale for seed in paired_seeds
                 ]
             if normalized is None:
                 normalized_mean = None
@@ -1162,9 +1135,7 @@ def _summarize_validated_run_records(
                 normalized_mean = _mean(normalized)
                 normalized_sd = _sample_sd(normalized)
                 lcb = normalized_mean - (
-                    CONTROL_GATE_T_CRITICAL
-                    * normalized_sd
-                    / math.sqrt(len(normalized))
+                    CONTROL_GATE_T_CRITICAL * normalized_sd / math.sqrt(len(normalized))
                 )
             arm_summaries[arm] = {
                 "completed_seed_count": len(arm_values),
@@ -1192,9 +1163,7 @@ def _summarize_validated_run_records(
             and arm_summaries[arm]["paired_t_lcb_95"] is not None
             and arm_summaries[arm]["paired_t_lcb_95"] > CONTROL_GATE_LCB_THRESHOLD
         ]
-        qualified_arms = (
-            [] if execution_or_learning_failed else statistically_qualified_arms
-        )
+        qualified_arms = [] if execution_or_learning_failed else statistically_qualified_arms
         environment_qualified = (
             not execution_or_learning_failed and scale_valid and bool(qualified_arms)
         )
@@ -1207,17 +1176,11 @@ def _summarize_validated_run_records(
         ):
             assert scale is not None
             prototype_frozen_samples = [
-                (
-                    returns["prototype"][seed]
-                    - returns["prototype_frozen"][seed]
-                )
-                / scale
+                (returns["prototype"][seed] - returns["prototype_frozen"][seed]) / scale
                 for seed in SEED_ROSTER
             ]
         prototype_frozen_lcb = (
-            None
-            if prototype_frozen_samples is None
-            else _paired_lcb(prototype_frozen_samples)
+            None if prototype_frozen_samples is None else _paired_lcb(prototype_frozen_samples)
         )
         beats_frozen = not execution_or_learning_failed and (
             prototype_frozen_lcb is not None and prototype_frozen_lcb >= 0.05
@@ -1237,8 +1200,7 @@ def _summarize_validated_run_records(
             scale_valid
             and best_sarsa is not None
             and all(
-                seed in returns["prototype"] and seed in returns[best_sarsa]
-                for seed in SEED_ROSTER
+                seed in returns["prototype"] and seed in returns[best_sarsa] for seed in SEED_ROSTER
             )
         ):
             assert scale is not None
@@ -1247,9 +1209,7 @@ def _summarize_validated_run_records(
                 for seed in SEED_ROSTER
             ]
         prototype_sarsa_lcb = (
-            None
-            if prototype_sarsa_samples is None
-            else _paired_lcb(prototype_sarsa_samples)
+            None if prototype_sarsa_samples is None else _paired_lcb(prototype_sarsa_samples)
         )
         sarsa_noninferior = not execution_or_learning_failed and (
             prototype_sarsa_lcb is not None and prototype_sarsa_lcb >= -0.05
@@ -1329,9 +1289,7 @@ def _summarize_validated_run_records(
         "candidate_selection_status": candidate_selection_status,
         "pareto_resource_decision": {
             "status": "not_evaluated_resource_telemetry_only",
-            "reason": (
-                "cold/warmed latency is telemetry-only and cannot be used in selection"
-            ),
+            "reason": ("cold/warmed latency is telemetry-only and cannot be used in selection"),
             "future_gate_if_latency_is_qualified_under_a_new_protocol": {
                 "requires_no_qualifying_sarsa_utility_noninferior_on_both_environments": True,
                 "candidate_utility_advantage": 0.05,
@@ -1359,7 +1317,7 @@ def summarize_run_records(
     for record in canonical_records:
         identity = _record_identity(record)
         if identity in by_identity:
-            raise ValueError(f"duplicate run identity {identity!r}")
+            raise ValueError(f"duplicate run identity '{identity}'")
         by_identity[identity] = record
     identities = _current_consistency_identities()
     ordered: list[Mapping[str, Any]] = []
@@ -1367,7 +1325,7 @@ def summarize_run_records(
         identity = (spec.environment_kind, spec.arm, spec.seed)
         scheduled_record = by_identity.get(identity)
         if scheduled_record is None:
-            raise ValueError(f"run records are missing scheduled identity {identity!r}")
+            raise ValueError(f"run records are missing scheduled identity '{identity}'")
         _validate_run_record(
             plan,
             scheduled_record,
@@ -1516,13 +1474,16 @@ def write_new_json(path: Path, value: Any) -> Path:
 
     destination, parent_fd = _open_output_parent(Path(path), create=True)
     _validate_json_value(value)
-    encoded = json.dumps(
-        value,
-        allow_nan=False,
-        ensure_ascii=True,
-        indent=2,
-        sort_keys=True,
-    ).encode("utf-8") + b"\n"
+    encoded = (
+        json.dumps(
+            value,
+            allow_nan=False,
+            ensure_ascii=True,
+            indent=2,
+            sort_keys=True,
+        ).encode("utf-8")
+        + b"\n"
+    )
     file_fd: int | None = None
     try:
         try:
@@ -1530,9 +1491,7 @@ def write_new_json(path: Path, value: Any) -> Path:
         except FileNotFoundError:
             pass
         else:
-            raise FileExistsError(
-                f"refusing to overwrite immutable output: {destination}"
-            )
+            raise FileExistsError(f"refusing to overwrite immutable output: {destination}")
         if not hasattr(os, "O_TMPFILE"):
             raise OSError("immutable publication requires Linux O_TMPFILE support")
         file_fd = os.open(
@@ -1550,9 +1509,7 @@ def write_new_json(path: Path, value: Any) -> Path:
         try:
             _link_unnamed_file(file_fd, parent_fd, destination.name)
         except FileExistsError as exc:
-            raise FileExistsError(
-                f"refusing to overwrite immutable output: {destination}"
-            ) from exc
+            raise FileExistsError(f"refusing to overwrite immutable output: {destination}") from exc
         return destination
     finally:
         if file_fd is not None:
@@ -1573,13 +1530,15 @@ def _load_json_strict_with_metadata(
     def pairs_hook(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
         result: dict[str, Any] = {}
         for key, value in pairs:
-            if key in result:
-                raise ValueError(f"duplicate JSON key {key!r}")
-            result[key] = value
+            host_key = _require_exact_str("key", key)
+            if host_key in result:
+                raise ValueError(f"duplicate JSON key '{host_key}'")
+            result[host_key] = value
         return result
 
     def reject_constant(value: str) -> NoReturn:
-        raise ValueError(f"non-finite JSON constant is forbidden: {value}")
+        host_value = _require_exact_str("value", value)
+        raise ValueError(f"non-finite JSON constant is forbidden: '{host_value}'")
 
     if not hasattr(os, "O_NOFOLLOW"):
         raise ValueError("strict JSON loading requires no-follow file support")
@@ -1593,9 +1552,7 @@ def _load_json_strict_with_metadata(
         if not stat.S_ISREG(metadata.st_mode):
             raise ValueError(f"{path}: strict JSON input must be a regular file")
         if metadata.st_size > max_bytes:
-            raise ValueError(
-                f"{path}: strict JSON input exceeds {max_bytes} bytes"
-            )
+            raise ValueError(f"{path}: strict JSON input exceeds {max_bytes} bytes")
         chunks: list[bytes] = []
         remaining = max_bytes + 1
         while remaining > 0:
@@ -1606,14 +1563,11 @@ def _load_json_strict_with_metadata(
             remaining -= len(chunk)
         encoded = b"".join(chunks)
         if len(encoded) > max_bytes:
-            raise ValueError(
-                f"{path}: strict JSON input exceeds {max_bytes} bytes"
-            )
+            raise ValueError(f"{path}: strict JSON input exceeds {max_bytes} bytes")
         final_metadata = os.fstat(descriptor)
         stable_fields = ("st_dev", "st_ino", "st_size", "st_mtime_ns", "st_ctime_ns")
         if len(encoded) != metadata.st_size or any(
-            getattr(metadata, field) != getattr(final_metadata, field)
-            for field in stable_fields
+            getattr(metadata, field) != getattr(final_metadata, field) for field in stable_fields
         ):
             raise ValueError(f"{path}: strict JSON input changed while being read")
         try:
@@ -1685,9 +1639,7 @@ def build_scorecard_artifact(
         }
         for spec in iter_run_specs(plan)
     ]
-    source_identity, runtime_identity, dependency_identity = (
-        _current_consistency_identities()
-    )
+    source_identity, runtime_identity, dependency_identity = _current_consistency_identities()
     payload: dict[str, Any] = {
         "schema": REFERENCE_LIFE_SCORECARD_ARTIFACT_SCHEMA,
         "schema_version": 1,
@@ -1766,13 +1718,9 @@ def _validate_agent_manifest_descriptor(value: Any, *, path: str) -> None:
     observation_spec = _space_from_descriptor(
         value["observation_spec"], path=f"{path}.observation_spec"
     )
-    action_spec = _space_from_descriptor(
-        value["action_spec"], path=f"{path}.action_spec"
-    )
+    action_spec = _space_from_descriptor(value["action_spec"], path=f"{path}.action_spec")
     capabilities = value["capabilities"]
-    if not isinstance(capabilities, Mapping) or set(capabilities) != {
-        "dispatch_rebinding"
-    }:
+    if not isinstance(capabilities, Mapping) or set(capabilities) != {"dispatch_rebinding"}:
         raise ValueError(f"{path}.capabilities fields are invalid")
     reconstructed = AgentManifest.from_config(
         schema=cast(str, value["schema"]),
@@ -1781,9 +1729,7 @@ def _validate_agent_manifest_descriptor(value: Any, *, path: str) -> None:
         config=config,
         observation_spec=observation_spec,
         action_spec=action_spec,
-        capabilities=AgentCapabilities(
-            dispatch_rebinding=capabilities["dispatch_rebinding"]
-        ),
+        capabilities=AgentCapabilities(dispatch_rebinding=capabilities["dispatch_rebinding"]),
     )
     if _agent_manifest_descriptor(reconstructed) != dict(value):
         raise ValueError(f"{path} manifest identity does not recompute")
@@ -1851,9 +1797,7 @@ def _validate_environment_manifest_descriptor(value: Any, *, path: str) -> None:
         observation_spec=_space_from_descriptor(
             value["observation_spec"], path=f"{path}.observation_spec"
         ),
-        action_spec=_space_from_descriptor(
-            value["action_spec"], path=f"{path}.action_spec"
-        ),
+        action_spec=_space_from_descriptor(value["action_spec"], path=f"{path}.action_spec"),
         max_executions=cast(int, value["max_executions"]),
     )
     if reconstructed.descriptor() != dict(value):
@@ -1868,9 +1812,7 @@ def _validate_resolved_components(
     path: str,
 ) -> None:
     agent_manifest = resolved["agent_manifest"]
-    _validate_agent_manifest_descriptor(
-        agent_manifest, path=f"{path}.agent_manifest"
-    )
+    _validate_agent_manifest_descriptor(agent_manifest, path=f"{path}.agent_manifest")
     environment_manifest = resolved["environment_manifest"]
     _validate_environment_manifest_descriptor(
         environment_manifest, path=f"{path}.environment_manifest"
@@ -1946,9 +1888,7 @@ def _validate_resource_payload(resource: Any, *, arm: str, path: str) -> None:
         required.add("trainable_parameter_tree_scalar_count")
     if set(resource) != required:
         raise ValueError(f"{path} fields do not match the resource contract")
-    if resource["persistent_state_measurement"] != (
-        "numeric_jax_and_numpy_pytree_leaves"
-    ):
+    if resource["persistent_state_measurement"] != ("numeric_jax_and_numpy_pytree_leaves"):
         raise ValueError(f"{path}.persistent_state_measurement is unsupported")
     if resource["trainable_scalar_count_method"] != expected_method:
         raise ValueError(f"{path}.trainable_scalar_count_method differs from the arm")
@@ -2009,9 +1949,7 @@ def _reward_lattice_matches(
     if any(not math.isfinite(value) or value < 0.0 for value in values):
         return False
     positive = [value for value in values if value > 0.0]
-    tolerance = float(
-        max(1e-12, event_count * float(np.spacing(max(1.0, abs(total)))) * 4.0)
-    )
+    tolerance = float(max(1e-12, event_count * float(np.spacing(max(1.0, abs(total)))) * 4.0))
     if not positive:
         return abs(total) <= tolerance
     if len(positive) == 1:
@@ -2028,14 +1966,11 @@ def _reward_lattice_matches(
         for high_count in range(maximum_high + 1):
             residual = total - high_count * high
             low_count = round(residual / low)
-            if (
-                0 <= low_count <= event_count - high_count
-                and math.isclose(
-                    total,
-                    high_count * high + low_count * low,
-                    rel_tol=0.0,
-                    abs_tol=tolerance,
-                )
+            if 0 <= low_count <= event_count - high_count and math.isclose(
+                total,
+                high_count * high + low_count * low,
+                rel_tol=0.0,
+                abs_tol=tolerance,
             ):
                 return True
     return False
@@ -2057,9 +1992,7 @@ def _validate_metric_window(
     if window["event_count"] != event_count or type(window["event_count"]) is not int:
         raise ValueError(f"{path}.event_count differs from the fixed window")
     reward_sum = _require_finite_number(window["reward_sum"], path=f"{path}.reward_sum")
-    mean_reward = _require_finite_number(
-        window["mean_reward"], path=f"{path}.mean_reward"
-    )
+    mean_reward = _require_finite_number(window["mean_reward"], path=f"{path}.mean_reward")
     mean_regret = _require_finite_number(
         window["mean_oracle_regret"], path=f"{path}.mean_oracle_regret"
     )
@@ -2130,18 +2063,12 @@ def _validate_completed_outcome(
         raise ValueError(f"{path} environment RNG cursor is not matched to the horizon")
     if outcome["summary_mode"] != "streaming_o1_no_retained_events":
         raise ValueError(f"{path} did not use the streaming summary")
-    reward_sum = _require_finite_number(
-        outcome["reward_sum"], path=f"{path}.reward_sum"
-    )
+    reward_sum = _require_finite_number(outcome["reward_sum"], path=f"{path}.reward_sum")
     oracle_reward_sum = _require_finite_number(
         outcome["oracle_reward_sum"], path=f"{path}.oracle_reward_sum"
     )
-    mean_reward = _require_finite_number(
-        outcome["mean_reward"], path=f"{path}.mean_reward"
-    )
-    regret_sum = _require_finite_number(
-        outcome["regret_sum"], path=f"{path}.regret_sum"
-    )
+    mean_reward = _require_finite_number(outcome["mean_reward"], path=f"{path}.mean_reward")
+    regret_sum = _require_finite_number(outcome["regret_sum"], path=f"{path}.regret_sum")
     if not _numerically_equal(mean_reward, reward_sum / horizon):
         raise ValueError(f"{path}.mean_reward is inconsistent")
     if not _numerically_equal(regret_sum, oracle_reward_sum - reward_sum):
@@ -2157,9 +2084,7 @@ def _validate_completed_outcome(
     if not isinstance(resources, Mapping) or set(resources) != {"initial", "final"}:
         raise ValueError(f"{path}.resources must bind initial and final state")
     for label in ("initial", "final"):
-        _validate_resource_payload(
-            resources[label], arm=arm, path=f"{path}.resources.{label}"
-        )
+        _validate_resource_payload(resources[label], arm=arm, path=f"{path}.resources.{label}")
     if not _json_exact_equal(dict(resources["initial"]), dict(expected_initial_resource)):
         raise ValueError(f"{path}.resources.initial differs from the canonical agent state")
     if not _json_exact_equal(dict(resources["final"]), dict(resources["initial"])):
@@ -2222,17 +2147,13 @@ def _validate_completed_outcome(
                 <= phase_reward_values[phase]
                 <= max(flattened) * phase_counts[phase] + tolerance
             ):
-                raise ValueError(
-                    f"{path}.phase_reward_sums[{phase}] is outside the payoff range"
-                )
+                raise ValueError(f"{path}.phase_reward_sums[{phase}] is outside the payoff range")
             if not _reward_lattice_matches(
                 phase_reward_values[phase],
                 event_count=phase_counts[phase],
                 reward_values=flattened,
             ):
-                raise ValueError(
-                    f"{path}.phase_reward_sums[{phase}] is outside the reward lattice"
-                )
+                raise ValueError(f"{path}.phase_reward_sums[{phase}] is outside the reward lattice")
         for name, phase in (("initial_a", 0), ("first_b", 1), ("return_a", 0)):
             flattened = [float(value) for row in phase_payoffs[phase] for value in row]
             window_reward_sums.append(
@@ -2247,14 +2168,14 @@ def _validate_completed_outcome(
                 )
             )
         if (
-            window_reward_sums[0] + window_reward_sums[2]
-            > phase_reward_values[0] + 1e-9
+            window_reward_sums[0] + window_reward_sums[2] > phase_reward_values[0] + 1e-9
             or window_reward_sums[1] > phase_reward_values[1] + 1e-9
         ):
             raise ValueError(f"{path}.windows exceed their switching-phase rewards")
-        if outcome["high_end_visit_count"] is not None or outcome[
-            "high_end_visit_rate"
-        ] is not None:
+        if (
+            outcome["high_end_visit_count"] is not None
+            or outcome["high_end_visit_rate"] is not None
+        ):
             raise ValueError(f"{path} switching run must not claim RiverSwim visits")
     elif environment == "riverswim":
         if set(windows) != {"early", "late"}:
@@ -2275,11 +2196,14 @@ def _validate_completed_outcome(
         minimum_reward = min(possible_rewards)
         maximum_reward = max(possible_rewards)
         tolerance = 1e-9 * max(1.0, abs(phase_reward_values[0]))
-        if not (
-            minimum_reward * horizon - tolerance
-            <= phase_reward_values[0]
-            <= maximum_reward * horizon + tolerance
-        ) or phase_reward_values[1] != 0.0:
+        if (
+            not (
+                minimum_reward * horizon - tolerance
+                <= phase_reward_values[0]
+                <= maximum_reward * horizon + tolerance
+            )
+            or phase_reward_values[1] != 0.0
+        ):
             raise ValueError(f"{path}.phase_reward_sums violates stationary rewards")
         if not _reward_lattice_matches(
             phase_reward_values[0],
@@ -2380,9 +2304,7 @@ def _validate_partial_outcome(
     oracle_sum = _require_finite_number(
         partial["oracle_reward_sum"], path=f"{path}.oracle_reward_sum"
     )
-    regret_sum = _require_finite_number(
-        partial["regret_sum"], path=f"{path}.regret_sum"
-    )
+    regret_sum = _require_finite_number(partial["regret_sum"], path=f"{path}.regret_sum")
     mean = partial["mean_reward"]
     if accepted == 0:
         if mean is not None or any(value != 0.0 for value in (reward_sum, oracle_sum, regret_sum)):
@@ -2468,9 +2390,10 @@ def _validate_partial_outcome(
                     reward_values=rewards,
                     path=f"{path}.windows.{name}",
                 )
-        if partial["high_end_visit_count"] is not None or partial[
-            "high_end_visit_rate"
-        ] is not None:
+        if (
+            partial["high_end_visit_count"] is not None
+            or partial["high_end_visit_rate"] is not None
+        ):
             raise ValueError(f"{path} switching partial cannot claim RiverSwim visits")
     elif environment == "riverswim":
         if phase_counts != [accepted, 0] or phase_reward_values[1] != 0.0:
@@ -2526,8 +2449,7 @@ def _validate_partial_outcome(
     else:
         raise ValueError(f"{path} has an unsupported environment")
     expected_oracle = math.fsum(
-        count * oracle
-        for count, oracle in zip(phase_counts, oracle_rewards, strict=True)
+        count * oracle for count, oracle in zip(phase_counts, oracle_rewards, strict=True)
     )
     if not _numerically_equal(oracle_sum, expected_oracle):
         raise ValueError(f"{path}.oracle_reward_sum is inconsistent")
@@ -2624,9 +2546,7 @@ def _validate_run_record(
         optional_durations[field] = (
             None
             if value is None
-            else _require_finite_nonnegative(
-                value, path=f"{path}.telemetry.{field}"
-            )
+            else _require_finite_nonnegative(value, path=f"{path}.telemetry.{field}")
         )
     warmed_total = _require_finite_nonnegative(
         telemetry["warmed_step_seconds_total"],
@@ -2666,9 +2586,7 @@ def _validate_run_record(
     }
     if set(resolved) != expected_resolved_fields:
         raise ValueError(f"{path}.resolved fields are incomplete")
-    if not _json_exact_equal(
-        resolved["arm_definition"], plan.arm_definition(expected_spec.arm)
-    ):
+    if not _json_exact_equal(resolved["arm_definition"], plan.arm_definition(expected_spec.arm)):
         raise ValueError(f"{path} arm definition differs from the plan")
 
     status = record["status"]
@@ -2951,7 +2869,8 @@ def _control_adapter(
             raise ValueError("RiverSwim control construction lacks its environment config")
         factory_argument = river_config
     else:
-        raise ValueError(f"unsupported environment {environment_kind!r}")
+        host_env = _require_exact_str("environment_kind", environment_kind)
+        raise ValueError(f"unsupported environment '{host_env}'")
 
     if arm_definition != build_development_plan().arm_definition(arm):
         raise ValueError("control arm definition is not the pinned plan-v1 definition")
@@ -2976,14 +2895,17 @@ def _control_adapter(
             raise ValueError("random control did not resolve the planned semantics")
         return UniformRandomReferenceAdapter(random_config)
     if arm == "privileged_oracle":
-        if not _json_exact_equal(config, {
-            "finite_horizon_solver": (
-                "finite_horizon_backward_dynamic_program.float64.tie_low.preview1"
-            ),
-            "horizon_binding": "environment_protocol_horizon",
-            "privileged_environment_model": True,
-            "tie_break": "lowest_action_index",
-        }):
+        if not _json_exact_equal(
+            config,
+            {
+                "finite_horizon_solver": (
+                    "finite_horizon_backward_dynamic_program.float64.tie_low.preview1"
+                ),
+                "horizon_binding": "environment_protocol_horizon",
+                "privileged_environment_model": True,
+                "tie_break": "lowest_action_index",
+            },
+        ):
             raise ValueError("oracle control config is outside the pinned plan")
         oracle_config = (
             AnalyticOracleReferenceConfig.for_switching(
@@ -2998,8 +2920,7 @@ def _control_adapter(
         )
         oracle_payload = oracle_config.to_config()
         if (
-            oracle_payload["privileged_environment_model"]
-            != config["privileged_environment_model"]
+            oracle_payload["privileged_environment_model"] != config["privileged_environment_model"]
             or oracle_payload["tie_break"] != config["tie_break"]
         ):
             raise ValueError("oracle control did not resolve the planned semantics")
@@ -3008,21 +2929,18 @@ def _control_adapter(
         differential_config = (
             DifferentialSARSAReferenceConfig.for_switching(factory_argument, **config)
             if isinstance(factory_argument, SwitchingTwoStateConfig)
-            else DifferentialSARSAReferenceConfig.for_riverswim(
-                factory_argument, **config
-            )
+            else DifferentialSARSAReferenceConfig.for_riverswim(factory_argument, **config)
         )
         return DifferentialSARSAReferenceAdapter(differential_config)
     if arm == "sarsa":
         discounted_config = (
             DiscountedSARSAReferenceConfig.for_switching(factory_argument, **config)
             if isinstance(factory_argument, SwitchingTwoStateConfig)
-            else DiscountedSARSAReferenceConfig.for_riverswim(
-                factory_argument, **config
-            )
+            else DiscountedSARSAReferenceConfig.for_riverswim(factory_argument, **config)
         )
         return DiscountedSARSAReferenceAdapter(discounted_config)
-    raise ValueError(f"arm {arm!r} is not a control adapter")
+    host_arm = _require_exact_str("arm", arm)
+    raise ValueError(f"arm '{host_arm}' is not a control adapter")
 
 
 def build_scorecard_runner(
@@ -3041,9 +2959,7 @@ def build_scorecard_runner(
         if spec.environment_kind == "switching_two_state"
         else None
     )
-    river_config = (
-        _river_environment_config(plan) if spec.environment_kind == "riverswim" else None
-    )
+    river_config = _river_environment_config(plan) if spec.environment_kind == "riverswim" else None
 
     if spec.arm in ("prototype", "prototype_frozen"):
         agent_config = _prototype_agent_config(
@@ -3174,9 +3090,7 @@ def _telemetry_payload(
         "warmed_step_seconds_total": warmed_step_seconds_total,
         "warmed_step_count": warmed_step_count,
         "warmed_step_seconds_mean": (
-            None
-            if warmed_step_count == 0
-            else warmed_step_seconds_total / warmed_step_count
+            None if warmed_step_count == 0 else warmed_step_seconds_total / warmed_step_count
         ),
         "total_seconds": total_seconds,
     }
@@ -3191,9 +3105,7 @@ def run_scorecard_shard(
     expected = iter_run_specs(plan)[spec.schedule_index]
     if spec != expected:
         raise ValueError("run spec is not at its canonical schedule position")
-    source_identity, runtime_identity, dependency_identity = (
-        _current_consistency_identities()
-    )
+    source_identity, runtime_identity, dependency_identity = _current_consistency_identities()
     started = time.monotonic()
     stage = "build"
     runner: ReferenceLifeRunner | None = None
@@ -3360,9 +3272,7 @@ def validate_scorecard_run_record(
     payload: Mapping[str, Any],
     *,
     plan: ReferenceLifeDevelopmentPlan | None = None,
-    _consistency_identities: (
-        tuple[dict[str, Any], dict[str, Any], dict[str, Any]] | None
-    ) = None,
+    _consistency_identities: (tuple[dict[str, Any], dict[str, Any], dict[str, Any]] | None) = None,
 ) -> dict[str, Any]:
     """Validate one shard against its canonical schedule identity."""
 
@@ -3457,9 +3367,7 @@ def _print_json(value: Any) -> None:
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description=(
-            "PERMANENTLY NONPROMOTING matched reference-life development scorecard"
-        )
+        description=("PERMANENTLY NONPROMOTING matched reference-life development scorecard")
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -3483,9 +3391,7 @@ def _parser() -> argparse.ArgumentParser:
     summarize_parser.add_argument("--output", type=Path, required=True)
     summarize_parser.add_argument("shards", type=Path, nargs="+")
 
-    validate_parser = subparsers.add_parser(
-        "validate", help="validate one shard or one aggregate"
-    )
+    validate_parser = subparsers.add_parser("validate", help="validate one shard or one aggregate")
     validate_parser.add_argument("input", type=Path)
     return parser
 
