@@ -525,23 +525,37 @@ def _freeze_json(value: Any) -> Any:
     return value
 
 
+def _require_exact_str(name: object, value: object) -> str:
+    if type(name) is not str:
+        raise ForagerMatchedQualificationError("name must be an exact string")
+    if type(value) is not str:
+        raise ForagerMatchedQualificationError(f"{name} must be an exact string")
+    return value
+
+
 def _reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     result: dict[str, Any] = {}
     for key, value in pairs:
-        if key in result:
-            raise ForagerMatchedQualificationError(f"duplicate JSON key {key!r}")
-        result[key] = value
+        host_key = _require_exact_str("key", key)
+        if host_key in result:
+            raise ForagerMatchedQualificationError(f"duplicate JSON key '{host_key}'")
+        result[host_key] = value
     return result
 
 
 def _reject_nonfinite(value: str) -> NoReturn:
-    raise ForagerMatchedQualificationError(f"non-finite JSON number {value!r}")
+    host_value = _require_exact_str("value", value)
+    raise ForagerMatchedQualificationError(f"non-finite JSON number '{host_value}'")
 
 
 def _parse_finite_json_float(value: str) -> float:
-    parsed = float(value)
+    host_value = _require_exact_str("value", value)
+    try:
+        parsed = float(host_value)
+    except (OverflowError, ValueError) as exc:
+        raise ForagerMatchedQualificationError(f"invalid JSON number '{host_value}'") from exc
     if not math.isfinite(parsed):
-        raise ForagerMatchedQualificationError(f"non-finite JSON number {value!r}")
+        raise ForagerMatchedQualificationError(f"non-finite JSON number '{host_value}'")
     return parsed
 
 
