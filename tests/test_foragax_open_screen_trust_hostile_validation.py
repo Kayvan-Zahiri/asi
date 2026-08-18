@@ -1,0 +1,114 @@
+"""Trust-boundary validation for foragax_open_screen sanitized errors."""
+
+from __future__ import annotations
+
+import pathlib
+
+import pytest
+
+from alberta_framework.benchmarks.foragax_open_screen import (
+    ScreenError,
+    _parse_finite_json_float,
+    _reject_duplicate_pairs,
+    _reject_nonfinite_json_number,
+    _require_exact_str,
+)
+
+
+class _EvilStr(str):
+    def __str__(self) -> str:  # pragma: no cover
+        raise AssertionError("EvilStr.__str__ must not be called")
+
+    def __repr__(self) -> str:  # pragma: no cover
+        raise AssertionError("EvilStr.__repr__ must not be called")
+
+    def __hash__(self) -> int:
+        raise AssertionError("EvilStr.__hash__ must not be called")
+
+
+class _StringSubclass(str):
+    pass
+
+
+def test_require_exact_str_rejects_subclass() -> None:
+    with pytest.raises(ScreenError, match="must be an exact string"):
+        _require_exact_str("key", _StringSubclass("x"))
+    with pytest.raises(ScreenError, match="must be an exact string"):
+        _require_exact_str("value", _StringSubclass("x"))
+    with pytest.raises(ScreenError, match="must be an exact string"):
+        _require_exact_str("name", _StringSubclass("x"))
+
+
+def test_require_exact_str_hostile_without_repr_leak() -> None:
+    evil = _EvilStr("evil")
+    with pytest.raises(ScreenError, match="must be an exact string") as exc:
+        _require_exact_str("key", evil)
+    assert "EvilStr" not in str(exc.value)
+    assert "!r" not in str(exc.value)
+    evil2 = _EvilStr("val")
+    with pytest.raises(ScreenError, match="must be an exact string") as exc2:
+        _require_exact_str("value", evil2)
+    assert "EvilStr" not in str(exc2.value)
+
+
+def test_duplicate_key_sanitized() -> None:
+    with pytest.raises(ScreenError, match="JSON object contains duplicate key") as exc:
+        _reject_duplicate_pairs([("evil_key", 1), ("evil_key", 2)])
+    msg = str(exc.value)
+    assert "!r" not in msg
+    assert "'evil_key'" in msg
+
+
+def test_duplicate_key_hostile_blocked_before_hash() -> None:
+    evil = _EvilStr("evil")
+    with pytest.raises(ScreenError, match="must be an exact string") as exc:
+        _reject_duplicate_pairs([(evil, 1)])
+    assert "EvilStr" not in str(exc.value)
+    assert "!r" not in str(exc.value)
+    with pytest.raises(ScreenError, match="must be an exact string"):
+        _reject_duplicate_pairs([(_StringSubclass("evil"), 1)])
+
+
+def test_nonfinite_sanitized() -> None:
+    with pytest.raises(ScreenError, match="JSON contains non-finite number") as exc:
+        _reject_nonfinite_json_number("NaN")
+    msg = str(exc.value)
+    assert "!r" not in msg
+    assert "'NaN'" in msg
+    with pytest.raises(ScreenError, match="JSON contains non-finite number") as exc2:
+        _parse_finite_json_float("Infinity")
+    msg2 = str(exc2.value)
+    assert "!r" not in msg2
+    assert "'Infinity'" in msg2
+
+
+def test_nonfinite_hostile() -> None:
+    evil = _EvilStr("Infinity")
+    with pytest.raises(ScreenError, match="must be an exact string") as exc:
+        _reject_nonfinite_json_number(evil)
+    assert "EvilStr" not in str(exc.value)
+    assert "!r" not in str(exc.value)
+    evil2 = _EvilStr("NaN")
+    with pytest.raises(ScreenError, match="must be an exact string"):
+        _parse_finite_json_float(evil2)
+    with pytest.raises(ScreenError, match="must be an exact string"):
+        _parse_finite_json_float(_StringSubclass("Infinity"))
+
+
+def test_source_contains_no_repr_leak() -> None:
+    p = pathlib.Path("alberta_framework/benchmarks/foragax_open_screen.py")
+    text = p.read_text(encoding="utf-8")
+    assert "JSON object contains duplicate key {key!r}" not in text
+    assert "JSON contains non-finite number {value!r}" not in text
+    assert "NPZ CRC failure in member {bad_member!r}" not in text
+    assert "JSON object contains duplicate key '{host_key}'" in text
+    assert "JSON contains non-finite number '{host_value}'" in text
+    assert "NPZ CRC failure in member '{host_member}'" in text
+
+
+def test_valid_still_passes() -> None:
+    assert _require_exact_str("key", "ok") == "ok"
+    assert _reject_duplicate_pairs([("a", 1), ("b", 2)]) == {"a": 1, "b": 2}
+    assert _parse_finite_json_float("1.5") == 1.5
+    with pytest.raises(ScreenError):
+        _reject_nonfinite_json_number("x")

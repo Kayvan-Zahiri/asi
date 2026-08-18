@@ -287,23 +287,37 @@ def _utc_now() -> str:
     return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
+def _require_exact_str(name: object, value: object) -> str:
+    if type(name) is not str:
+        raise ScreenError("name must be an exact string")
+    if type(value) is not str:
+        raise ScreenError(f"{name} must be an exact string")
+    return value
+
+
 def _reject_duplicate_pairs(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     result: dict[str, Any] = {}
     for key, value in pairs:
-        if key in result:
-            raise ScreenError(f"JSON object contains duplicate key {key!r}")
-        result[key] = value
+        host_key = _require_exact_str("key", key)
+        if host_key in result:
+            raise ScreenError(f"JSON object contains duplicate key '{host_key}'")
+        result[host_key] = value
     return result
 
 
 def _reject_nonfinite_json_number(value: str) -> NoReturn:
-    raise ScreenError(f"JSON contains non-finite number {value!r}")
+    host_value = _require_exact_str("value", value)
+    raise ScreenError(f"JSON contains non-finite number '{host_value}'")
 
 
 def _parse_finite_json_float(value: str) -> float:
-    parsed = float(value)
+    host_value = _require_exact_str("value", value)
+    try:
+        parsed = float(host_value)
+    except (OverflowError, ValueError) as exc:
+        raise ScreenError(f"invalid JSON number '{host_value}'") from exc
     if not math.isfinite(parsed):
-        raise ScreenError(f"JSON contains non-finite number {value!r}")
+        raise ScreenError(f"JSON contains non-finite number '{host_value}'")
     return parsed
 
 
@@ -528,7 +542,7 @@ def _validate_metric(raw: dict[str, Any], horizon: int, schema: str) -> dict[str
     }
     for key, expected in expected_pairs.items():
         if metric.get(key) != expected:
-            raise ScreenError(f"metric.{key} is not the supported frozen value {expected!r}")
+            raise ScreenError(f"metric.{key} is not the supported frozen value '{expected}'")
     if metric.get("subsample_first_reward") is not True:
         raise ScreenError("metric.subsample_first_reward must be true")
     tail = metric.get("tail_fraction", metric.get("tail_fraction_of_sampled_curve"))
@@ -2149,7 +2163,8 @@ def _validate_zip_structure(path: Path, horizon: int) -> None:
                         _validate_reward_member_header(archive, info, horizon, path)
                 bad_member = archive.testzip()
                 if bad_member is not None:
-                    raise ScreenError(f"NPZ CRC failure in member {bad_member!r}: {path}")
+                    host_member = _require_exact_str("bad_member", bad_member)
+                    raise ScreenError(f"NPZ CRC failure in member '{host_member}': {path}")
             after = os.fstat(stream.fileno())
             if (
                 before.st_dev,
