@@ -75,9 +75,7 @@ MATCHED_VERIFICATION_REQUEST_SCHEMA_VERSION: Final = (
 )
 MATCHED_LIVE_RUNTIME_SCHEMA_VERSION: Final = "alberta.forager_matched_live_runtime.v1"
 
-QUALIFIED_IMAGE_SHA256: Final = (
-    "5ecaabefce6439a8731c19e7a55fedb666788242baf035e6ffca86eb31299768"
-)
+QUALIFIED_IMAGE_SHA256: Final = "5ecaabefce6439a8731c19e7a55fedb666788242baf035e6ffca86eb31299768"
 QUALIFIED_EXECUTOR_RECEIPT_SHA256: Final = (
     "7091147189debe9897d84a6ad55371381bf9a9d92b03ccc66b72e5859c0a4d13"
 )
@@ -180,6 +178,14 @@ ProcessRunner = Callable[[Sequence[str]], "ProcessResult"]
 TrustResolver = Callable[["VerificationRequest"], AuthenticatedEvidenceBindings]
 
 
+def _require_exact_str(name: object, value: object) -> str:
+    if type(name) is not str:
+        raise ValueError("name must be an exact string")
+    if type(value) is not str:
+        raise ValueError(f"{name} must be an exact string")
+    return value
+
+
 class ForagerMatchedExecutorError(ValueError):
     """A plan, live runtime, command, or artifact failed closed."""
 
@@ -247,9 +253,7 @@ class PreparedCandidate:
 
     def __post_init__(self) -> None:
         if type(self.candidate) is not MatchedCandidate:
-            raise ForagerMatchedExecutorError(
-                "candidate must be a MatchedCandidate"
-            )
+            raise ForagerMatchedExecutorError("candidate must be a MatchedCandidate")
         for name, value in (
             ("source_root", self.source_root),
             ("source_archive", self.source_archive),
@@ -302,8 +306,7 @@ class MatchedExecutionPlan:
             type(self.protocol.candidates) is not tuple
             or not 1 <= len(self.protocol.candidates) <= 256
             or not all(
-                type(candidate) is MatchedCandidate
-                for candidate in self.protocol.candidates
+                type(candidate) is MatchedCandidate for candidate in self.protocol.candidates
             )
         ):
             raise ForagerMatchedExecutorError(
@@ -317,20 +320,16 @@ class MatchedExecutionPlan:
         protocol_candidate_ids = tuple(
             candidate.candidate_id for candidate in self.protocol.candidates
         )
-        if (
-            tuple(protocol_index) != protocol_candidate_ids
-            or any(
-                protocol_index.get(candidate_id) != candidate
-                for candidate_id, candidate in zip(
-                    protocol_candidate_ids,
-                    self.protocol.candidates,
-                    strict=True,
-                )
+        if tuple(protocol_index) != protocol_candidate_ids or any(
+            protocol_index.get(candidate_id) != candidate
+            for candidate_id, candidate in zip(
+                protocol_candidate_ids,
+                self.protocol.candidates,
+                strict=True,
             )
         ):
             raise ForagerMatchedExecutorError(
-                "execution plan protocol candidate index differs from its canonical "
-                "candidate tuple"
+                "execution plan protocol candidate index differs from its canonical candidate tuple"
             )
         frozen_protocol = _protocol_instance(self.protocol)
         _validate_qualified_lock(frozen_protocol)
@@ -413,18 +412,12 @@ class MatchedExecutionPlan:
             payload_executor,
             Mapping,
         ):
-            raise ForagerMatchedExecutorError(
-                "execution plan payload manifests must be objects"
-            )
+            raise ForagerMatchedExecutorError("execution plan payload manifests must be objects")
         if payload.get("schema_version") != MATCHED_EXECUTION_PLAN_SCHEMA_VERSION:
-            raise ForagerMatchedExecutorError(
-                "execution plan object schema_version is unsupported"
-            )
+            raise ForagerMatchedExecutorError("execution plan object schema_version is unsupported")
         if (
-            executor_manifest.get("schema_version")
-            != MATCHED_EXECUTOR_MANIFEST_SCHEMA_VERSION
-            or payload_executor.get("schema_version")
-            != MATCHED_EXECUTOR_MANIFEST_SCHEMA_VERSION
+            executor_manifest.get("schema_version") != MATCHED_EXECUTOR_MANIFEST_SCHEMA_VERSION
+            or payload_executor.get("schema_version") != MATCHED_EXECUTOR_MANIFEST_SCHEMA_VERSION
         ):
             raise ForagerMatchedExecutorError(
                 "execution plan executor-manifest schema_version is unsupported"
@@ -439,21 +432,16 @@ class MatchedExecutionPlan:
             expected_executor_manifest
         ):
             raise ForagerMatchedExecutorError(
-                "execution plan executor manifest differs from its exact qualified "
-                "reconstruction"
+                "execution plan executor manifest differs from its exact qualified reconstruction"
             )
         if (
-            source_manifest.get("schema_version")
-            != MATCHED_SOURCE_MANIFEST_SCHEMA_VERSION
+            source_manifest.get("schema_version") != MATCHED_SOURCE_MANIFEST_SCHEMA_VERSION
             or source_manifest.get("stage") != self.protocol.stage
-            or source_manifest.get("protocol_sha256")
-            != self.protocol.protocol_sha256
+            or source_manifest.get("protocol_sha256") != self.protocol.protocol_sha256
             or executor_manifest.get("authentication_state")
             != "unendorsed_external_trust_resolution_required"
-            or executor_manifest.get("protocol_sha256")
-            != self.protocol.protocol_sha256
-            or payload.get("classification")
-            != "matched_current_execution_candidate"
+            or executor_manifest.get("protocol_sha256") != self.protocol.protocol_sha256
+            or payload.get("classification") != "matched_current_execution_candidate"
             or payload.get("promotion_authorized") is not False
             or payload.get("external_verification_required") is not True
             or payload.get("stage") != self.protocol.stage
@@ -485,19 +473,21 @@ class MatchedExecutionPlan:
                 _array(payload.get("candidate_order"), "execution plan candidate_order")
             )
         )
-        if type(self.candidates) is not tuple or not self.candidates or not all(
-            type(item) is PreparedCandidate
-            and type(item.candidate) is MatchedCandidate
-            and isinstance(item.capability_receipt, Mapping)
-            and isinstance(item.source_inventory, Mapping)
-            for item in self.candidates
+        if (
+            type(self.candidates) is not tuple
+            or not self.candidates
+            or not all(
+                type(item) is PreparedCandidate
+                and type(item.candidate) is MatchedCandidate
+                and isinstance(item.capability_receipt, Mapping)
+                and isinstance(item.source_inventory, Mapping)
+                for item in self.candidates
+            )
         ):
             raise ForagerMatchedExecutorError(
                 "execution plan candidates must be a non-empty tuple of prepared candidates"
             )
-        candidate_ids = tuple(
-            item.candidate.candidate_id for item in self.candidates
-        )
+        candidate_ids = tuple(item.candidate.candidate_id for item in self.candidates)
         if len(candidate_ids) > 256 or len(set(candidate_ids)) != len(candidate_ids):
             raise ForagerMatchedExecutorError(
                 "execution plan candidate order must contain 1..256 unique IDs"
@@ -522,8 +512,7 @@ class MatchedExecutionPlan:
                 "execution plan object differs from its typed protocol/candidate closure"
             )
         if any(
-            self.protocol.candidate_index.get(item.candidate.candidate_id)
-            != item.candidate
+            self.protocol.candidate_index.get(item.candidate.candidate_id) != item.candidate
             for item in self.candidates
         ):
             raise ForagerMatchedExecutorError(
@@ -556,10 +545,8 @@ class MatchedExecutionPlan:
                 or validated.python_import_root != supplied.python_import_root
                 or validated.invocation_style != supplied.invocation_style
                 or validated.result_root != supplied.result_root
-                or validated.rng_isolation_patch_sha256
-                != supplied.rng_isolation_patch_sha256
-                or validated.capability_receipt_sha256
-                != supplied.capability_receipt_sha256
+                or validated.rng_isolation_patch_sha256 != supplied.rng_isolation_patch_sha256
+                or validated.capability_receipt_sha256 != supplied.capability_receipt_sha256
                 or canonical_json_bytes(validated.capability_receipt)
                 != canonical_json_bytes(supplied.capability_receipt)
                 or canonical_json_bytes(validated.source_inventory)
@@ -611,15 +598,9 @@ class MatchedExecutionPlan:
             or canonical_json_bytes(
                 {"candidate_command_templates": payload.get("candidate_command_templates")}
             )
-            != canonical_json_bytes(
-                {"candidate_command_templates": expected_command_templates}
-            )
-            or canonical_json_bytes(
-                {"scoring_boundary": payload.get("scoring_boundary")}
-            )
-            != canonical_json_bytes(
-                {"scoring_boundary": expected_scoring_boundary}
-            )
+            != canonical_json_bytes({"candidate_command_templates": expected_command_templates})
+            or canonical_json_bytes({"scoring_boundary": payload.get("scoring_boundary")})
+            != canonical_json_bytes({"scoring_boundary": expected_scoring_boundary})
         ):
             raise ForagerMatchedExecutorError(
                 "execution plan object differs from its typed protocol/candidate closure"
@@ -657,9 +638,7 @@ class MatchedExecutionPlan:
         object.__setattr__(
             self,
             "candidate_index",
-            MappingProxyType(
-                {item.candidate.candidate_id: item for item in frozen_candidates}
-            ),
+            MappingProxyType({item.candidate.candidate_id: item for item in frozen_candidates}),
         )
 
     @property
@@ -784,9 +763,7 @@ class IndexedExecutionReceipt:
             "indexed execution receipt SHA-256",
         )
         if not isinstance(self.receipt_payload, Mapping):
-            raise ForagerMatchedExecutorError(
-                "indexed execution receipt payload must be a mapping"
-            )
+            raise ForagerMatchedExecutorError("indexed execution receipt payload must be a mapping")
         payload = _thaw_mapping(self.receipt_payload)
         _exact_keys(
             payload,
@@ -809,16 +786,11 @@ class IndexedExecutionReceipt:
         if (
             payload["schema_version"] != MATCHED_EXECUTION_RECEIPT_SCHEMA_VERSION
             or payload["stage"] not in {"open_tuning", "sealed_evaluation"}
-            or payload["authentication_state"]
-            != "content_complete_external_verifier_required"
+            or payload["authentication_state"] != "content_complete_external_verifier_required"
         ):
-            raise ForagerMatchedExecutorError(
-                "indexed execution receipt schema/state drift"
-            )
+            raise ForagerMatchedExecutorError("indexed execution receipt schema/state drift")
         if payload.get("candidate_id") != self.candidate_id:
-            raise ForagerMatchedExecutorError(
-                "indexed execution receipt candidate binding drift"
-            )
+            raise ForagerMatchedExecutorError("indexed execution receipt candidate binding drift")
         for name in (
             "protocol_sha256",
             "plan_sha256",
@@ -913,9 +885,7 @@ class MatchedExecutionReceiptIndex:
 
     def __post_init__(self) -> None:
         if self.schema_version != MATCHED_EXECUTION_RECEIPT_INDEX_SCHEMA_VERSION:
-            raise ForagerMatchedExecutorError(
-                "execution receipt index schema is unsupported"
-            )
+            raise ForagerMatchedExecutorError("execution receipt index schema is unsupported")
         if self.stage not in {"open_tuning", "sealed_evaluation"}:
             raise ForagerMatchedExecutorError("execution receipt index stage is unsupported")
         for name, value in (
@@ -960,8 +930,7 @@ class MatchedExecutionReceiptIndex:
         if (
             type(self.execution_receipts) is not tuple
             or any(type(item) is not IndexedExecutionReceipt for item in self.execution_receipts)
-            or tuple(item.candidate_id for item in self.execution_receipts)
-            != self.candidate_order
+            or tuple(item.candidate_id for item in self.execution_receipts) != self.candidate_order
         ):
             raise ForagerMatchedExecutorError(
                 "execution receipt index receipts differ from candidate order"
@@ -976,9 +945,7 @@ class MatchedExecutionReceiptIndex:
                 "executor_manifest_sha256": self.executor_manifest_sha256,
                 "live_runtime_identity_sha256": self.live_runtime_identity_sha256,
             }
-            drifted = [
-                name for name, expected in closure.items() if receipt.get(name) != expected
-            ]
+            drifted = [name for name, expected in closure.items() if receipt.get(name) != expected]
             if drifted:
                 raise ForagerMatchedExecutorError(
                     "execution receipt index closure drift: " + ", ".join(drifted)
@@ -987,9 +954,7 @@ class MatchedExecutionReceiptIndex:
                 Sequence[Mapping[str, Any]],
                 receipt["seed_artifacts"],
             )
-            receipt_seeds = tuple(
-                seed_artifact["seed"] for seed_artifact in receipt_seed_artifacts
-            )
+            receipt_seeds = tuple(seed_artifact["seed"] for seed_artifact in receipt_seed_artifacts)
             if receipt_seeds != self.active_seeds:
                 raise ForagerMatchedExecutorError(
                     "execution receipt index receipt seed order drift"
@@ -1180,20 +1145,23 @@ class VerificationRequest:
 def _reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     result: dict[str, Any] = {}
     for key, value in pairs:
-        if key in result:
-            raise ForagerMatchedExecutorError(f"duplicate JSON object key {key!r}")
-        result[key] = value
+        host_key = _require_exact_str("key", key)
+        if host_key in result:
+            raise ForagerMatchedExecutorError(f"duplicate JSON object key '{host_key}'")
+        result[host_key] = value
     return result
 
 
 def _reject_nonfinite(value: str) -> NoReturn:
-    raise ForagerMatchedExecutorError(f"non-finite JSON constant {value!r} is forbidden")
+    host_value = _require_exact_str("value", value)
+    raise ForagerMatchedExecutorError(f"non-finite JSON constant '{host_value}' is forbidden")
 
 
 def _parse_float(value: str) -> float:
-    parsed = float(value)
+    host_value = _require_exact_str("value", value)
+    parsed = float(host_value)
     if not math.isfinite(parsed):
-        raise ForagerMatchedExecutorError(f"non-finite JSON number {value!r} is forbidden")
+        raise ForagerMatchedExecutorError(f"non-finite JSON number '{host_value}' is forbidden")
     return parsed
 
 
@@ -1272,9 +1240,7 @@ def _freeze(value: Any) -> Any:
 def _thaw(value: Any) -> Any:
     if isinstance(value, Mapping):
         if any(type(key) is not str for key in value):
-            raise ForagerMatchedExecutorError(
-                "canonical JSON object keys must be strings"
-            )
+            raise ForagerMatchedExecutorError("canonical JSON object keys must be strings")
         return {key: _thaw(item) for key, item in value.items()}
     if type(value) is tuple:
         return [_thaw(item) for item in value]
@@ -1328,9 +1294,7 @@ def _sha256(value: Any, label: str) -> str:
 
 def _integer(value: Any, label: str, *, minimum: int, maximum: int) -> int:
     if type(value) is not int or not minimum <= value <= maximum:
-        raise ForagerMatchedExecutorError(
-            f"{label} must be an integer in [{minimum}, {maximum}]"
-        )
+        raise ForagerMatchedExecutorError(f"{label} must be an integer in [{minimum}, {maximum}]")
     return value
 
 
@@ -1355,11 +1319,7 @@ def _python_import_root(value: Any, label: str) -> str:
 
 
 def _container_source_path(relative: str) -> str:
-    return (
-        CONTAINER_SOURCE_ROOT
-        if relative == "."
-        else f"{CONTAINER_SOURCE_ROOT}/{relative}"
-    )
+    return CONTAINER_SOURCE_ROOT if relative == "." else f"{CONTAINER_SOURCE_ROOT}/{relative}"
 
 
 def _read_stable_file(path: Path, label: str, *, maximum: int) -> bytes:
@@ -1541,26 +1501,18 @@ def load_executor_qualification_artifacts(
     )
     if (
         qualification_binding.get("file_sha256") != CPU_QUALIFICATION_FILE_SHA256
-        or qualification_binding.get("qualification_sha256")
-        != QUALIFIED_EXECUTOR_RECEIPT_SHA256
-        or environment_binding.get("file_sha256")
-        != CPU_ENVIRONMENT_PROFILE_FILE_SHA256
-        or environment_binding.get("canonical_payload_sha256")
-        != QUALIFIED_RUNTIME_PROFILE_SHA256
+        or qualification_binding.get("qualification_sha256") != QUALIFIED_EXECUTOR_RECEIPT_SHA256
+        or environment_binding.get("file_sha256") != CPU_ENVIRONMENT_PROFILE_FILE_SHA256
+        or environment_binding.get("canonical_payload_sha256") != QUALIFIED_RUNTIME_PROFILE_SHA256
         or _canonical_sha256(environment_profile) != QUALIFIED_RUNTIME_PROFILE_SHA256
     ):
         raise ForagerMatchedExecutorError("CPU qualification referenced artifact drift")
-    cpu_binding = _object(
-        cpu_receipt.get("qualification_binding"), "CPU qualification binding"
-    )
-    qualification_result = _object(
-        qualification.get("qualification"), "CPU qualification result"
-    )
+    cpu_binding = _object(cpu_receipt.get("qualification_binding"), "CPU qualification binding")
+    qualification_result = _object(qualification.get("qualification"), "CPU qualification result")
     if (
         cpu_binding.get("backend") != "cpu"
         or cpu_binding.get("image_id") != f"sha256:{QUALIFIED_IMAGE_SHA256}"
-        or cpu_binding.get("source_archive_sha256")
-        != parity.REQUIRED_SOURCE_ARCHIVE_SHA256
+        or cpu_binding.get("source_archive_sha256") != parity.REQUIRED_SOURCE_ARCHIVE_SHA256
         or qualification.get("qualification_sha256") != QUALIFIED_EXECUTOR_RECEIPT_SHA256
         or qualification_result.get("state") != "sealed_oci_two_run_exact"
         or qualification_result.get("image_id") != f"sha256:{QUALIFIED_IMAGE_SHA256}"
@@ -1570,15 +1522,13 @@ def load_executor_qualification_artifacts(
         raise ForagerMatchedExecutorError("CPU qualification content binding drift")
 
     if (
-        rng_plan.get("schema_version")
-        != "alberta.forager_fixed_action_rng_parity.host_plan.v1"
+        rng_plan.get("schema_version") != "alberta.forager_fixed_action_rng_parity.host_plan.v1"
         or rng_plan.get("classification") != "open_runtime_qualification_nonpromoting"
         or rng_plan.get("promotion_authorized") is not False
         or rng_plan.get("required_oci_image_id") != f"sha256:{QUALIFIED_IMAGE_SHA256}"
         or rng_receipt.get("schema_version")
         != "alberta.forager_fixed_action_rng_parity.host_receipt.v1"
-        or rng_receipt.get("status")
-        != "content_complete_external_executor_receipt_unverified"
+        or rng_receipt.get("status") != "content_complete_external_executor_receipt_unverified"
         or rng_receipt.get("promotion_authorized") is not False
         or rng_receipt.get("external_executor_receipt_requires_trust_resolver") is not True
         or rng_receipt.get("executor_qualification_receipt_sha256")
@@ -1594,8 +1544,7 @@ def load_executor_qualification_artifacts(
     if (
         rng_result.get("status") != "exact_fixed_action_parity_match"
         or rng_contract.get("rng_contract_sha256") != RNG_PARITY_CONTRACT_SHA256
-        or rng_runtime.get("source_archive_sha256")
-        != parity.REQUIRED_SOURCE_ARCHIVE_SHA256
+        or rng_runtime.get("source_archive_sha256") != parity.REQUIRED_SOURCE_ARCHIVE_SHA256
         or rng_runtime.get("source_archive_inventory_sha256")
         != parity.REQUIRED_SOURCE_ARCHIVE_INVENTORY_SHA256
         or rng_task.get("task_sha256") != parity.task_descriptor()["task_sha256"]
@@ -1761,9 +1710,7 @@ def _validate_qualified_lock(protocol: ForagerMatchedProtocol) -> None:
         "executor_kind": runtime.executor_kind,
         "image_sha256": runtime.image_sha256,
         "runtime_profile_sha256": runtime.runtime_profile_sha256,
-        "executor_qualification_receipt_sha256": (
-            runtime.executor_qualification_receipt_sha256
-        ),
+        "executor_qualification_receipt_sha256": (runtime.executor_qualification_receipt_sha256),
         "source_mount_mode": runtime.source_mount_mode,
         "default_prng": runtime.default_prng,
         "threefry_partitionable": runtime.threefry_partitionable,
@@ -1848,8 +1795,7 @@ def _source_tree_snapshot(root: Path) -> tuple[list[str], list[tuple[str, int, b
     if (
         not stat.S_ISDIR(root_before.st_mode)
         or not stat.S_ISDIR(root_opened.st_mode)
-        or (root_before.st_dev, root_before.st_ino)
-        != (root_opened.st_dev, root_opened.st_ino)
+        or (root_before.st_dev, root_before.st_ino) != (root_opened.st_dev, root_opened.st_ino)
     ):
         os.close(root_fd)
         raise ForagerMatchedExecutorError("source root changed before it was opened")
@@ -1875,9 +1821,7 @@ def _source_tree_snapshot(root: Path) -> tuple[list[str], list[tuple[str, int, b
         try:
             descriptor = os.open(name, flags, dir_fd=parent_fd)
         except OSError as exc:
-            raise ForagerMatchedExecutorError(
-                f"cannot safely open source file {relative}"
-            ) from exc
+            raise ForagerMatchedExecutorError(f"cannot safely open source file {relative}") from exc
         try:
             opened = os.fstat(descriptor)
             if identity(opened) != identity(metadata):
@@ -1912,9 +1856,7 @@ def _source_tree_snapshot(root: Path) -> tuple[list[str], list[tuple[str, int, b
                 for entry in entries:
                     name = entry.name
                     if not name or name in {".", ".."} or "/" in name or "\x00" in name:
-                        raise ForagerMatchedExecutorError(
-                            "source tree contains an unsafe name"
-                        )
+                        raise ForagerMatchedExecutorError("source tree contains an unsafe name")
                     entry_count += 1
                     if entry_count > _MAX_SOURCE_ENTRIES:
                         raise ForagerMatchedExecutorError(
@@ -1939,9 +1881,7 @@ def _source_tree_snapshot(root: Path) -> tuple[list[str], list[tuple[str, int, b
             if stat.S_ISDIR(metadata.st_mode):
                 directory_count += 1
                 if directory_count > _MAX_SOURCE_DIRECTORIES:
-                    raise ForagerMatchedExecutorError(
-                        "source tree exceeds its directory bound"
-                    )
+                    raise ForagerMatchedExecutorError("source tree exceeds its directory bound")
                 child_depth = depth + 1
                 if child_depth > _MAX_SOURCE_DEPTH:
                     raise ForagerMatchedExecutorError(
@@ -2016,12 +1956,9 @@ def _inventory_from_snapshot(files: list[tuple[str, int, bytes]]) -> dict[str, A
     }
 
 
-def _normalized_snapshot_sha256(
-    directories: list[str], files: list[tuple[str, int, bytes]]
-) -> str:
+def _normalized_snapshot_sha256(directories: list[str], files: list[tuple[str, int, bytes]]) -> str:
     entries: list[dict[str, Any]] = [
-        {"mode": 0o775, "path": path, "type": "directory"}
-        for path in directories
+        {"mode": 0o775, "path": path, "type": "directory"} for path in directories
     ]
     entries.extend(
         {
@@ -2210,7 +2147,7 @@ def _parse_capability_receipt(
     drifted = [key for key, expected_value in expected.items() if actual[key] != expected_value]
     if drifted:
         raise ForagerMatchedExecutorError(
-            f"candidate {candidate.candidate_id!r} capability receipt drift: {drifted}"
+            f"candidate '{candidate.candidate_id}' capability receipt drift: {drifted}"
         )
     entrypoint_path = _safe_relative(
         payload["entrypoint_path"],
@@ -2266,7 +2203,7 @@ def _parse_capability_receipt(
     receipt_sha256 = _canonical_sha256(payload)
     if receipt_sha256 != candidate.runtime_binding.capability_qualification_receipt_sha256:
         raise ForagerMatchedExecutorError(
-            f"candidate {candidate.candidate_id!r} capability receipt digest mismatch"
+            f"candidate '{candidate.candidate_id}' capability receipt digest mismatch"
         )
     return (
         cast(Mapping[str, Any], _freeze(payload)),
@@ -2310,13 +2247,13 @@ def _replay_configuration_transforms(candidate: MatchedCandidate, original: byte
             nested = current.get(component)
             if type(nested) is not dict:
                 raise ForagerMatchedExecutorError(
-                    f"configuration transform target {transform.target!r} is absent"
+                    f"configuration transform target '{transform.target}' is absent"
                 )
             current = cast(dict[str, Any], nested)
         leaf = components[-1]
         if leaf not in current or type(current[leaf]) is not int:
             raise ForagerMatchedExecutorError(
-                f"configuration transform target {transform.target!r} is not an integer"
+                f"configuration transform target '{transform.target}' is not an integer"
             )
         key = json.dumps(leaf, ensure_ascii=True).encode("ascii")
         pattern = re.compile(
@@ -2327,7 +2264,7 @@ def _replay_configuration_transforms(candidate: MatchedCandidate, original: byte
         matches = list(pattern.finditer(transformed))
         if len(matches) != 1:
             raise ForagerMatchedExecutorError(
-                f"configuration transform key {leaf!r} is not byte-unique"
+                f"configuration transform key '{leaf}' is not byte-unique"
             )
         match = matches[0]
         old_value = int(match.group("value"))
@@ -2610,9 +2547,7 @@ def _source_manifest_for_prepared(
                 "capability_descriptor_sha256": candidate_capability_descriptor_sha256(
                     item.candidate
                 ),
-                "capability_qualification_receipt_sha256": (
-                    item.capability_receipt_sha256
-                ),
+                "capability_qualification_receipt_sha256": (item.capability_receipt_sha256),
                 "source": item.candidate.source.to_dict(),
                 "source_inventory_hash_scheme": parity.REQUIRED_SOURCE_TREE_HASH_SCHEME,
                 "executor_inventory_sha256": _canonical_sha256(
@@ -2654,9 +2589,7 @@ def _executor_manifest_for_protocol(
         maximum=_MAX_JSON_BYTES,
     )
     if scorer_sha256 != QUALIFIED_SCORER_SOURCE_SHA256:
-        raise ForagerMatchedExecutorError(
-            "frozen scorer source differs from its qualified digest"
-        )
+        raise ForagerMatchedExecutorError("frozen scorer source differs from its qualified digest")
     qualification_artifacts = load_executor_qualification_artifacts(
         cpu_root=cpu_qualification_root,
         rng_parity_root=rng_parity_qualification_root,
@@ -2670,12 +2603,8 @@ def _executor_manifest_for_protocol(
         "qualified_lock": {
             "image_sha256": QUALIFIED_IMAGE_SHA256,
             "runtime_profile_sha256": QUALIFIED_RUNTIME_PROFILE_SHA256,
-            "executor_qualification_receipt_sha256": (
-                QUALIFIED_EXECUTOR_RECEIPT_SHA256
-            ),
-            "environment_rng_schedule_sha256": (
-                MATCHED_ENVIRONMENT_RNG_SCHEDULE_SHA256
-            ),
+            "executor_qualification_receipt_sha256": (QUALIFIED_EXECUTOR_RECEIPT_SHA256),
+            "environment_rng_schedule_sha256": (MATCHED_ENVIRONMENT_RNG_SCHEDULE_SHA256),
             "rng_parity_contract_sha256": RNG_PARITY_CONTRACT_SHA256,
             "metric_semantics_sha256": MATCHED_METRIC_SEMANTICS_SHA256,
         },
@@ -2689,9 +2618,7 @@ def _executor_manifest_for_protocol(
             "path": "alberta_framework/benchmarks/_foragax_open_screen_scorer_v3.py",
             "sha256": scorer_sha256,
             "size_bytes": scorer_size,
-            "execution_boundary": (
-                "qualified_oci_only_host_must_not_load_reward_arrays"
-            ),
+            "execution_boundary": ("qualified_oci_only_host_must_not_load_reward_arrays"),
         },
         "sandbox": protocol.runtime.sandbox.to_dict(),
         "resource_limits": {
@@ -2737,7 +2664,8 @@ def build_execution_plan(
     for candidate_id in ids:
         candidate = frozen.candidate_index.get(candidate_id)
         if candidate is None:
-            raise ForagerMatchedExecutorError(f"unknown matched candidate {candidate_id!r}")
+            host_candidate_id = _require_exact_str("candidate_id", candidate_id)
+            raise ForagerMatchedExecutorError(f"unknown matched candidate '{host_candidate_id}'")
         prepared.append(_prepare_candidate(frozen, candidate, assets[candidate_id]))
     source_manifest = _source_manifest_for_prepared(frozen, prepared)
     executor_manifest = _executor_manifest_for_protocol(
@@ -2770,12 +2698,12 @@ def build_execution_plan(
             }
             for item in prepared
         ],
-            "scoring_boundary": {
-                "host_reward_array_access": "forbidden",
-                "scorer_runtime": "same_exact_qualified_oci_image",
-                "scorer_source_sha256": QUALIFIED_SCORER_SOURCE_SHA256,
-                "scorer_output": "canonical_hashes_and_scalar_score_only",
-            },
+        "scoring_boundary": {
+            "host_reward_array_access": "forbidden",
+            "scorer_runtime": "same_exact_qualified_oci_image",
+            "scorer_source_sha256": QUALIFIED_SCORER_SOURCE_SHA256,
+            "scorer_output": "canonical_hashes_and_scalar_score_only",
+        },
     }
     frozen_source = cast(Mapping[str, Any], _freeze(source_manifest))
     frozen_executor = cast(Mapping[str, Any], _freeze(executor_manifest))
@@ -2887,9 +2815,7 @@ def load_execution_plan(
         protocol=protocol,
         assets=assets,
         expected_plan_sha256=expected_plan_sha256,
-        expected_qualification_manifest_sha256=(
-            expected_qualification_manifest_sha256
-        ),
+        expected_qualification_manifest_sha256=(expected_qualification_manifest_sha256),
         cpu_qualification_root=cpu_qualification_root,
         rng_parity_qualification_root=rng_parity_qualification_root,
     )
@@ -2924,11 +2850,15 @@ def _cleanup_interrupted_container(
             )
         else:
             try:
-                container_id = _read_stable_file(
-                    cidfile,
-                    "OCI interrupted-run cidfile",
-                    maximum=128,
-                ).decode("ascii").strip()
+                container_id = (
+                    _read_stable_file(
+                        cidfile,
+                        "OCI interrupted-run cidfile",
+                        maximum=128,
+                    )
+                    .decode("ascii")
+                    .strip()
+                )
                 if re.fullmatch(r"[0-9a-f]{64}", container_id) is None:
                     raise ForagerMatchedExecutorError(
                         "OCI cidfile does not contain an exact container ID"
@@ -3074,9 +3004,7 @@ def _run_bounded_process(
                             )
                         sizes[label] += written
                     if accepted != len(chunk):
-                        raise _BoundedProcessOutputError(
-                            f"{label} exceeded its active byte limit"
-                        )
+                        raise _BoundedProcessOutputError(f"{label} exceeded its active byte limit")
             remaining = deadline - time.monotonic()
             if remaining <= 0 and process.poll() is None:
                 raise subprocess.TimeoutExpired(
@@ -3152,23 +3080,17 @@ def _default_runner(command: Sequence[str]) -> ProcessResult:
                 maximum_stderr_bytes=_MAX_PROCESS_STDERR_BYTES,
             )
         except subprocess.TimeoutExpired as exc:
-            cleanup_state = _cleanup_interrupted_container(
-                materialized, cidfile, container_name
-            )
+            cleanup_state = _cleanup_interrupted_container(materialized, cidfile, container_name)
             raise ForagerMatchedExecutorError(
                 f"OCI process exceeded the execution timeout; cleanup={cleanup_state}"
             ) from exc
         except _BoundedProcessOutputError as exc:
-            cleanup_state = _cleanup_interrupted_container(
-                materialized, cidfile, container_name
-            )
+            cleanup_state = _cleanup_interrupted_container(materialized, cidfile, container_name)
             raise ForagerMatchedExecutorError(
                 f"OCI process output exceeded its byte bound; cleanup={cleanup_state}"
             ) from exc
         except Exception as exc:
-            cleanup_state = _cleanup_interrupted_container(
-                materialized, cidfile, container_name
-            )
+            cleanup_state = _cleanup_interrupted_container(materialized, cidfile, container_name)
             raise ForagerMatchedExecutorError(
                 f"OCI process runner failed; cleanup={cleanup_state}"
             ) from exc
@@ -3207,7 +3129,8 @@ def _resolve_runtime(runtime: str | Path) -> Path:
     if resolved_text is None and "/" in requested:
         resolved_text = requested
     if resolved_text is None:
-        raise ForagerMatchedExecutorError(f"cannot resolve OCI runtime {requested!r}")
+        host_requested = _require_exact_str("requested", requested)
+        raise ForagerMatchedExecutorError(f"cannot resolve OCI runtime '{host_requested}'")
     resolved = _regular_path(Path(resolved_text), "OCI runtime", directory=False)
     if not os.access(resolved, os.X_OK):
         raise ForagerMatchedExecutorError("OCI runtime is not executable")
@@ -3533,10 +3456,9 @@ def _rebind_live_runtime(
     """Rebind the daemon and image immediately before one container run."""
     _reverify_live_runtime(live_runtime)
     version, inspection = _inspect_runtime_bindings(live_runtime.executable, runner)
-    if (
-        _thaw_mapping(version) != _thaw_mapping(live_runtime.version)
-        or _thaw_mapping(inspection) != _thaw_mapping(live_runtime.image_inspection)
-    ):
+    if _thaw_mapping(version) != _thaw_mapping(live_runtime.version) or _thaw_mapping(
+        inspection
+    ) != _thaw_mapping(live_runtime.image_inspection):
         raise ForagerMatchedExecutorError(
             "OCI daemon version or image identity changed after qualification"
         )
@@ -3610,10 +3532,7 @@ def _parse_scorer_output(
     }
     _exact_keys(record, expected_keys, "qualified scorer record")
     expected_archive = (
-        PurePosixPath("payload")
-        / candidate.result_root
-        / "data"
-        / f"{seed}.npz"
+        PurePosixPath("payload") / candidate.result_root / "data" / f"{seed}.npz"
     ).as_posix()
     sample_count = (plan.protocol.horizon + 99) // 100
     tail_start = int(0.9 * sample_count)
@@ -3722,9 +3641,7 @@ def _artifact_mappings(
         "seed": seed,
         "horizon": plan.protocol.horizon,
         "metric": plan.protocol.analysis_plan.metric,
-        "metric_implementation_sha256": (
-            plan.protocol.analysis_plan.metric_implementation_sha256
-        ),
+        "metric_implementation_sha256": (plan.protocol.analysis_plan.metric_implementation_sha256),
         "score_hex": score.hex(),
         "raw_artifact_sha256": _canonical_sha256(raw_artifact),
         "reward_trace_sha256": _canonical_sha256(trace_artifact),
@@ -3805,10 +3722,7 @@ def score_seed_archive(
         maximum=_MAX_RAW_ARCHIVE_BYTES,
     )
     _reverify_execution_inputs(plan, candidate)
-    if (
-        after_scoring_sha256 != expected_digest
-        or after_scoring_size != expected_size
-    ):
+    if after_scoring_sha256 != expected_digest or after_scoring_size != expected_size:
         raise ForagerMatchedExecutorError("opaque raw OCI archive changed during scoring")
     if scoring.returncode != 0 or scoring.stderr:
         raise ForagerMatchedExecutorError(
@@ -4002,9 +3916,7 @@ def parse_seed_artifact_bundle(
         "seed": seed,
         "horizon": plan.protocol.horizon,
         "metric": plan.protocol.analysis_plan.metric,
-        "metric_implementation_sha256": (
-            plan.protocol.analysis_plan.metric_implementation_sha256
-        ),
+        "metric_implementation_sha256": (plan.protocol.analysis_plan.metric_implementation_sha256),
         "score_hex": score_text,
         "raw_artifact_sha256": raw_digest,
         "reward_trace_sha256": trace_digest,
@@ -4099,11 +4011,11 @@ def _validated_execution_material(
             supplied_records = tuple(artifacts[candidate_id])
         except TypeError as exc:
             raise ForagerMatchedExecutorError(
-                f"candidate {candidate_id!r} artifacts must be a finite sequence"
+                f"candidate '{candidate_id}' artifacts must be a finite sequence"
             ) from exc
         if len(supplied_records) != len(plan.protocol.active_seeds):
             raise ForagerMatchedExecutorError(
-                f"candidate {candidate_id!r} artifacts do not contain exact active seed block"
+                f"candidate '{candidate_id}' artifacts do not contain exact active seed block"
             )
         parsed_records: list[SeedExecutionArtifacts] = []
         for record in supplied_records:
@@ -4113,12 +4025,12 @@ def _validated_execution_material(
         records = tuple(parsed_records)
         if tuple(record.seed for record in records) != plan.protocol.active_seeds:
             raise ForagerMatchedExecutorError(
-                f"candidate {candidate_id!r} artifacts do not contain exact active seed block"
+                f"candidate '{candidate_id}' artifacts do not contain exact active seed block"
             )
         runtime_identities = {record.live_runtime_identity_sha256 for record in records}
         if len(runtime_identities) != 1:
             raise ForagerMatchedExecutorError(
-                f"candidate {candidate_id!r} seed block used multiple live runtime identities"
+                f"candidate '{candidate_id}' seed block used multiple live runtime identities"
             )
         global_runtime_identities.update(runtime_identities)
         execution_receipt_payload: dict[str, Any] = {
@@ -4132,9 +4044,7 @@ def _validated_execution_material(
             "capability_descriptor_sha256": candidate_capability_descriptor_sha256(
                 candidate.candidate
             ),
-            "capability_qualification_receipt_sha256": (
-                candidate.capability_receipt_sha256
-            ),
+            "capability_qualification_receipt_sha256": (candidate.capability_receipt_sha256),
             "live_runtime_identity_sha256": next(iter(runtime_identities)),
             "seed_artifacts": [
                 {
@@ -4247,14 +4157,11 @@ def parse_execution_receipt_index(
     if (
         payload["schema_version"] != MATCHED_EXECUTION_RECEIPT_INDEX_SCHEMA_VERSION
         or payload["classification"] != "content_complete_execution_receipt_preimages"
-        or payload["authentication_state"]
-        != "content_only_unendorsed_external_verifier_required"
+        or payload["authentication_state"] != "content_only_unendorsed_external_verifier_required"
         or payload["promotion_authorized"] is not False
         or payload["external_verification_required"] is not True
     ):
-        raise ForagerMatchedExecutorError(
-            "execution receipt index schema/classification drift"
-        )
+        raise ForagerMatchedExecutorError("execution receipt index schema/classification drift")
     declared_payload_sha256 = _sha256(
         payload["payload_sha256"],
         "execution receipt index payload SHA-256",
@@ -4262,9 +4169,7 @@ def parse_execution_receipt_index(
     unsigned = dict(payload)
     del unsigned["payload_sha256"]
     if _canonical_sha256(unsigned) != declared_payload_sha256:
-        raise ForagerMatchedExecutorError(
-            "execution receipt index payload SHA-256 does not verify"
-        )
+        raise ForagerMatchedExecutorError("execution receipt index payload SHA-256 does not verify")
     if expected_payload_sha256 is not None and declared_payload_sha256 != _sha256(
         expected_payload_sha256,
         "expected execution receipt index payload SHA-256",
@@ -4321,12 +4226,8 @@ def build_score_evidence(
                 "capability_descriptor_sha256": candidate_capability_descriptor_sha256(
                     candidate.candidate
                 ),
-                "capability_qualification_receipt_sha256": (
-                    candidate.capability_receipt_sha256
-                ),
-                "execution_receipt_sha256": (
-                    indexed_receipt.execution_receipt_sha256
-                ),
+                "capability_qualification_receipt_sha256": (candidate.capability_receipt_sha256),
+                "execution_receipt_sha256": (indexed_receipt.execution_receipt_sha256),
                 "records": [
                     {
                         "seed": record.seed,
@@ -4347,21 +4248,15 @@ def build_score_evidence(
         "active_seeds": list(plan.protocol.active_seeds),
         "horizon": plan.protocol.horizon,
         "metric": plan.protocol.analysis_plan.metric,
-        "metric_implementation_sha256": (
-            plan.protocol.analysis_plan.metric_implementation_sha256
-        ),
+        "metric_implementation_sha256": (plan.protocol.analysis_plan.metric_implementation_sha256),
         "task_identity_sha256": plan.protocol.task.task_identity_sha256,
-        "environment_rng_schedule_sha256": (
-            plan.protocol.task.environment_rng_schedule_sha256
-        ),
+        "environment_rng_schedule_sha256": (plan.protocol.task.environment_rng_schedule_sha256),
         "runtime_profile_sha256": plan.protocol.runtime.runtime_profile_sha256,
         "source_evidence_sha256": plan.source_manifest_sha256,
         "executor_evidence_sha256": plan.executor_manifest_sha256,
         "candidate_scores": candidate_scores,
     }
-    return parse_matched_score_evidence(
-        {**unsigned, "payload_sha256": _canonical_sha256(unsigned)}
-    )
+    return parse_matched_score_evidence({**unsigned, "payload_sha256": _canonical_sha256(unsigned)})
 
 
 def parse_verification_request(
@@ -4396,8 +4291,7 @@ def parse_verification_request(
     )
     if (
         payload["schema_version"] != MATCHED_VERIFICATION_REQUEST_SCHEMA_VERSION
-        or payload["authentication_state"]
-        != "unresolved_external_verifier_required"
+        or payload["authentication_state"] != "unresolved_external_verifier_required"
         or payload["qualification_promotion_authorized"] is not False
     ):
         raise ForagerMatchedExecutorError(
@@ -4502,8 +4396,7 @@ def build_verification_request(
     )
     if (
         scores.protocol_sha256 != plan.protocol.protocol_sha256
-        or scores.qualification_manifest_sha256
-        != plan.qualification_manifest_sha256
+        or scores.qualification_manifest_sha256 != plan.qualification_manifest_sha256
         or plan.executor_manifest.get("qualification_manifest_sha256")
         != plan.qualification_manifest_sha256
         or scores.source_evidence_sha256 != plan.source_manifest_sha256
@@ -4515,12 +4408,8 @@ def build_verification_request(
     qualification_artifacts = cast(
         Mapping[str, Any], plan.executor_manifest["qualification_artifacts"]
     )
-    cpu_qualification = cast(
-        Mapping[str, Any], qualification_artifacts["cpu_qualification"]
-    )
-    rng_qualification = cast(
-        Mapping[str, Any], qualification_artifacts["rng_parity_qualification"]
-    )
+    cpu_qualification = cast(Mapping[str, Any], qualification_artifacts["cpu_qualification"])
+    rng_qualification = cast(Mapping[str, Any], qualification_artifacts["rng_parity_qualification"])
     return VerificationRequest(
         stage=scores.stage,
         protocol_sha256=scores.protocol_sha256,
@@ -4571,7 +4460,6 @@ def resolve_authenticated_bindings(
     drifted = [name for name in names if actual[name] != expected[name]]
     if drifted:
         raise ForagerMatchedExecutorError(
-            "trust resolver authenticated a different verification subject: "
-            + ", ".join(drifted)
+            "trust resolver authenticated a different verification subject: " + ", ".join(drifted)
         )
     return bindings
