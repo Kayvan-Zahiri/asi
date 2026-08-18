@@ -77,9 +77,7 @@ from typing import Any, Literal, cast
 
 import numpy as np
 
-OFFICIAL_FORAGAX_REPOSITORY = (
-    "https://github.com/steventango/continual-foragax-agents"
-)
+OFFICIAL_FORAGAX_REPOSITORY = "https://github.com/steventango/continual-foragax-agents"
 OFFICIAL_FORAGAX_PAPER_COMMIT = "6c3175729377e634460ed41621fed7de06432cf8"
 OFFICIAL_FORAGAX_CAMERA_READY_COMMIT = "20617616b27b7cd85a2acbed52a73ff9fa6eb480"
 OFFICIAL_FORAGAX_AUDIT_COMMIT = "9710f60fa30da5badc451ad7ce3ff296d5070830"
@@ -90,38 +88,25 @@ OFFICIAL_FORAGAX_TRUST_DESCRIPTOR_ID = "alberta-official-foragax-1.4-v1"
 OFFICIAL_FORAGAX_TRUST_DESCRIPTOR_SHA256 = (
     "e00f5a79a2b29a8e912b8e603048b02ee5206826dcd40eedff8e0c3ec6e3a9b0"
 )
-OFFICIAL_FORAGAX_ENDORSEMENT_DESCRIPTOR_ID = (
-    "alberta-official-foragax-1.4-endorsements-v1"
-)
+OFFICIAL_FORAGAX_ENDORSEMENT_DESCRIPTOR_ID = "alberta-official-foragax-1.4-endorsements-v1"
 OFFICIAL_FORAGAX_ENDORSEMENT_DESCRIPTOR_SHA256 = (
     "2620a972dc5a253deaf06cfe9b9a103fd4367d24432817772284dd73eb6843bf"
 )
 OFFICIAL_FORAGAX_MAX_SEED = (1 << 32) - 1
 OFFICIAL_FORAGAX_OCI_LAUNCHER_CONTRACT = "oci-read-only-stdout-tar-v4"
-OFFICIAL_FORAGAX_MATCHED_RUNTIME_CLASS = (
-    "matched_current_foragax_0_55_cuda12"
-)
+OFFICIAL_FORAGAX_MATCHED_RUNTIME_CLASS = "matched_current_foragax_0_55_cuda12"
 OFFICIAL_FORAGAX_CUBLAS_WORKSPACE_CONFIG = ":4096:8"
 OFFICIAL_FORAGAX_GPU_XLA_FLAGS = (
-    "--xla_gpu_enable_triton_gemm=false "
-    "--xla_gpu_deterministic_ops=true"
+    "--xla_gpu_enable_triton_gemm=false --xla_gpu_deterministic_ops=true"
 )
 OFFICIAL_FORAGAX_XLA_PYTHON_CLIENT_PREALLOCATE = "false"
-OFFICIAL_FORAGAX_CUDA_WHEEL_LIBRARY_PROFILE_SCHEMA = (
-    "alberta.cuda_wheel_library_profile.v1"
-)
-OFFICIAL_FORAGAX_DRIVER_LIBRARY_TREE_HASH_SCHEME = (
-    "canonical-entry-json+mode+size+bytes-v1"
-)
-OFFICIAL_FORAGAX_GPU_USER_LIBRARY_BUNDLE_SCHEMA = (
-    "alberta.gpu_user_library_bundle.v1"
-)
+OFFICIAL_FORAGAX_CUDA_WHEEL_LIBRARY_PROFILE_SCHEMA = "alberta.cuda_wheel_library_profile.v1"
+OFFICIAL_FORAGAX_DRIVER_LIBRARY_TREE_HASH_SCHEME = "canonical-entry-json+mode+size+bytes-v1"
+OFFICIAL_FORAGAX_GPU_USER_LIBRARY_BUNDLE_SCHEMA = "alberta.gpu_user_library_bundle.v1"
 OFFICIAL_FORAGAX_NATIVE_RUNTIME_INVENTORY_HASH_SCHEME = (
     OFFICIAL_FORAGAX_DRIVER_LIBRARY_TREE_HASH_SCHEME
 )
-OFFICIAL_FORAGAX_DETERMINISM_QUALIFICATION_SCHEMA = (
-    "alberta.oci_determinism_qualification.v2"
-)
+OFFICIAL_FORAGAX_DETERMINISM_QUALIFICATION_SCHEMA = "alberta.oci_determinism_qualification.v2"
 OFFICIAL_FORAGAX_QUALIFICATION_WORKLOAD_SCHEMA = (
     "alberta.official_foragax.qualification_workload.v1"
 )
@@ -159,15 +144,9 @@ _OFFICIAL_FORAGAX_SCIENTIFIC_TRACKS = frozenset(
 # stay archival evidence and never verify.  The only upgrade path is a rerun
 # under the current schema.
 _ARCHIVAL_MANIFEST_SCHEMA_VERSIONS = frozenset({"1.1", "1.2", "1.3"})
-_TRUST_DESCRIPTOR_PATH = (
-    Path(__file__).resolve().parent
-    / "protocols"
-    / "official_foragax-1.4.json"
-)
+_TRUST_DESCRIPTOR_PATH = Path(__file__).resolve().parent / "protocols" / "official_foragax-1.4.json"
 _ENDORSEMENT_DESCRIPTOR_PATH = (
-    Path(__file__).resolve().parent
-    / "protocols"
-    / "official_foragax-1.4-endorsements.json"
+    Path(__file__).resolve().parent / "protocols" / "official_foragax-1.4-endorsements.json"
 )
 _HARNESS_SOURCE_HASH_SCHEME = "ordered-relative-path+size+bytes-v1"
 _HARNESS_SOURCE_RELATIVE_PATHS = (
@@ -216,6 +195,14 @@ class OfficialForagaxValidationError(ValueError):
     """Raised when provenance or artifact verification fails closed."""
 
 
+def _require_exact_str(name: object, value: object) -> str:
+    if type(name) is not str:
+        raise ValueError("name must be an exact string")
+    if type(value) is not str:
+        raise ValueError(f"{name} must be an exact string")
+    return value
+
+
 def _require_string(value: Any, *, label: str) -> str:
     if type(value) is not str or not value:
         raise OfficialForagaxValidationError(f"{label} must be a non-empty string")
@@ -261,17 +248,13 @@ class OfficialForagaxRunRequest:
             ("output_dir", self.output_dir),
         ):
             if not isinstance(value, Path):
-                raise OfficialForagaxValidationError(
-                    f"{name} must be a pathlib.Path"
-                )
+                raise OfficialForagaxValidationError(f"{name} must be a pathlib.Path")
         if not self.config_path.parts:
             raise OfficialForagaxValidationError("config_path must not be empty")
         if type(self.gpu) is not bool:
             raise OfficialForagaxValidationError("gpu must be a boolean")
         if type(self.expected_repository) is not str:
-            raise OfficialForagaxValidationError(
-                "expected_repository must be a string"
-            )
+            raise OfficialForagaxValidationError("expected_repository must be a string")
         if (
             type(self.execution_commit) is not str
             or _COMMIT_PATTERN.fullmatch(self.execution_commit) is None
@@ -286,11 +269,7 @@ class OfficialForagaxRunRequest:
             raise OfficialForagaxValidationError(
                 "config_commit must be a full lowercase 40-character Git SHA"
             )
-        if (
-            type(self.index) is not int
-            or self.index < 0
-            or self.index > OFFICIAL_FORAGAX_MAX_SEED
-        ):
+        if type(self.index) is not int or self.index < 0 or self.index > OFFICIAL_FORAGAX_MAX_SEED:
             raise OfficialForagaxValidationError(
                 f"index must be an integer in [0, {OFFICIAL_FORAGAX_MAX_SEED}]"
             )
@@ -300,18 +279,13 @@ class OfficialForagaxRunRequest:
             or self.expected_seed > OFFICIAL_FORAGAX_MAX_SEED
         ):
             raise OfficialForagaxValidationError(
-                "expected_seed must be a canonical JAX seed in "
-                f"[0, {OFFICIAL_FORAGAX_MAX_SEED}]"
+                f"expected_seed must be a canonical JAX seed in [0, {OFFICIAL_FORAGAX_MAX_SEED}]"
             )
         if self.max_env_steps is not None and (
-            type(self.max_env_steps) is not int
-            or self.max_env_steps < 1
+            type(self.max_env_steps) is not int or self.max_env_steps < 1
         ):
             raise OfficialForagaxValidationError("max_env_steps must be positive")
-        if (
-            _canonical_repository_url(self.expected_repository)
-            != OFFICIAL_FORAGAX_REPOSITORY
-        ):
+        if _canonical_repository_url(self.expected_repository) != OFFICIAL_FORAGAX_REPOSITORY:
             raise OfficialForagaxValidationError(
                 "expected_repository must name the official continual-Foragax repository"
             )
@@ -347,14 +321,11 @@ class OfficialForagaxBatchRunRequest:
                 "a batch request must contain at least two indices"
             )
         if any(
-            type(index) is not int
-            or index < 0
-            or index > OFFICIAL_FORAGAX_MAX_SEED
+            type(index) is not int or index < 0 or index > OFFICIAL_FORAGAX_MAX_SEED
             for index in indices
         ):
             raise OfficialForagaxValidationError(
-                "batch indices must be canonical integers in "
-                f"[0, {OFFICIAL_FORAGAX_MAX_SEED}]"
+                f"batch indices must be canonical integers in [0, {OFFICIAL_FORAGAX_MAX_SEED}]"
             )
         if len(set(indices)) != len(indices):
             raise OfficialForagaxValidationError("batch indices must be unique")
@@ -372,9 +343,7 @@ class OfficialForagaxBatchRunRequest:
                     "expected_seeds must have one entry per requested index"
                 )
             if any(
-                type(seed) is not int
-                or seed < 0
-                or seed > OFFICIAL_FORAGAX_MAX_SEED
+                type(seed) is not int or seed < 0 or seed > OFFICIAL_FORAGAX_MAX_SEED
                 for seed in expected_seeds
             ):
                 raise OfficialForagaxValidationError(
@@ -382,9 +351,7 @@ class OfficialForagaxBatchRunRequest:
                     f"[0, {OFFICIAL_FORAGAX_MAX_SEED}]"
                 )
             if len(set(expected_seeds)) != len(expected_seeds):
-                raise OfficialForagaxValidationError(
-                    "expected_seeds must be unique"
-                )
+                raise OfficialForagaxValidationError("expected_seeds must be unique")
         # Reuse the complete scalar validation contract for shared fields.
         OfficialForagaxRunRequest(
             repository=self.repository,
@@ -394,9 +361,7 @@ class OfficialForagaxBatchRunRequest:
             interpreter=self.interpreter,
             output_dir=self.output_dir,
             index=indices[0],
-            expected_seed=(
-                None if self.expected_seeds is None else self.expected_seeds[0]
-            ),
+            expected_seed=(None if self.expected_seeds is None else self.expected_seeds[0]),
             max_env_steps=self.max_env_steps,
             gpu=self.gpu,
             expected_repository=self.expected_repository,
@@ -474,9 +439,7 @@ class OfficialForagaxRunPlan:
                 "package_freeze_method": "importlib.metadata_with_pep610",
                 "package_freeze": list(self.package_freeze),
                 "package_inventory": list(_package_inventory(self.package_freeze)),
-                "package_inventory_sha256": _text_sha256(
-                    _package_inventory(self.package_freeze)
-                ),
+                "package_inventory_sha256": _text_sha256(_package_inventory(self.package_freeze)),
                 "package_freeze_sha256": self.package_freeze_sha256,
                 "runtime": dict(self.runtime),
                 "runtime_sha256": _json_sha256(self.runtime),
@@ -552,9 +515,7 @@ class OfficialForagaxBatchRunPlan:
                 "package_freeze_method": "importlib.metadata_with_pep610",
                 "package_freeze": list(self.package_freeze),
                 "package_inventory": list(_package_inventory(self.package_freeze)),
-                "package_inventory_sha256": _text_sha256(
-                    _package_inventory(self.package_freeze)
-                ),
+                "package_inventory_sha256": _text_sha256(_package_inventory(self.package_freeze)),
                 "package_freeze_sha256": self.package_freeze_sha256,
                 "runtime": dict(self.runtime),
                 "runtime_sha256": _json_sha256(self.runtime),
@@ -660,9 +621,7 @@ class VerifiedOfficialForagaxBatchManifest:
         if type(self.artifact_paths) is not tuple or not all(
             isinstance(p, Path) for p in self.artifact_paths
         ):
-            raise OfficialForagaxValidationError(
-                "artifact_paths must be a tuple of Path instances"
-            )
+            raise OfficialForagaxValidationError("artifact_paths must be a tuple of Path instances")
         if not isinstance(self.manifest, Mapping):
             raise OfficialForagaxValidationError("manifest must be a Mapping")
         if self.evidence is not None and not isinstance(
@@ -688,9 +647,7 @@ class OfficialForagaxBatchRun:
         if type(self.artifact_paths) is not tuple or not all(
             isinstance(p, Path) for p in self.artifact_paths
         ):
-            raise OfficialForagaxValidationError(
-                "artifact_paths must be a tuple of Path instances"
-            )
+            raise OfficialForagaxValidationError("artifact_paths must be a tuple of Path instances")
         if not isinstance(self.manifest, Mapping):
             raise OfficialForagaxValidationError("manifest must be a Mapping")
         _require_bool(self.resumed, label="resumed")
@@ -711,9 +668,7 @@ def _sha256(path: Path) -> str:
 def _canonical_relative_path(value: str, *, label: str) -> Path:
     """Return one normalized POSIX-relative path or fail closed."""
     if not value or "\x00" in value:
-        raise OfficialForagaxValidationError(
-            f"official {label} must be a non-empty relative path"
-        )
+        raise OfficialForagaxValidationError(f"official {label} must be a non-empty relative path")
     relative = Path(value)
     windows_relative = PureWindowsPath(value)
     if (
@@ -773,10 +728,7 @@ def _open_directory_path_nofollow(path: Path, *, label: str) -> tuple[int, os.st
             child_descriptor, child_metadata = _open_directory_at_nofollow(
                 descriptor,
                 part,
-                label=(
-                    f"{label} ancestor "
-                    f"{Path(*absolute.parts[: position + 1])}"
-                ),
+                label=(f"{label} ancestor {Path(*absolute.parts[: position + 1])}"),
             )
             os.close(descriptor)
             descriptor = child_descriptor
@@ -805,22 +757,17 @@ def _open_directory_at_nofollow(
     try:
         before = os.stat(name, dir_fd=parent_descriptor, follow_symlinks=False)
         if not stat.S_ISDIR(before.st_mode) or stat.S_ISLNK(before.st_mode):
-            raise OfficialForagaxValidationError(
-                f"official {label} is not a real directory"
-            )
+            raise OfficialForagaxValidationError(f"official {label} is not a real directory")
         descriptor = os.open(
             name,
             _directory_open_flags(),
             dir_fd=parent_descriptor,
         )
         opened = os.fstat(descriptor)
-        if (
-            not stat.S_ISDIR(opened.st_mode)
-            or _stat_object_identity(before) != _stat_object_identity(opened)
-        ):
-            raise OfficialForagaxValidationError(
-                f"official {label} changed while it was opened"
-            )
+        if not stat.S_ISDIR(opened.st_mode) or _stat_object_identity(
+            before
+        ) != _stat_object_identity(opened):
+            raise OfficialForagaxValidationError(f"official {label} changed while it was opened")
         result = descriptor
         descriptor = None
         return result, opened
@@ -851,9 +798,7 @@ def _read_regular_at_nofollow(
             follow_symlinks=False,
         )
         if not stat.S_ISREG(path_before.st_mode) or stat.S_ISLNK(path_before.st_mode):
-            raise OfficialForagaxValidationError(
-                f"official {label} is not a regular file"
-            )
+            raise OfficialForagaxValidationError(f"official {label} is not a regular file")
         if int(path_before.st_nlink) != 1:
             raise OfficialForagaxValidationError(
                 f"official {label} must not have external hard-link aliases"
@@ -864,13 +809,10 @@ def _read_regular_at_nofollow(
             dir_fd=parent_descriptor,
         )
         opened = os.fstat(descriptor)
-        if (
-            not stat.S_ISREG(opened.st_mode)
-            or _stat_object_identity(path_before) != _stat_object_identity(opened)
-        ):
-            raise OfficialForagaxValidationError(
-                f"official {label} changed while it was opened"
-            )
+        if not stat.S_ISREG(opened.st_mode) or _stat_object_identity(
+            path_before
+        ) != _stat_object_identity(opened):
+            raise OfficialForagaxValidationError(f"official {label} changed while it was opened")
         digest = hashlib.sha256()
         captured = bytearray() if capture_bytes else None
         byte_count = 0
@@ -894,9 +836,7 @@ def _read_regular_at_nofollow(
             or _stat_file_identity(path_after) != expected_identity
             or byte_count != int(opened.st_size)
         ):
-            raise OfficialForagaxValidationError(
-                f"official {label} changed while it was hashed"
-            )
+            raise OfficialForagaxValidationError(f"official {label} changed while it was hashed")
         return (
             {
                 "sha256": digest.hexdigest(),
@@ -1003,8 +943,7 @@ def _driver_user_library_tree_identity(
                 )
             except OSError as exc:
                 raise OfficialForagaxValidationError(
-                    "official NVIDIA driver tree entry cannot be inspected: "
-                    f"{relative}: {exc}"
+                    f"official NVIDIA driver tree entry cannot be inspected: {relative}: {exc}"
                 ) from exc
             mode = stat.S_IMODE(metadata.st_mode)
             if stat.S_ISDIR(metadata.st_mode):
@@ -1013,12 +952,10 @@ def _driver_user_library_tree_identity(
                     expected_mode=0o555,
                     relative=relative,
                 )
-                child_descriptor, _child_identity = (
-                    _open_directory_at_nofollow(
-                        descriptor,
-                        name,
-                        label=f"NVIDIA driver directory {relative}",
-                    )
+                child_descriptor, _child_identity = _open_directory_at_nofollow(
+                    descriptor,
+                    name,
+                    label=f"NVIDIA driver directory {relative}",
                 )
                 entries.append(
                     {
@@ -1038,13 +975,11 @@ def _driver_user_library_tree_identity(
                     relative=relative,
                 )
                 validate_version(relative, relative=relative)
-                file_metadata, _contents, _identity = (
-                    _read_regular_at_nofollow(
-                        descriptor,
-                        name,
-                        label=f"NVIDIA driver file {relative}",
-                        capture_bytes=False,
-                    )
+                file_metadata, _contents, _identity = _read_regular_at_nofollow(
+                    descriptor,
+                    name,
+                    label=f"NVIDIA driver file {relative}",
+                    capture_bytes=False,
                 )
                 byte_size = cast(int, file_metadata["byte_size"])
                 total_bytes += byte_size
@@ -1079,8 +1014,7 @@ def _driver_user_library_tree_identity(
                     )
                 except OSError as exc:
                     raise OfficialForagaxValidationError(
-                        "official NVIDIA driver symlink cannot be read: "
-                        f"{relative}: {exc}"
+                        f"official NVIDIA driver symlink cannot be read: {relative}: {exc}"
                     ) from exc
                 target_path = Path(target)
                 target_windows_path = PureWindowsPath(target)
@@ -1094,14 +1028,12 @@ def _driver_user_library_tree_identity(
                     or ".." in target_windows_path.parts
                 ):
                     raise OfficialForagaxValidationError(
-                        "official NVIDIA driver symlink escapes its bundle: "
-                        f"{relative}"
+                        f"official NVIDIA driver symlink escapes its bundle: {relative}"
                     )
                 validate_version(target, relative=relative)
                 if _stat_file_identity(after) != _stat_file_identity(metadata):
                     raise OfficialForagaxValidationError(
-                        "official NVIDIA driver symlink changed while read: "
-                        f"{relative}"
+                        f"official NVIDIA driver symlink changed while read: {relative}"
                     )
                 entries.append(
                     {
@@ -1113,8 +1045,7 @@ def _driver_user_library_tree_identity(
                 )
             else:
                 raise OfficialForagaxValidationError(
-                    "official NVIDIA driver tree contains a forbidden special "
-                    f"entry: {relative}"
+                    f"official NVIDIA driver tree contains a forbidden special entry: {relative}"
                 )
             if len(entries) > 20_000:
                 raise OfficialForagaxValidationError(
@@ -1127,11 +1058,9 @@ def _driver_user_library_tree_identity(
             raise OfficialForagaxValidationError(
                 f"official NVIDIA driver tree changed during scan: {exc}"
             ) from exc
-        if (
-            names_after != names_before
-            or _stat_file_identity(after_directory)
-            != _stat_file_identity(before)
-        ):
+        if names_after != names_before or _stat_file_identity(
+            after_directory
+        ) != _stat_file_identity(before):
             raise OfficialForagaxValidationError(
                 "official NVIDIA driver directory changed during scan"
             )
@@ -1140,9 +1069,7 @@ def _driver_user_library_tree_identity(
         scan_directory(root_descriptor, ())
         root_after = root.lstat()
         if _stat_file_identity(root_after) != _stat_file_identity(root_identity):
-            raise OfficialForagaxValidationError(
-                "official NVIDIA driver root changed during scan"
-            )
+            raise OfficialForagaxValidationError("official NVIDIA driver root changed during scan")
     finally:
         os.close(root_descriptor)
     if libcuda_sha256 is None:
@@ -1152,9 +1079,7 @@ def _driver_user_library_tree_identity(
     tree_sha256 = _json_sha256(
         {
             "entries": entries,
-            "hash_scheme": (
-                OFFICIAL_FORAGAX_DRIVER_LIBRARY_TREE_HASH_SCHEME
-            ),
+            "hash_scheme": (OFFICIAL_FORAGAX_DRIVER_LIBRARY_TREE_HASH_SCHEME),
         }
     )
     return tree_sha256, libcuda_sha256
@@ -1179,8 +1104,7 @@ def _verify_driver_user_library_bundle(
         or libcuda_sha256 != contract["libcuda_sha256"]
     ):
         raise OfficialForagaxValidationError(
-            "local NVIDIA driver user-library bundle differs from the "
-            "descriptor-pinned identity"
+            "local NVIDIA driver user-library bundle differs from the descriptor-pinned identity"
         )
 
 
@@ -1238,9 +1162,7 @@ def _read_bound_regular_file(
             follow_symlinks=False,
         )
         if _stat_file_identity(final_file) != _stat_file_identity(file_identity):
-            raise OfficialForagaxValidationError(
-                f"official {label} changed after it was read"
-            )
+            raise OfficialForagaxValidationError(f"official {label} changed after it was read")
         return metadata, contents
     except OfficialForagaxValidationError:
         raise
@@ -1290,9 +1212,9 @@ def _verify_current_harness_source_closure(
         )
     if source.get("harness_module_sha256") != _HARNESS_SHA256_AT_IMPORT:
         raise OfficialForagaxValidationError(
-            "official manifest validator source closure does not match the "
-            "current repository"
+            "official manifest validator source closure does not match the current repository"
         )
+
 
 def _text_sha256(lines: Sequence[str]) -> str:
     encoded = ("\n".join(lines) + ("\n" if lines else "")).encode()
@@ -1330,11 +1252,12 @@ def _strict_json_loads(
     def object_pairs(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
         result: dict[str, Any] = {}
         for key, item in pairs:
-            if key in result:
+            host_key = _require_exact_str("key", key)
+            if host_key in result:
                 raise OfficialForagaxValidationError(
-                    f"{label} contains duplicate object key {key!r}"
+                    f"{label} contains duplicate object key '{host_key}'"
                 )
-            result[key] = item
+            result[host_key] = item
         return result
 
     def reject_constant(constant: str) -> Any:
@@ -1345,9 +1268,7 @@ def _strict_json_loads(
     def parse_float(value: str) -> float:
         parsed = float(value)
         if not math.isfinite(parsed):
-            raise OfficialForagaxValidationError(
-                f"{label} contains non-finite JSON number {value}"
-            )
+            raise OfficialForagaxValidationError(f"{label} contains non-finite JSON number {value}")
         return parsed
 
     try:
@@ -1381,9 +1302,7 @@ def _expect_exact_keys(
 def _require_git_sha1(value: Any, *, label: str) -> str:
     result = _require_string(value, label=label)
     if _COMMIT_PATTERN.fullmatch(result) is None:
-        raise OfficialForagaxValidationError(
-            f"{label} must be a full lowercase Git SHA-1"
-        )
+        raise OfficialForagaxValidationError(f"{label} must be a full lowercase Git SHA-1")
     return result
 
 
@@ -1514,18 +1433,11 @@ def _validate_archive_array_contracts(
             )
         semantic_role = contract["semantic_role"]
         if semantic_role not in {"diagnostic", "trusted_metric_payload"}:
-            raise OfficialForagaxValidationError(
-                f"{contract_label}.semantic_role is invalid"
-            )
+            raise OfficialForagaxValidationError(f"{contract_label}.semantic_role is invalid")
         finite_policy = contract["finite_policy"]
         if finite_policy not in {"all_finite", "allow_nonfinite"}:
-            raise OfficialForagaxValidationError(
-                f"{contract_label}.finite_policy is invalid"
-            )
-        if (
-            semantic_role == "trusted_metric_payload"
-            and finite_policy != "all_finite"
-        ):
+            raise OfficialForagaxValidationError(f"{contract_label}.finite_policy is invalid")
+        if semantic_role == "trusted_metric_payload" and finite_policy != "all_finite":
             raise OfficialForagaxValidationError(
                 f"{contract_label} trusted metric payload must be all finite"
             )
@@ -1534,8 +1446,7 @@ def _validate_archive_array_contracts(
     if (
         len(names) != len(set(names))
         or "rewards" not in names
-        or cast(str, contracts[names.index("rewards")]["semantic_role"])
-        != "trusted_metric_payload"
+        or cast(str, contracts[names.index("rewards")]["semantic_role"]) != "trusted_metric_payload"
     ):
         raise OfficialForagaxValidationError(
             f"{label} must contain unique members and a trusted rewards payload"
@@ -1580,11 +1491,7 @@ def _descriptor_result_layout(
         )
         for index in raw_indices
     ]
-    if (
-        not indices
-        or indices
-        != list(range(indices[0], indices[-1] + 1))
-    ):
+    if not indices or indices != list(range(indices[0], indices[-1] + 1)):
         raise OfficialForagaxValidationError(
             f"{label} result indices must be unique, ordered, and contiguous"
         )
@@ -1625,10 +1532,7 @@ def _descriptor_result_layout(
                 f"{member_label} result NPZ role/policy requires an .npz path"
             )
         if relative.suffix == ".db":
-            if (
-                role != "auxiliary"
-                or content_policy != "sqlite_foragax_metadata_v1"
-            ):
+            if role != "auxiliary" or content_policy != "sqlite_foragax_metadata_v1":
                 raise OfficialForagaxValidationError(
                     f"{member_label} is an unbound result database member"
                 )
@@ -1643,9 +1547,7 @@ def _descriptor_result_layout(
         all_paths.append(path)
 
     if len(all_paths) != len(set(all_paths)):
-        raise OfficialForagaxValidationError(
-            f"{label} repeats a descriptor-bound output member"
-        )
+        raise OfficialForagaxValidationError(f"{label} repeats a descriptor-bound output member")
     if len(result_paths) != len(indices):
         raise OfficialForagaxValidationError(
             f"{label} result NPZ count differs from its invocation indices"
@@ -1672,18 +1574,11 @@ def _descriptor_result_layout(
             f"{label} result NPZ members do not derive exactly one root"
         )
     root = roots[0]
-    expected_result_paths = tuple(
-        (root / "data" / f"{index}.npz").as_posix()
-        for index in indices
-    )
+    expected_result_paths = tuple((root / "data" / f"{index}.npz").as_posix() for index in indices)
     database_path = (root / "results.db").as_posix()
-    if (
-        tuple(result_paths) != expected_result_paths
-        or database_paths != [database_path]
-    ):
+    if tuple(result_paths) != expected_result_paths or database_paths != [database_path]:
         raise OfficialForagaxValidationError(
-            f"{label} must bind ordered result NPZs and exactly one sibling "
-            "results.db"
+            f"{label} must bind ordered result NPZs and exactly one sibling results.db"
         )
     return _DescriptorResultLayout(
         experiment_root=root.as_posix(),
@@ -1703,15 +1598,9 @@ def _qualification_workload_projection(
 ) -> dict[str, Any]:
     """Project one trust entry into the reviewable qualifier workload schema."""
     if backend not in {"cpu", "gpu"}:
-        raise OfficialForagaxValidationError(
-            "qualification workload backend is invalid"
-        )
+        raise OfficialForagaxValidationError("qualification workload backend is invalid")
     indices = cast(list[int], invocation["indices"])
-    if (
-        len(indices) != 1
-        or indices[0] != run["index"]
-        or run["index"] != run["effective_seed"]
-    ):
+    if len(indices) != 1 or indices[0] != run["index"] or run["index"] != run["effective_seed"]:
         raise OfficialForagaxValidationError(
             "qualification workload must bind one index equal to its seed"
         )
@@ -1722,11 +1611,7 @@ def _qualification_workload_projection(
         entrypoints[entrypoint_family],
     )
     offset_source = "top_level" if entrypoint_family == "ppo" else "nested"
-    offset_key = (
-        "top_level_seed_offset"
-        if entrypoint_family == "ppo"
-        else "nested_seed_offset"
-    )
+    offset_key = "top_level_seed_offset" if entrypoint_family == "ppo" else "nested_seed_offset"
     members = [
         {
             "content_policy": member["content_policy"],
@@ -1739,9 +1624,7 @@ def _qualification_workload_projection(
         "backend": {
             "kind": backend,
             "launcher_contract": executor["launcher_contract"],
-            "runtime_arguments": executor[
-                f"{backend}_runtime_arguments"
-            ],
+            "runtime_arguments": executor[f"{backend}_runtime_arguments"],
         },
         "configuration": {
             "agent": agent,
@@ -1756,9 +1639,7 @@ def _qualification_workload_projection(
             "sha256": entrypoint["sha256"],
         },
         "invocation": {
-            "expected_result_env_steps": invocation[
-                "expected_result_env_steps"
-            ],
+            "expected_result_env_steps": invocation["expected_result_env_steps"],
             "index_expression": invocation["index_expression"],
             "indices": indices,
             "max_steps_argument": invocation["max_steps_argument"],
@@ -1790,14 +1671,11 @@ def _validate_qualification_trust_binding(
         executor["determinism_qualification"],
     )
     if (
-        executor["source_archive_sha256"]
-        != determinism["source_archive_sha256"]
-        or executor["environment_profile_sha256"]
-        != determinism["environment_profile_sha256"]
+        executor["source_archive_sha256"] != determinism["source_archive_sha256"]
+        or executor["environment_profile_sha256"] != determinism["environment_profile_sha256"]
     ):
         raise OfficialForagaxValidationError(
-            f"{label} determinism source/environment bindings differ "
-            "from the executor"
+            f"{label} determinism source/environment bindings differ from the executor"
         )
     qualified_workloads: list[dict[str, Any]] = []
     for configuration in configurations:
@@ -1812,8 +1690,7 @@ def _validate_qualification_trust_binding(
             ):
                 if (
                     invocation["indices"] != [run["index"]]
-                    or invocation["expected_result_env_steps"]
-                    != determinism["steps"]
+                    or invocation["expected_result_env_steps"] != determinism["steps"]
                 ):
                     continue
                 projection = _qualification_workload_projection(
@@ -1824,10 +1701,7 @@ def _validate_qualification_trust_binding(
                     invocation=invocation,
                     backend=cast(str, determinism["backend"]),
                 )
-                if (
-                    _json_sha256(projection)
-                    == determinism["workload_identity_sha256"]
-                ):
+                if _json_sha256(projection) == determinism["workload_identity_sha256"]:
                     qualified_workloads.append(projection)
     if len(qualified_workloads) != 1:
         raise OfficialForagaxValidationError(
@@ -1907,9 +1781,7 @@ def _validate_trust_configuration(
         label=f"{profile_label} configuration scientific_track",
     )
     allowed_tracks = (
-        _OFFICIAL_FORAGAX_SCIENTIFIC_TRACKS
-        if executor_kind == "oci"
-        else {"synthetic_test"}
+        _OFFICIAL_FORAGAX_SCIENTIFIC_TRACKS if executor_kind == "oci" else {"synthetic_test"}
     )
     if scientific_track not in allowed_tracks:
         raise OfficialForagaxValidationError(
@@ -1964,9 +1836,7 @@ def _validate_trust_configuration(
             label=f"{invocation_label}.indices",
         )
         if not indices:
-            raise OfficialForagaxValidationError(
-                f"{invocation_label}.indices is empty"
-            )
+            raise OfficialForagaxValidationError(f"{invocation_label}.indices is empty")
         canonical_indices = [
             _require_int(
                 index,
@@ -1982,8 +1852,7 @@ def _validate_trust_configuration(
             else f"{canonical_indices[0]}:{canonical_indices[-1] + 1}"
         )
         if (
-            canonical_indices
-            != list(range(canonical_indices[0], canonical_indices[-1] + 1))
+            canonical_indices != list(range(canonical_indices[0], canonical_indices[-1] + 1))
             or expression != expected_expression
         ):
             raise OfficialForagaxValidationError(
@@ -2011,9 +1880,7 @@ def _validate_trust_configuration(
             label=f"{invocation_label}.members",
         )
         if not members:
-            raise OfficialForagaxValidationError(
-                f"{invocation_label}.members is empty"
-            )
+            raise OfficialForagaxValidationError(f"{invocation_label}.members is empty")
         member_paths: list[str] = []
         total_bound = 0
         roles: list[str] = []
@@ -2043,9 +1910,7 @@ def _validate_trust_configuration(
                 "stderr_log",
                 "stdout_log",
             }:
-                raise OfficialForagaxValidationError(
-                    f"{member_label}.role is not recognized"
-                )
+                raise OfficialForagaxValidationError(f"{member_label}.role is not recognized")
             content_policy = _require_string(
                 member["content_policy"],
                 label=f"{member_label}.content_policy",
@@ -2094,10 +1959,9 @@ def _validate_trust_configuration(
             for role in set(roles)
         }
         _descriptor_result_layout(invocation, label=invocation_label)
-        if (
-            paths_by_role.get("stdout_log") != ["stdout.log"]
-            or paths_by_role.get("stderr_log") != ["stderr.log"]
-        ):
+        if paths_by_role.get("stdout_log") != ["stdout.log"] or paths_by_role.get("stderr_log") != [
+            "stderr.log"
+        ]:
             raise OfficialForagaxValidationError(
                 f"{invocation_label} does not bind the canonical log paths"
             )
@@ -2164,9 +2028,7 @@ def _validate_trust_configuration(
             )
         run_indices.append(cast(int, run["index"]))
     if len(run_indices) != len(set(run_indices)):
-        raise OfficialForagaxValidationError(
-            f"{profile_label} configuration repeats a run index"
-        )
+        raise OfficialForagaxValidationError(f"{profile_label} configuration repeats a run index")
     return configuration
 
 
@@ -2300,8 +2162,7 @@ def _validate_trust_profile(value: Any, *, position: int) -> dict[str, Any]:
             label=f"{label}.executor.rootfs_diff_ids",
         )
         if not rootfs_diff_ids or any(
-            type(item) is not str
-            or _OCI_DIGEST_PATTERN.fullmatch(item) is None
+            type(item) is not str or _OCI_DIGEST_PATTERN.fullmatch(item) is None
             for item in rootfs_diff_ids
         ):
             raise OfficialForagaxValidationError(
@@ -2326,8 +2187,7 @@ def _validate_trust_profile(value: Any, *, position: int) -> dict[str, Any]:
             != OFFICIAL_FORAGAX_NATIVE_RUNTIME_INVENTORY_HASH_SCHEME
         ):
             raise OfficialForagaxValidationError(
-                f"{label}.executor.native_runtime_inventory_hash_scheme is "
-                "unsupported"
+                f"{label}.executor.native_runtime_inventory_hash_scheme is unsupported"
             )
         native_runtime_inventory_root = _require_string(
             executor["native_runtime_inventory_root"],
@@ -2336,8 +2196,7 @@ def _validate_trust_profile(value: Any, *, position: int) -> dict[str, Any]:
         native_runtime_root = Path(native_runtime_inventory_root)
         if (
             not native_runtime_root.is_absolute()
-            or native_runtime_root.as_posix()
-            != native_runtime_inventory_root
+            or native_runtime_root.as_posix() != native_runtime_inventory_root
             or ".." in native_runtime_root.parts
             or native_runtime_inventory_root in {"/tmp", "/run"}
             or native_runtime_inventory_root.startswith(("/tmp/", "/run/"))
@@ -2358,13 +2217,9 @@ def _validate_trust_profile(value: Any, *, position: int) -> dict[str, Any]:
             raise OfficialForagaxValidationError(
                 f"{label}.executor.scientific_runtime_class is unsupported"
             )
-        if (
-            runtime_class == OFFICIAL_FORAGAX_MATCHED_RUNTIME_CLASS
-            and jax_version != "0.9.0.1"
-        ):
+        if runtime_class == OFFICIAL_FORAGAX_MATCHED_RUNTIME_CLASS and jax_version != "0.9.0.1":
             raise OfficialForagaxValidationError(
-                f"{label}.executor.jax_version must use the canonical "
-                "JAX 0.9.0.1 runtime"
+                f"{label}.executor.jax_version must use the canonical JAX 0.9.0.1 runtime"
             )
         runtime_profile_id = _require_string(
             executor["runtime_profile_id"],
@@ -2399,8 +2254,7 @@ def _validate_trust_profile(value: Any, *, position: int) -> dict[str, Any]:
             label=f"{label}.executor.determinism_qualification",
         )
         if (
-            determinism["schema_version"]
-            != OFFICIAL_FORAGAX_DETERMINISM_QUALIFICATION_SCHEMA
+            determinism["schema_version"] != OFFICIAL_FORAGAX_DETERMINISM_QUALIFICATION_SCHEMA
             or determinism["state"] != "sealed_oci_two_run_exact"
             or determinism["executor_kind"] != "oci"
             or determinism["backend"] not in {"cpu", "gpu"}
@@ -2416,9 +2270,7 @@ def _validate_trust_profile(value: Any, *, position: int) -> dict[str, Any]:
             )
         _require_int(
             determinism["effective_seed"],
-            label=(
-                f"{label}.executor.determinism_qualification.effective_seed"
-            ),
+            label=(f"{label}.executor.determinism_qualification.effective_seed"),
             minimum=0,
             maximum=OFFICIAL_FORAGAX_MAX_SEED,
         )
@@ -2439,9 +2291,7 @@ def _validate_trust_profile(value: Any, *, position: int) -> dict[str, Any]:
         ):
             _require_sha256(
                 determinism[key],
-                label=(
-                    f"{label}.executor.determinism_qualification.{key}"
-                ),
+                label=(f"{label}.executor.determinism_qualification.{key}"),
             )
         for key in (
             "launcher_path",
@@ -2503,9 +2353,7 @@ def _validate_trust_profile(value: Any, *, position: int) -> dict[str, Any]:
         )
         driver_version = _require_string(
             gpu_host_contract["kernel_driver_version"],
-            label=(
-                f"{label}.executor.gpu_host_contract.kernel_driver_version"
-            ),
+            label=(f"{label}.executor.gpu_host_contract.kernel_driver_version"),
         )
         if re.fullmatch(r"[0-9]+\.[0-9]+(?:\.[0-9]+)?", driver_version) is None:
             raise OfficialForagaxValidationError(
@@ -2521,10 +2369,7 @@ def _validate_trust_profile(value: Any, *, position: int) -> dict[str, Any]:
             )
         _require_sha256(
             gpu_host_contract["user_library_bundle_sha256"],
-            label=(
-                f"{label}.executor.gpu_host_contract."
-                "user_library_bundle_sha256"
-            ),
+            label=(f"{label}.executor.gpu_host_contract.user_library_bundle_sha256"),
         )
         library_paths = _require_list(
             gpu_host_contract["user_library_paths"],
@@ -2550,17 +2395,11 @@ def _validate_trust_profile(value: Any, *, position: int) -> dict[str, Any]:
         library_path = ":".join(cast(list[str], library_paths))
         cuda_wheel_library_paths = _require_list(
             gpu_host_contract["cuda_wheel_library_paths"],
-            label=(
-                f"{label}.executor.gpu_host_contract."
-                "cuda_wheel_library_paths"
-            ),
+            label=(f"{label}.executor.gpu_host_contract.cuda_wheel_library_paths"),
         )
         driver_user_library_paths = _require_list(
             gpu_host_contract["driver_user_library_paths"],
-            label=(
-                f"{label}.executor.gpu_host_contract."
-                "driver_user_library_paths"
-            ),
+            label=(f"{label}.executor.gpu_host_contract.driver_user_library_paths"),
         )
         if (
             not cuda_wheel_library_paths
@@ -2577,40 +2416,26 @@ def _validate_trust_profile(value: Any, *, position: int) -> dict[str, Any]:
             )
         cuda_wheel_library_profile_sha256 = _require_sha256(
             gpu_host_contract["cuda_wheel_library_profile_sha256"],
-            label=(
-                f"{label}.executor.gpu_host_contract."
-                "cuda_wheel_library_profile_sha256"
-            ),
+            label=(f"{label}.executor.gpu_host_contract.cuda_wheel_library_profile_sha256"),
         )
         expected_cuda_wheel_profile_sha256 = _json_sha256(
             {
-                "schema_version": (
-                    OFFICIAL_FORAGAX_CUDA_WHEEL_LIBRARY_PROFILE_SCHEMA
-                ),
+                "schema_version": (OFFICIAL_FORAGAX_CUDA_WHEEL_LIBRARY_PROFILE_SCHEMA),
                 "paths": cuda_wheel_library_paths,
             }
         )
-        if (
-            cuda_wheel_library_profile_sha256
-            != expected_cuda_wheel_profile_sha256
-        ):
+        if cuda_wheel_library_profile_sha256 != expected_cuda_wheel_profile_sha256:
             raise OfficialForagaxValidationError(
                 f"{label}.executor.gpu_host_contract CUDA wheel library "
                 "profile digest does not verify"
             )
         driver_host_path = _require_string(
             gpu_host_contract["driver_user_library_host_path"],
-            label=(
-                f"{label}.executor.gpu_host_contract."
-                "driver_user_library_host_path"
-            ),
+            label=(f"{label}.executor.gpu_host_contract.driver_user_library_host_path"),
         )
         driver_container_path = _require_string(
             gpu_host_contract["driver_user_library_container_path"],
-            label=(
-                f"{label}.executor.gpu_host_contract."
-                "driver_user_library_container_path"
-            ),
+            label=(f"{label}.executor.gpu_host_contract.driver_user_library_container_path"),
         )
         for path_value, path_label in (
             (driver_host_path, "host"),
@@ -2650,21 +2475,15 @@ def _validate_trust_profile(value: Any, *, position: int) -> dict[str, Any]:
             != OFFICIAL_FORAGAX_DRIVER_LIBRARY_TREE_HASH_SCHEME
         ):
             raise OfficialForagaxValidationError(
-                f"{label}.executor.gpu_host_contract driver library hash "
-                "scheme is unsupported"
+                f"{label}.executor.gpu_host_contract driver library hash scheme is unsupported"
             )
         driver_tree_sha256 = _require_sha256(
             gpu_host_contract["driver_user_library_tree_sha256"],
-            label=(
-                f"{label}.executor.gpu_host_contract."
-                "driver_user_library_tree_sha256"
-            ),
+            label=(f"{label}.executor.gpu_host_contract.driver_user_library_tree_sha256"),
         )
         libcuda_relative_path = _require_string(
             gpu_host_contract["libcuda_relative_path"],
-            label=(
-                f"{label}.executor.gpu_host_contract.libcuda_relative_path"
-            ),
+            label=(f"{label}.executor.gpu_host_contract.libcuda_relative_path"),
         )
         _canonical_relative_path(
             libcuda_relative_path,
@@ -2684,20 +2503,13 @@ def _validate_trust_profile(value: Any, *, position: int) -> dict[str, Any]:
             )
         expected_bundle_sha256 = _json_sha256(
             {
-                "cuda_wheel_library_profile_sha256": (
-                    cuda_wheel_library_profile_sha256
-                ),
+                "cuda_wheel_library_profile_sha256": (cuda_wheel_library_profile_sha256),
                 "driver_user_library_tree_sha256": driver_tree_sha256,
                 "libcuda_sha256": libcuda_sha256,
-                "schema_version": (
-                    OFFICIAL_FORAGAX_GPU_USER_LIBRARY_BUNDLE_SCHEMA
-                ),
+                "schema_version": (OFFICIAL_FORAGAX_GPU_USER_LIBRARY_BUNDLE_SCHEMA),
             }
         )
-        if (
-            gpu_host_contract["user_library_bundle_sha256"]
-            != expected_bundle_sha256
-        ):
+        if gpu_host_contract["user_library_bundle_sha256"] != expected_bundle_sha256:
             raise OfficialForagaxValidationError(
                 f"{label}.executor.gpu_host_contract composite GPU user "
                 "library bundle digest does not verify"
@@ -2716,15 +2528,11 @@ def _validate_trust_profile(value: Any, *, position: int) -> dict[str, Any]:
             )
         cublas_workspace_config = _require_string(
             gpu_host_contract["cublas_workspace_config"],
-            label=(
-                f"{label}.executor.gpu_host_contract."
-                "cublas_workspace_config"
-            ),
+            label=(f"{label}.executor.gpu_host_contract.cublas_workspace_config"),
         )
         if (
             runtime_class == OFFICIAL_FORAGAX_MATCHED_RUNTIME_CLASS
-            and cublas_workspace_config
-            != OFFICIAL_FORAGAX_CUBLAS_WORKSPACE_CONFIG
+            and cublas_workspace_config != OFFICIAL_FORAGAX_CUBLAS_WORKSPACE_CONFIG
         ):
             raise OfficialForagaxValidationError(
                 f"{label}.executor.gpu_host_contract must use the audited "
@@ -2732,19 +2540,14 @@ def _validate_trust_profile(value: Any, *, position: int) -> dict[str, Any]:
             )
         xla_python_client_preallocate = _require_string(
             gpu_host_contract["xla_python_client_preallocate"],
-            label=(
-                f"{label}.executor.gpu_host_contract."
-                "xla_python_client_preallocate"
-            ),
+            label=(f"{label}.executor.gpu_host_contract.xla_python_client_preallocate"),
         )
         if (
             runtime_class == OFFICIAL_FORAGAX_MATCHED_RUNTIME_CLASS
-            and xla_python_client_preallocate
-            != OFFICIAL_FORAGAX_XLA_PYTHON_CLIENT_PREALLOCATE
+            and xla_python_client_preallocate != OFFICIAL_FORAGAX_XLA_PYTHON_CLIENT_PREALLOCATE
         ):
             raise OfficialForagaxValidationError(
-                f"{label}.executor.gpu_host_contract must disable XLA Python "
-                "client preallocation"
+                f"{label}.executor.gpu_host_contract must disable XLA Python client preallocation"
             )
         device_paths = _require_list(
             gpu_host_contract["device_paths"],
@@ -2760,31 +2563,22 @@ def _validate_trust_profile(value: Any, *, position: int) -> dict[str, Any]:
                 for path in device_paths
             )
             or len(device_paths) != len(set(cast(list[str], device_paths)))
-            or not any(
-                re.fullmatch(r"/dev/nvidia[0-9]+", cast(str, path))
-                for path in device_paths
-            )
+            or not any(re.fullmatch(r"/dev/nvidia[0-9]+", cast(str, path)) for path in device_paths)
             or "/dev/nvidiactl" not in device_paths
             or "/dev/nvidia-uvm" not in device_paths
         ):
             raise OfficialForagaxValidationError(
-                f"{label}.executor.gpu_host_contract must name exact NVIDIA "
-                "character-device paths"
+                f"{label}.executor.gpu_host_contract must name exact NVIDIA character-device paths"
             )
         device_identities = _require_list(
             gpu_host_contract["device_identities"],
-            label=(
-                f"{label}.executor.gpu_host_contract.device_identities"
-            ),
+            label=(f"{label}.executor.gpu_host_contract.device_identities"),
         )
         validated_device_identities: list[dict[str, Any]] = []
         for position, raw_identity in enumerate(device_identities):
             identity = _require_mapping(
                 raw_identity,
-                label=(
-                    f"{label}.executor.gpu_host_contract."
-                    f"device_identities[{position}]"
-                ),
+                label=(f"{label}.executor.gpu_host_contract.device_identities[{position}]"),
             )
             _expect_exact_keys(
                 identity,
@@ -2794,36 +2588,29 @@ def _validate_trust_profile(value: Any, *, position: int) -> dict[str, Any]:
                     "gpu_uuid",
                     "pci_bus_id",
                 },
-                label=(
-                    f"{label}.executor.gpu_host_contract."
-                    f"device_identities[{position}]"
-                ),
+                label=(f"{label}.executor.gpu_host_contract.device_identities[{position}]"),
             )
             index = _require_int(
                 identity["device_index"],
                 label=(
-                    f"{label}.executor.gpu_host_contract."
-                    f"device_identities[{position}].device_index"
+                    f"{label}.executor.gpu_host_contract.device_identities[{position}].device_index"
                 ),
                 minimum=0,
             )
             if identity["device_path"] != f"/dev/nvidia{index}":
                 raise OfficialForagaxValidationError(
-                    f"{label}.executor.gpu_host_contract device identity "
-                    "path/index is inconsistent"
+                    f"{label}.executor.gpu_host_contract device identity path/index is inconsistent"
                 )
             gpu_uuid = _require_string(
                 identity["gpu_uuid"],
                 label=(
-                    f"{label}.executor.gpu_host_contract."
-                    f"device_identities[{position}].gpu_uuid"
+                    f"{label}.executor.gpu_host_contract.device_identities[{position}].gpu_uuid"
                 ),
             )
             pci_bus_id = _require_string(
                 identity["pci_bus_id"],
                 label=(
-                    f"{label}.executor.gpu_host_contract."
-                    f"device_identities[{position}].pci_bus_id"
+                    f"{label}.executor.gpu_host_contract.device_identities[{position}].pci_bus_id"
                 ),
             )
             if (
@@ -2841,25 +2628,20 @@ def _validate_trust_profile(value: Any, *, position: int) -> dict[str, Any]:
                 or gpu_uuid != "GPU-" + gpu_uuid.removeprefix("GPU-").casefold()
             ):
                 raise OfficialForagaxValidationError(
-                    f"{label}.executor.gpu_host_contract GPU UUID/PCI "
-                    "identity is invalid"
+                    f"{label}.executor.gpu_host_contract GPU UUID/PCI identity is invalid"
                 )
             validated_device_identities.append(identity)
         identity_indices = [
-            cast(int, identity["device_index"])
-            for identity in validated_device_identities
+            cast(int, identity["device_index"]) for identity in validated_device_identities
         ]
         identity_paths = [
-            cast(str, identity["device_path"])
-            for identity in validated_device_identities
+            cast(str, identity["device_path"]) for identity in validated_device_identities
         ]
         identity_uuids = [
-            cast(str, identity["gpu_uuid"])
-            for identity in validated_device_identities
+            cast(str, identity["gpu_uuid"]) for identity in validated_device_identities
         ]
         identity_pci_ids = [
-            cast(str, identity["pci_bus_id"]).casefold()
-            for identity in validated_device_identities
+            cast(str, identity["pci_bus_id"]).casefold() for identity in validated_device_identities
         ]
         if (
             not validated_device_identities
@@ -2882,8 +2664,7 @@ def _validate_trust_profile(value: Any, *, position: int) -> dict[str, Any]:
                     f"{label}.executor.{key} must contain non-empty strings"
                 )
             if any(
-                os.path.isabs(cast(str, argument))
-                or "\x00" in cast(str, argument)
+                os.path.isabs(cast(str, argument)) or "\x00" in cast(str, argument)
                 for argument in arguments
             ):
                 raise OfficialForagaxValidationError(
@@ -2905,17 +2686,11 @@ def _validate_trust_profile(value: Any, *, position: int) -> dict[str, Any]:
                 f"destination={driver_container_path},readonly"
             ),
             *(f"--device={path}" for path in device_paths),
-            (
-                "--env=CUDA_VISIBLE_DEVICES="
-                + ",".join(str(index) for index in identity_indices)
-            ),
+            ("--env=CUDA_VISIBLE_DEVICES=" + ",".join(str(index) for index in identity_indices)),
             f"--env=CUBLAS_WORKSPACE_CONFIG={cublas_workspace_config}",
             f"--env=LD_LIBRARY_PATH={library_path}",
             f"--env=XLA_FLAGS={xla_flags}",
-            (
-                "--env=XLA_PYTHON_CLIENT_PREALLOCATE="
-                f"{xla_python_client_preallocate}"
-            ),
+            (f"--env=XLA_PYTHON_CLIENT_PREALLOCATE={xla_python_client_preallocate}"),
         ]
         if executor["gpu_runtime_arguments"] != expected_gpu_arguments:
             raise OfficialForagaxValidationError(
@@ -2955,17 +2730,10 @@ def _validate_trust_profile(value: Any, *, position: int) -> dict[str, Any]:
     if kind == "oci":
         expected_track = {
             "head_diagnostics_unpaired": "head_diagnostics",
-            "historical_paper_lock_sensitivity": (
-                "historical_paper_lock_sensitivity"
-            ),
-            OFFICIAL_FORAGAX_MATCHED_RUNTIME_CLASS: (
-                "matched_current_environment_comparator"
-            ),
+            "historical_paper_lock_sensitivity": ("historical_paper_lock_sensitivity"),
+            OFFICIAL_FORAGAX_MATCHED_RUNTIME_CLASS: ("matched_current_environment_comparator"),
         }[cast(str, executor["scientific_runtime_class"])]
-        if any(
-            configuration["scientific_track"] != expected_track
-            for configuration in validated
-        ):
+        if any(configuration["scientific_track"] != expected_track for configuration in validated):
             raise OfficialForagaxValidationError(
                 f"{label} mixes a scientific track with the wrong runtime class"
             )
@@ -2974,8 +2742,7 @@ def _validate_trust_profile(value: Any, *, position: int) -> dict[str, Any]:
             "historical_paper_lock_sensitivity",
         } and any(
             configuration["config_commit"] != profile["execution_commit"]
-            or configuration["config_lock_sha256"]
-            != profile["execution_lock_sha256"]
+            or configuration["config_lock_sha256"] != profile["execution_lock_sha256"]
             for configuration in validated
         ):
             raise OfficialForagaxValidationError(
@@ -2996,9 +2763,7 @@ def _validate_trust_profile(value: Any, *, position: int) -> dict[str, Any]:
         for configuration in validated
     ]
     if len(identities) != len(set(identities)):
-        raise OfficialForagaxValidationError(
-            f"{label} repeats a configuration identity"
-        )
+        raise OfficialForagaxValidationError(f"{label} repeats a configuration identity")
     return profile
 
 
@@ -3034,8 +2799,7 @@ def _load_trust_descriptor() -> tuple[dict[str, Any], str]:
     if (
         descriptor["schema_version"] != "1.0"
         or descriptor["descriptor_id"] != OFFICIAL_FORAGAX_TRUST_DESCRIPTOR_ID
-        or descriptor["manifest_schema_version"]
-        != OFFICIAL_FORAGAX_MANIFEST_SCHEMA_VERSION
+        or descriptor["manifest_schema_version"] != OFFICIAL_FORAGAX_MANIFEST_SCHEMA_VERSION
         or _canonical_repository_url(
             _require_string(
                 descriptor["repository"],
@@ -3044,9 +2808,7 @@ def _load_trust_descriptor() -> tuple[dict[str, Any], str]:
         )
         != OFFICIAL_FORAGAX_REPOSITORY
     ):
-        raise OfficialForagaxValidationError(
-            "official trust descriptor identity is not recognized"
-        )
+        raise OfficialForagaxValidationError("official trust descriptor identity is not recognized")
     profiles = _require_list(
         descriptor["profiles"],
         label="official trust descriptor profiles",
@@ -3057,9 +2819,7 @@ def _load_trust_descriptor() -> tuple[dict[str, Any], str]:
     ]
     profile_ids = [cast(str, profile["profile_id"]) for profile in validated_profiles]
     if len(profile_ids) != len(set(profile_ids)):
-        raise OfficialForagaxValidationError(
-            "official trust descriptor repeats a profile_id"
-        )
+        raise OfficialForagaxValidationError("official trust descriptor repeats a profile_id")
     return descriptor, actual_sha256
 
 
@@ -3156,9 +2916,7 @@ def _trusted_profile_from_identity(
         and _json_sha256(profile) == trust.get("profile_sha256")
     ]
     if len(profiles) != 1:
-        raise OfficialForagaxValidationError(
-            "manifest/plan trust profile is absent or ambiguous"
-        )
+        raise OfficialForagaxValidationError("manifest/plan trust profile is absent or ambiguous")
     configurations = cast(list[dict[str, Any]], profiles[0]["configurations"])
     configurations = [
         configuration
@@ -3237,10 +2995,8 @@ def _load_endorsement_descriptor() -> tuple[dict[str, Any], str]:
     )
     if (
         descriptor["schema_version"] != "1.0"
-        or descriptor["descriptor_id"]
-        != OFFICIAL_FORAGAX_ENDORSEMENT_DESCRIPTOR_ID
-        or descriptor["manifest_schema_version"]
-        != OFFICIAL_FORAGAX_MANIFEST_SCHEMA_VERSION
+        or descriptor["descriptor_id"] != OFFICIAL_FORAGAX_ENDORSEMENT_DESCRIPTOR_ID
+        or descriptor["manifest_schema_version"] != OFFICIAL_FORAGAX_MANIFEST_SCHEMA_VERSION
     ):
         raise OfficialForagaxValidationError(
             "official result-endorsement descriptor identity is invalid"
@@ -3292,17 +3048,12 @@ def _load_endorsement_descriptor() -> tuple[dict[str, Any], str]:
             "official_foragax_single",
             "official_foragax_batch",
         }:
-            raise OfficialForagaxValidationError(
-                f"{label}.manifest_kind is invalid"
-            )
+            raise OfficialForagaxValidationError(f"{label}.manifest_kind is invalid")
         image_id = endorsement["executor_image_id"]
         if image_id is not None and (
-            type(image_id) is not str
-            or _OCI_DIGEST_PATTERN.fullmatch(image_id) is None
+            type(image_id) is not str or _OCI_DIGEST_PATTERN.fullmatch(image_id) is None
         ):
-            raise OfficialForagaxValidationError(
-                f"{label}.executor_image_id is invalid"
-            )
+            raise OfficialForagaxValidationError(f"{label}.executor_image_id is invalid")
         artifacts = _require_list(
             endorsement["artifacts"],
             label=f"{label}.artifacts",
@@ -3350,9 +3101,8 @@ def _load_endorsement_descriptor() -> tuple[dict[str, Any], str]:
             raise OfficialForagaxValidationError(
                 f"{label}.artifact_identities_sha256 does not verify"
             )
-    if (
-        len(endorsement_ids) != len(set(endorsement_ids))
-        or len(manifest_hashes) != len(set(manifest_hashes))
+    if len(endorsement_ids) != len(set(endorsement_ids)) or len(manifest_hashes) != len(
+        set(manifest_hashes)
     ):
         raise OfficialForagaxValidationError(
             "official result endorsement identities are duplicate or ambiguous"
@@ -3373,9 +3123,7 @@ def _verified_manifest_evidence(
     expected = {
         "artifact_identities_sha256": _json_sha256(artifacts),
         "artifacts": artifacts,
-        "executor_image_id": (
-            executor["image_id"] if executor["kind"] == "oci" else None
-        ),
+        "executor_image_id": (executor["image_id"] if executor["kind"] == "oci" else None),
         "manifest_kind": manifest["manifest_kind"],
         "manifest_sha256": manifest["manifest_sha256"],
         "output_tree_sha256": cast(
@@ -3440,9 +3188,7 @@ def _normalized_command(
             except ValueError:
                 pass
             else:
-                normalized.append(
-                    f"<OFFICIAL_CHECKOUT>/{source_relative.as_posix()}"
-                )
+                normalized.append(f"<OFFICIAL_CHECKOUT>/{source_relative.as_posix()}")
                 continue
             try:
                 relative = candidate.relative_to(output_dir)
@@ -3450,9 +3196,7 @@ def _normalized_command(
                 normalized.append("<HOST_PATH>")
             else:
                 normalized.append(
-                    "<OUTPUT_DIR>"
-                    if not relative.parts
-                    else f"<OUTPUT_DIR>/{relative.as_posix()}"
+                    "<OUTPUT_DIR>" if not relative.parts else f"<OUTPUT_DIR>/{relative.as_posix()}"
                 )
             continue
         normalized.append(argument)
@@ -3465,9 +3209,7 @@ def _manifest_environment(
     semantic = plan.run.get("environment")
     implementation = plan.runtime.get("foragax_implementation")
     if not isinstance(semantic, Mapping) or not isinstance(implementation, Mapping):
-        raise OfficialForagaxValidationError(
-            "official environment provenance is incomplete"
-        )
+        raise OfficialForagaxValidationError("official environment provenance is incomplete")
     return {
         "semantic": dict(semantic),
         "implementation": dict(implementation),
@@ -3543,14 +3285,10 @@ def _relative_path_in_repository(repository: Path, candidate: Path) -> tuple[Pat
 
 def _tracked_tree_sha256(repository: Path, pathspec: str) -> str:
     raw_paths = _git_bytes(repository, "ls-files", "-z", "--", pathspec)
-    relative_paths = sorted(
-        item.decode()
-        for item in raw_paths.split(b"\0")
-        if item
-    )
+    relative_paths = sorted(item.decode() for item in raw_paths.split(b"\0") if item)
     if not relative_paths:
         raise OfficialForagaxValidationError(
-            f"official repository has no tracked files under {pathspec!r}"
+            f"official repository has no tracked files under '{pathspec}'"
         )
     digest = hashlib.sha256()
     for relative in relative_paths:
@@ -3576,11 +3314,7 @@ def _command_environment(*, gpu: bool) -> dict[str, str]:
         "XLA_PYTHON_CLIENT_MEM_FRACTION",
         "XLA_PYTHON_CLIENT_PREALLOCATE",
     )
-    environment = {
-        key: os.environ[key]
-        for key in inherited
-        if key in os.environ
-    }
+    environment = {key: os.environ[key] for key in inherited if key in os.environ}
     environment.update(
         {
             "LANG": "C.UTF-8",
@@ -3616,8 +3350,7 @@ def _relevant_environment(environment: Mapping[str, str]) -> dict[str, str]:
     path_like_keys = {"LD_LIBRARY_PATH", "PATH", "XLA_FLAGS"}
     return {
         key: (
-            f"<REDACTED_PATH_VALUE sha256="
-            f"{hashlib.sha256(environment[key].encode()).hexdigest()}>"
+            f"<REDACTED_PATH_VALUE sha256={hashlib.sha256(environment[key].encode()).hexdigest()}>"
             if key in path_like_keys
             else environment[key]
         )
@@ -3675,9 +3408,7 @@ def _validate_oci_scientific_package_inventory(
     }
     missing = sorted(required - normalized)
     conflicting_jax_plugins = sorted(
-        line
-        for line in normalized
-        if line.startswith(("jax-cuda11-", "jax-cuda13-"))
+        line for line in normalized if line.startswith(("jax-cuda11-", "jax-cuda13-"))
     )
     if missing or conflicting_jax_plugins:
         raise OfficialForagaxValidationError(
@@ -3751,30 +3482,15 @@ def _oci_base_command(
         "--security-opt=no-new-privileges",
         "--user=65532:65532",
         "--pids-limit=512",
-        (
-            "--mount=type=tmpfs,destination=/tmp/src,"
-            "tmpfs-mode=0555,tmpfs-size=1048576"
-        ),
-        (
-            "--tmpfs=/run/alberta:"
-            "rw,noexec,nosuid,nodev,size=8g,uid=65532,gid=65532,mode=0700"
-        ),
-        (
-            "--tmpfs=/run/alberta/home:"
-            "rw,noexec,nosuid,nodev,size=64m,uid=65532,gid=65532,mode=0700"
-        ),
-        (
-            "--tmpfs=/run/alberta/tmp:"
-            "rw,noexec,nosuid,nodev,size=1g,uid=65532,gid=65532,mode=0700"
-        ),
+        ("--mount=type=tmpfs,destination=/tmp/src,tmpfs-mode=0555,tmpfs-size=1048576"),
+        ("--tmpfs=/run/alberta:rw,noexec,nosuid,nodev,size=8g,uid=65532,gid=65532,mode=0700"),
+        ("--tmpfs=/run/alberta/home:rw,noexec,nosuid,nodev,size=64m,uid=65532,gid=65532,mode=0700"),
+        ("--tmpfs=/run/alberta/tmp:rw,noexec,nosuid,nodev,size=1g,uid=65532,gid=65532,mode=0700"),
         (
             "--tmpfs=/run/alberta/matplotlib:"
             "rw,noexec,nosuid,nodev,size=64m,uid=65532,gid=65532,mode=0700"
         ),
-        (
-            "--tmpfs=/run/alberta/cache:"
-            "rw,noexec,nosuid,nodev,size=1g,uid=65532,gid=65532,mode=0700"
-        ),
+        ("--tmpfs=/run/alberta/cache:rw,noexec,nosuid,nodev,size=1g,uid=65532,gid=65532,mode=0700"),
         (
             "--tmpfs=/run/alberta/cuda-cache:"
             "rw,noexec,nosuid,nodev,size=256m,uid=65532,gid=65532,mode=0700"
@@ -3818,12 +3534,8 @@ def _oci_official_command(
     index_expression: str,
     max_steps_argument: int | None,
 ) -> tuple[str, ...]:
-    source_entrypoint = (
-        Path(cast(str, executor["source_root"])) / entrypoint
-    ).as_posix()
-    trusted_python_path = (
-        Path(cast(str, executor["source_root"])) / "src"
-    ).as_posix()
+    source_entrypoint = (Path(cast(str, executor["source_root"])) / entrypoint).as_posix()
+    trusted_python_path = (Path(cast(str, executor["source_root"])) / "src").as_posix()
     command = [
         *_oci_base_command(runtime=runtime, executor=executor, gpu=gpu),
         cast(str, executor["launcher_path"]),
@@ -4133,9 +3845,7 @@ def _probe_runtime(
                 execution["gpu_host_contract"],
             )["cuda_wheel_library_profile_sha256"],
             "dependency_lock_sha256": execution["dependency_lock_sha256"],
-            "determinism_qualification": execution[
-                "determinism_qualification"
-            ],
+            "determinism_qualification": execution["determinism_qualification"],
             "determinism_qualification_sha256": _json_sha256(
                 execution["determinism_qualification"]
             ),
@@ -4160,24 +3870,18 @@ def _probe_runtime(
                 execution["gpu_host_contract"],
             )["libcuda_sha256"],
             "sbom_sha256": execution["sbom_sha256"],
-            "native_runtime_inventory_sha256": execution[
-                "native_runtime_inventory_sha256"
-            ],
+            "native_runtime_inventory_sha256": execution["native_runtime_inventory_sha256"],
             "native_runtime_inventory_hash_scheme": execution[
                 "native_runtime_inventory_hash_scheme"
             ],
-            "native_runtime_inventory_root": execution[
-                "native_runtime_inventory_root"
-            ],
+            "native_runtime_inventory_root": execution["native_runtime_inventory_root"],
             "gpu_user_library_bundle_sha256": cast(
                 Mapping[str, Any],
                 execution["gpu_host_contract"],
             )["user_library_bundle_sha256"],
             "runtime_profile_id": execution["runtime_profile_id"],
             "runtime_binary_sha256": execution["runtime_binary_sha256"],
-            "scientific_runtime_class": execution[
-                "scientific_runtime_class"
-            ],
+            "scientific_runtime_class": execution["scientific_runtime_class"],
         }
     )
     gpu_host_contract = (
@@ -4191,9 +3895,7 @@ def _probe_runtime(
         else ""
     )
     expected_gpu_device_paths = (
-        cast(list[str], gpu_host_contract["device_paths"])
-        if gpu_host_contract is not None
-        else []
+        cast(list[str], gpu_host_contract["device_paths"]) if gpu_host_contract is not None else []
     )
     expected_gpu_device_identities = (
         cast(list[dict[str, Any]], gpu_host_contract["device_identities"])
@@ -4201,8 +3903,7 @@ def _probe_runtime(
         else []
     )
     expected_cuda_visible_devices = ",".join(
-        str(identity["device_index"])
-        for identity in expected_gpu_device_identities
+        str(identity["device_index"]) for identity in expected_gpu_device_identities
     )
     expected_gpu_library_paths = (
         cast(list[str], gpu_host_contract["user_library_paths"])
@@ -4211,9 +3912,7 @@ def _probe_runtime(
     )
     expected_gpu_library_path = ":".join(expected_gpu_library_paths)
     expected_gpu_xla_flags = (
-        cast(str, gpu_host_contract["xla_flags"])
-        if gpu_host_contract is not None
-        else ""
+        cast(str, gpu_host_contract["xla_flags"]) if gpu_host_contract is not None else ""
     )
     expected_gpu_cublas_workspace_config = (
         cast(str, gpu_host_contract["cublas_workspace_config"])
@@ -4236,15 +3935,9 @@ def _probe_runtime(
         else ""
     )
     expected_libcuda_sha256 = (
-        cast(str, gpu_host_contract["libcuda_sha256"])
-        if gpu_host_contract is not None
-        else ""
+        cast(str, gpu_host_contract["libcuda_sha256"]) if gpu_host_contract is not None else ""
     )
-    expected_source_root = (
-        cast(str, execution["source_root"])
-        if execution["kind"] == "oci"
-        else ""
-    )
+    expected_source_root = cast(str, execution["source_root"]) if execution["kind"] == "oci" else ""
     script = f"""
 import hashlib
 import importlib.metadata
@@ -4606,9 +4299,7 @@ if {gpu_host_contract is not None!r}:
     expected_library_paths = {expected_gpu_library_paths!r}
     expected_xla_flags = {expected_gpu_xla_flags!r}
     expected_cublas_workspace_config = {expected_gpu_cublas_workspace_config!r}
-    expected_xla_python_client_preallocate = {
-        expected_gpu_xla_python_client_preallocate!r
-    }
+    expected_xla_python_client_preallocate = {expected_gpu_xla_python_client_preallocate!r}
     expected_driver_container_path = {expected_driver_container_path!r}
     expected_libcuda_relative_path = {expected_libcuda_relative_path!r}
     expected_libcuda_sha256 = {expected_libcuda_sha256!r}
@@ -4682,7 +4373,7 @@ if {gpu_host_contract is not None!r}:
         )
         if pci_match is None or int(pci_match.group(1), 16) > 0xFFFF:
             raise RuntimeError(
-                f"GPU PCI identity {{raw_pci_bus_id!r}} is invalid"
+                f"GPU PCI identity '{{raw_pci_bus_id}}' is invalid"
             )
         observed_pci_bus_id = (
             f"{{int(pci_match.group(1), 16):04x}}:"
@@ -4759,7 +4450,7 @@ def _verify_requested_backend(
     if runtime.get("jax_backend") != expected_platform:
         raise OfficialForagaxValidationError(
             f"requested {expected_platform} execution but JAX selected "
-            f"{runtime.get('jax_backend')!r}"
+            f"'{runtime.get('jax_backend')}'"
         )
     devices = runtime.get("jax_devices")
     if (
@@ -4772,8 +4463,7 @@ def _verify_requested_backend(
         )
     ):
         raise OfficialForagaxValidationError(
-            f"requested {expected_platform} execution but probed devices do not "
-            "match that backend"
+            f"requested {expected_platform} execution but probed devices do not match that backend"
         )
     if executor["kind"] != "oci":
         return
@@ -4794,8 +4484,7 @@ def _verify_requested_backend(
         )
     device_pattern = re.compile(cast(str, contract["device_kind_pattern"]))
     if any(
-        device_pattern.fullmatch(str(cast(dict[str, Any], device)["device_kind"]))
-        is None
+        device_pattern.fullmatch(str(cast(dict[str, Any], device)["device_kind"])) is None
         for device in devices
     ):
         raise OfficialForagaxValidationError(
@@ -4809,20 +4498,15 @@ def _verify_requested_backend(
         )
         if (
             type(observed_gpu) is not dict
-            or cast(dict[str, Any], observed_gpu).get(
-                "kernel_driver_version"
-            )
+            or cast(dict[str, Any], observed_gpu).get("kernel_driver_version")
             != expected_gpu["kernel_driver_version"]
             or cast(dict[str, Any], observed_gpu).get("device_paths")
             != expected_gpu["device_paths"]
-            or cast(dict[str, Any], observed_gpu).get(
-                "device_identities"
-            )
+            or cast(dict[str, Any], observed_gpu).get("device_identities")
             != expected_gpu["device_identities"]
         ):
             raise OfficialForagaxValidationError(
-                "probed GPU host runtime differs from the explicit trusted "
-                "device/driver contract"
+                "probed GPU host runtime differs from the explicit trusted device/driver contract"
             )
     elif observed_gpu is not None:
         raise OfficialForagaxValidationError(
@@ -4845,33 +4529,25 @@ def _semantic_environment(probe: Mapping[str, Any]) -> dict[str, Any]:
     }
     if env_id not in presets:
         raise OfficialForagaxValidationError(
-            "official environment cannot be mapped to a benchmark preset: "
-            f"{env_id!r}"
+            f"official environment cannot be mapped to a benchmark preset: '{env_id}'"
         )
     preset, default_observation_type = presets[cast(str, env_id)]
     aperture_size = raw.get("aperture_size", 9)
     observation_type = raw.get("observation_type", default_observation_type)
     reward_delay = raw.get("reward_delay", 0)
     random_shift_max_steps = raw.get("random_shift_max_steps", 0)
-    if (
-        type(aperture_size) is not int
-        or (aperture_size != -1 and (aperture_size < 1 or aperture_size % 2 == 0))
+    if type(aperture_size) is not int or (
+        aperture_size != -1 and (aperture_size < 1 or aperture_size % 2 == 0)
     ):
-        raise OfficialForagaxValidationError(
-            "official environment aperture_size is invalid"
-        )
+        raise OfficialForagaxValidationError("official environment aperture_size is invalid")
     if observation_type not in {"color", "rgb", "object"}:
-        raise OfficialForagaxValidationError(
-            "official environment observation_type is invalid"
-        )
+        raise OfficialForagaxValidationError("official environment observation_type is invalid")
     for name, value in (
         ("reward_delay", reward_delay),
         ("random_shift_max_steps", random_shift_max_steps),
     ):
         if type(value) is not int or value < 0:
-            raise OfficialForagaxValidationError(
-                f"official environment {name} is invalid"
-            )
+            raise OfficialForagaxValidationError(f"official environment {name} is invalid")
     consumed = {
         "env_id",
         "aperture_size",
@@ -4886,9 +4562,7 @@ def _semantic_environment(probe: Mapping[str, Any]) -> dict[str, Any]:
         "observation_type": observation_type,
         "reward_delay": reward_delay,
         "random_shift_max_steps": random_shift_max_steps,
-        "extra_kwargs": {
-            key: value for key, value in raw.items() if key not in consumed
-        },
+        "extra_kwargs": {key: value for key, value in raw.items() if key not in consumed},
     }
 
 
@@ -4941,14 +4615,10 @@ def _validated_registry_identity(value: Any) -> dict[str, str]:
     result: dict[str, str] = {}
     for key, item in value.items():
         if type(key) is not str or type(item) is not str or not item:
-            raise OfficialForagaxValidationError(
-                f"official agent registry {key} is invalid"
-            )
+            raise OfficialForagaxValidationError(f"official agent registry {key} is invalid")
         result[key] = item
     if result["module"] not in {"algorithms.registry", "algorithms.PPORegistry"}:
-        raise OfficialForagaxValidationError(
-            "official agent registry module is not recognized"
-        )
+        raise OfficialForagaxValidationError("official agent registry module is not recognized")
     for key in ("registry_source_path", "class_source_path"):
         relative = _canonical_relative_path(
             result[key],
@@ -4960,9 +4630,7 @@ def _validated_registry_identity(value: Any) -> dict[str, str]:
             )
     for key in ("registry_source_sha256", "class_source_sha256"):
         if not re.fullmatch(r"[0-9a-f]{64}", result[key]):
-            raise OfficialForagaxValidationError(
-                f"official agent registry {key} is not a SHA-256"
-            )
+            raise OfficialForagaxValidationError(f"official agent registry {key} is not a SHA-256")
     return result
 
 
@@ -4997,9 +4665,7 @@ def _validated_resolved_hyperparameters(
         )
 
     forbidden = tuple(
-        str(path)
-        for path in forbidden_host_paths
-        if str(path) and str(path) not in {".", os.sep}
+        str(path) for path in forbidden_host_paths if str(path) and str(path) not in {".", os.sep}
     )
 
     def validate_strings(item: Any) -> None:
@@ -5035,6 +4701,7 @@ def _classify_official_foragax_agent_access(
     registry: Mapping[str, str],
 ) -> dict[str, Any]:
     """Classify scientific identity and information access, failing closed."""
+
     def finite_json_number(value: object) -> bool:
         # Resolved hyperparameters have already crossed the canonical-JSON
         # boundary.  Keep this check total even for arbitrarily large JSON
@@ -5136,9 +4803,7 @@ def _classify_official_foragax_agent_access(
         "classified": classified,
         "privileged": privileged if classified else None,
         "information_access": {
-            "observation_scope": (
-                "full_world" if full_world_observation else "aperture"
-            ),
+            "observation_scope": ("full_world" if full_world_observation else "aperture"),
             "aperture_size": aperture_size,
             "observation_type": observation_type,
             "search_mode": mode,
@@ -5190,24 +4855,17 @@ def _verified_agent_access_sections(
     resolved = _validated_resolved_hyperparameters(
         {
             "resolved_hyperparameters": raw_resolved,
-            "resolved_hyperparameters_sha256": run.get(
-                "resolved_hyperparameters_sha256"
-            ),
+            "resolved_hyperparameters_sha256": run.get("resolved_hyperparameters_sha256"),
         }
     )
     resolved_hash = _json_sha256(resolved)
     semantic = run.get("environment")
     if not isinstance(semantic, dict):
-        raise OfficialForagaxValidationError(
-            "official manifest environment semantics are invalid"
-        )
-    expected_semantic = _semantic_environment(
-        {"environment": resolved.get("environment")}
-    )
+        raise OfficialForagaxValidationError("official manifest environment semantics are invalid")
+    expected_semantic = _semantic_environment({"environment": resolved.get("environment")})
     if semantic != expected_semantic:
         raise OfficialForagaxValidationError(
-            "official manifest environment semantics do not match exact "
-            "resolved hyperparameters"
+            "official manifest environment semantics do not match exact resolved hyperparameters"
         )
     registry = _validated_registry_identity(run.get("registry"))
     if run.get("registry_sha256") != _json_sha256(registry):
@@ -5216,9 +4874,7 @@ def _verified_agent_access_sections(
         )
     agent = run.get("agent")
     if type(agent) is not str or not agent:
-        raise OfficialForagaxValidationError(
-            "official manifest agent identity is invalid"
-        )
+        raise OfficialForagaxValidationError("official manifest agent identity is invalid")
     expected_access = _classify_official_foragax_agent_access(
         agent=agent,
         resolved_hyperparameters=resolved,
@@ -5232,9 +4888,7 @@ def _verified_agent_access_sections(
         )
     access_hash = _json_sha256(expected_access)
     if run.get("agent_access_sha256") != access_hash:
-        raise OfficialForagaxValidationError(
-            "official manifest agent-access hash does not verify"
-        )
+        raise OfficialForagaxValidationError("official manifest agent-access hash does not verify")
     binding = _agent_access_binding_sha256(
         source=source,
         resolved_hyperparameters_sha256=resolved_hash,
@@ -5299,9 +4953,7 @@ sys.stdout.write(
     )
     payload = _extract_probe_payload(result.stdout)
     packages = payload.get("packages")
-    if not isinstance(packages, list) or not all(
-        type(item) is str and item for item in packages
-    ):
+    if not isinstance(packages, list) or not all(type(item) is str and item for item in packages):
         raise OfficialForagaxValidationError(
             "supplied interpreter returned an invalid package freeze"
         )
@@ -5333,26 +4985,20 @@ def _claim(
         "synthetic_test": "Synthetic test-only execution; no scientific claim.",
     }
     if scientific_track not in notes:
-        raise OfficialForagaxValidationError(
-            "official scientific track is unsupported"
-        )
+        raise OfficialForagaxValidationError("official scientific track is unsupported")
     return {
         "classification": scientific_track,
         "execution_commit": execution_commit,
         "config_commit": config_commit,
         "source_config_relation": (
-            "same_revision"
-            if config_commit == execution_commit
-            else "cross_revision"
+            "same_revision" if config_commit == execution_commit else "cross_revision"
         ),
         "paper_reproduction_claimed": False,
         "matched_current_environment": (
             scientific_track == "matched_current_environment_comparator"
         ),
         "diagnostic_only": scientific_track == "head_diagnostics",
-        "historical_lock_sensitivity": (
-            scientific_track == "historical_paper_lock_sensitivity"
-        ),
+        "historical_lock_sensitivity": (scientific_track == "historical_paper_lock_sensitivity"),
         "note": notes[scientific_track],
     }
 
@@ -5387,13 +5033,11 @@ def prepare_official_foragax_run(
             "official checkout must be clean; status contains:\n" + status
         )
 
-    origin = _canonical_repository_url(
-        _git_text(repository, "remote", "get-url", "origin")
-    )
+    origin = _canonical_repository_url(_git_text(repository, "remote", "get-url", "origin"))
     expected_repository = _canonical_repository_url(request.expected_repository)
     if origin != expected_repository:
         raise OfficialForagaxValidationError(
-            f"origin is {origin!r}; expected official repository {expected_repository!r}"
+            f"origin is '{origin}'; expected official repository '{expected_repository}'"
         )
 
     checkout_config, config_relative = _relative_path_in_repository(
@@ -5432,20 +5076,13 @@ def prepare_official_foragax_run(
     if type(agent) is not str or not agent.strip():
         raise OfficialForagaxValidationError("official config has no non-empty agent")
     if problem != "Foragax":
-        raise OfficialForagaxValidationError(
-            "official config problem must be exactly 'Foragax'"
-        )
-    if (
-        type(configured_env_steps) is not int
-        or configured_env_steps < 1
-    ):
+        raise OfficialForagaxValidationError("official config problem must be exactly 'Foragax'")
+    if type(configured_env_steps) is not int or configured_env_steps < 1:
         raise OfficialForagaxValidationError(
             "official config total_steps must be a positive integer"
         )
     if not isinstance(meta_parameters, dict):
-        raise OfficialForagaxValidationError(
-            "official config metaParameters must be an object"
-        )
+        raise OfficialForagaxValidationError("official config metaParameters must be an object")
 
     interpreter = _absolute_without_resolving_symlinks(request.interpreter)
     try:
@@ -5463,10 +5100,7 @@ def prepare_official_foragax_run(
                 and interpreter.is_file()
             )
         )
-        or (
-            stat.S_ISLNK(interpreter_metadata.st_mode)
-            and not _ALLOW_TEST_NATIVE_EXECUTION
-        )
+        or (stat.S_ISLNK(interpreter_metadata.st_mode) and not _ALLOW_TEST_NATIVE_EXECUTION)
         or not os.access(interpreter, os.X_OK)
     ):
         raise OfficialForagaxValidationError(
@@ -5527,19 +5161,15 @@ def prepare_official_foragax_run(
     )
     executor = cast(dict[str, Any], trust_profile["executor"])
     if executor["kind"] == "oci" and (
-        cast(Mapping[str, Any], executor["determinism_qualification"])[
-            "backend"
-        ]
+        cast(Mapping[str, Any], executor["determinism_qualification"])["backend"]
         != ("gpu" if request.gpu else "cpu")
     ):
         raise OfficialForagaxValidationError(
-            "requested backend differs from the executor determinism "
-            "qualification"
+            "requested backend differs from the executor determinism qualification"
         )
     if (
         executor["kind"] == "oci"
-        and executor["scientific_runtime_class"]
-        == "historical_paper_lock_sensitivity"
+        and executor["scientific_runtime_class"] == "historical_paper_lock_sensitivity"
     ):
         raise OfficialForagaxValidationError(
             "the exact historical source/config/lock profile is archival "
@@ -5562,9 +5192,7 @@ def prepare_official_foragax_run(
             gpu=request.gpu,
         )
     else:
-        with tempfile.TemporaryDirectory(
-            prefix="alberta-foragax-config-probe-"
-        ) as directory:
+        with tempfile.TemporaryDirectory(prefix="alberta-foragax-config-probe-") as directory:
             probe_config = Path(directory) / "config.snapshot.json"
             probe_config.write_bytes(historical_config)
             probe = _probe_experiment(
@@ -5587,26 +5215,19 @@ def prepare_official_foragax_run(
         )
     rollout_steps = probe.get("rollout_steps")
     ppo_signature = (
-        agent.startswith(("PPO", "RealTimeActorCritic", "ActorCritic"))
-        or rollout_steps is not None
+        agent.startswith(("PPO", "RealTimeActorCritic", "ActorCritic")) or rollout_steps is not None
     )
     if ppo_signature:
         family: Literal["continuing", "ppo"] = "ppo"
         entrypoint = "src/rtu_ppo.py"
-        if (
-            type(rollout_steps) is not int
-            or rollout_steps < 1
-        ):
+        if type(rollout_steps) is not int or rollout_steps < 1:
             raise OfficialForagaxValidationError(
                 "PPO/RTU-PPO config must resolve a positive rollout_steps"
             )
         configured_updates = probe.get("num_updates")
         if configured_updates is None:
             configured_updates = configured_env_steps // rollout_steps + 1
-        if (
-            type(configured_updates) is not int
-            or configured_updates < 1
-        ):
+        if type(configured_updates) is not int or configured_updates < 1:
             raise OfficialForagaxValidationError(
                 "PPO/RTU-PPO config must resolve a positive update count"
             )
@@ -5638,8 +5259,7 @@ def prepare_official_foragax_run(
 
     if trusted_configuration["entrypoint_family"] != family:
         raise OfficialForagaxValidationError(
-            "trusted configuration entrypoint family differs from the "
-            "resolved workload"
+            "trusted configuration entrypoint family differs from the resolved workload"
         )
 
     stored_seed = probe.get("stored_seed")
@@ -5650,9 +5270,7 @@ def prepare_official_foragax_run(
         maximum=OFFICIAL_FORAGAX_MAX_SEED,
     )
     offset_key = (
-        "declared_top_level_seed_offset"
-        if family == "ppo"
-        else "declared_nested_seed_offset"
+        "declared_top_level_seed_offset" if family == "ppo" else "declared_nested_seed_offset"
     )
     applied_seed_offset = probe.get(offset_key)
     applied_seed_offset = _require_int(
@@ -5670,8 +5288,7 @@ def prepare_official_foragax_run(
     effective_seed = stored_seed + applied_seed_offset
     if not 0 <= effective_seed <= OFFICIAL_FORAGAX_MAX_SEED:
         raise OfficialForagaxValidationError(
-            "official effective seed falls outside the canonical 32-bit JAX "
-            "seed domain"
+            "official effective seed falls outside the canonical 32-bit JAX seed domain"
         )
     if probe.get("effective_seed") != effective_seed:
         raise OfficialForagaxValidationError(
@@ -5719,13 +5336,11 @@ def prepare_official_foragax_run(
         Mapping[str, Any],
         cast(Mapping[str, Any], trust_profile["entrypoints"])[family],
     )
-    if (
-        trusted_entrypoint.get("path") != entrypoint
-        or trusted_entrypoint.get("sha256") != _sha256(entrypoint_path)
+    if trusted_entrypoint.get("path") != entrypoint or trusted_entrypoint.get("sha256") != _sha256(
+        entrypoint_path
     ):
         raise OfficialForagaxValidationError(
-            "selected official entrypoint does not match the trusted execution "
-            "profile"
+            "selected official entrypoint does not match the trusted execution profile"
         )
     lock_path = repository / "uv.lock"
     if not lock_path.is_file():
@@ -5811,14 +5426,11 @@ def prepare_official_foragax_run(
         gpu=request.gpu,
     )
     expected_executable = (
-        str(interpreter)
-        if executor["kind"] != "oci"
-        else cast(str, executor["python_executable"])
+        str(interpreter) if executor["kind"] != "oci" else cast(str, executor["python_executable"])
     )
     if raw_runtime.get("executable") != expected_executable:
         raise OfficialForagaxValidationError(
-            "runtime probe used an interpreter other than the trusted launcher "
-            "contract"
+            "runtime probe used an interpreter other than the trusted launcher contract"
         )
     runtime = _sanitized_runtime(raw_runtime)
     _verify_requested_backend(
@@ -5826,9 +5438,7 @@ def prepare_official_foragax_run(
         gpu=request.gpu,
         executor=executor,
     )
-    checkout_config_bytes = (
-        checkout_config.read_bytes() if checkout_config.is_file() else None
-    )
+    checkout_config_bytes = checkout_config.read_bytes() if checkout_config.is_file() else None
     source = {
         "repository": expected_repository,
         "origin": origin,
@@ -5897,9 +5507,7 @@ def prepare_official_foragax_run(
     ]
     if trusted_runs:
         run_matches = [
-            trusted_run
-            for trusted_run in trusted_runs
-            if trusted_run.get("index") == request.index
+            trusted_run for trusted_run in trusted_runs if trusted_run.get("index") == request.index
         ]
         if len(run_matches) == 1:
             expected_archive_members = [
@@ -5916,9 +5524,7 @@ def prepare_official_foragax_run(
             "top_level_seed_offset": top_level_seed_offset,
             "nested_seed_offset": nested_seed_offset,
             "effective_seed": effective_seed,
-            "resolved_hyperparameters_sha256": _json_sha256(
-                resolved_hyperparameters
-            ),
+            "resolved_hyperparameters_sha256": _json_sha256(resolved_hyperparameters),
             "effective_configuration_sha256": effective_configuration_sha256,
             "environment_sha256": _json_sha256(semantic_environment),
             "environment_rng_schedule": environment_rng_schedule,
@@ -5950,18 +5556,14 @@ def prepare_official_foragax_run(
         "jax_key_words": jax_key_words,
         "jax_key_sha256": jax_key_sha256,
         "resolved_hyperparameters": resolved_hyperparameters,
-        "resolved_hyperparameters_sha256": _json_sha256(
-            resolved_hyperparameters
-        ),
+        "resolved_hyperparameters_sha256": _json_sha256(resolved_hyperparameters),
         "registry": registry,
         "registry_sha256": _json_sha256(registry),
         "agent_access": agent_access,
         "agent_access_sha256": agent_access_sha256,
         "agent_access_binding_sha256": _agent_access_binding_sha256(
             source=source,
-            resolved_hyperparameters_sha256=_json_sha256(
-                resolved_hyperparameters
-            ),
+            resolved_hyperparameters_sha256=_json_sha256(resolved_hyperparameters),
             semantic_environment=semantic_environment,
             registry=registry,
             agent_access_sha256=agent_access_sha256,
@@ -6036,9 +5638,7 @@ def _batch_run_entry(
     registry = _validated_registry_identity(probe.get("registry"))
     compared_probe_values: dict[str, Any] = {
         "resolved_hyperparameters": resolved_hyperparameters,
-        "resolved_hyperparameters_sha256": _json_sha256(
-            resolved_hyperparameters
-        ),
+        "resolved_hyperparameters_sha256": _json_sha256(resolved_hyperparameters),
         "registry": registry,
         "registry_sha256": _json_sha256(registry),
         "rollout_steps": probe.get("rollout_steps"),
@@ -6047,15 +5647,14 @@ def _batch_run_entry(
         expected = first_run.get(key)
         if actual != expected:
             raise OfficialForagaxValidationError(
-                f"index {index} changes {key} within a native batch "
-                f"({actual!r} != {expected!r})"
+                f"index {index} changes {key} within a native batch ('{actual}' != '{expected}')"
             )
     if family == "ppo":
         actual_updates = probe.get("num_updates")
         if actual_updates is None:
-            actual_updates = int(first_run["configured_env_steps"]) // int(
-                first_run["rollout_steps"]
-            ) + 1
+            actual_updates = (
+                int(first_run["configured_env_steps"]) // int(first_run["rollout_steps"]) + 1
+            )
         if actual_updates != first_run.get("configured_updates"):
             raise OfficialForagaxValidationError(
                 f"index {index} changes configured_updates within a native batch"
@@ -6068,8 +5667,7 @@ def _batch_run_entry(
     if (
         probe.get("agent") != first_run.get("agent")
         or probe.get("problem") != "Foragax"
-        or probe.get("configured_total_steps")
-        != first_run.get("configured_env_steps")
+        or probe.get("configured_total_steps") != first_run.get("configured_env_steps")
     ):
         raise OfficialForagaxValidationError(
             f"index {index} changes the trusted ExperimentModel identity"
@@ -6081,9 +5679,7 @@ def _batch_run_entry(
         maximum=OFFICIAL_FORAGAX_MAX_SEED,
     )
     offset_key = (
-        "declared_top_level_seed_offset"
-        if family == "ppo"
-        else "declared_nested_seed_offset"
+        "declared_top_level_seed_offset" if family == "ppo" else "declared_nested_seed_offset"
     )
     applied_seed_offset = probe.get(offset_key)
     applied_seed_offset = _require_int(
@@ -6101,8 +5697,7 @@ def _batch_run_entry(
     effective_seed = stored_seed + applied_seed_offset
     if not 0 <= effective_seed <= OFFICIAL_FORAGAX_MAX_SEED:
         raise OfficialForagaxValidationError(
-            f"index {index} effective seed is outside the canonical 32-bit "
-            "JAX seed domain"
+            f"index {index} effective seed is outside the canonical 32-bit JAX seed domain"
         )
     if probe.get("effective_seed") != effective_seed:
         raise OfficialForagaxValidationError(
@@ -6128,8 +5723,7 @@ def _batch_run_entry(
     jax_key_sha256 = _json_sha256(jax_key_words)
     if expected_seed is not None and effective_seed != expected_seed:
         raise OfficialForagaxValidationError(
-            f"index {index} has effective seed {effective_seed}; "
-            f"expected {expected_seed}"
+            f"index {index} has effective seed {effective_seed}; expected {expected_seed}"
         )
     result = {
         "index": index,
@@ -6140,14 +5734,10 @@ def _batch_run_entry(
         "effective_seed": effective_seed,
         "jax_key_words": jax_key_words,
         "jax_key_sha256": jax_key_sha256,
-        "resolved_hyperparameters_sha256": compared_probe_values[
-            "resolved_hyperparameters_sha256"
-        ],
+        "resolved_hyperparameters_sha256": compared_probe_values["resolved_hyperparameters_sha256"],
         "registry_sha256": first_run["registry_sha256"],
         "agent_access_sha256": first_run["agent_access_sha256"],
-        "agent_access_binding_sha256": first_run[
-            "agent_access_binding_sha256"
-        ],
+        "agent_access_binding_sha256": first_run["agent_access_binding_sha256"],
         "expected_result_env_steps": first_run["expected_result_env_steps"],
     }
     if trusted_runs:
@@ -6159,16 +5749,10 @@ def _batch_run_entry(
             "top_level_seed_offset": top_level_seed_offset,
             "nested_seed_offset": nested_seed_offset,
             "effective_seed": effective_seed,
-            "resolved_hyperparameters_sha256": result[
-                "resolved_hyperparameters_sha256"
-            ],
-            "effective_configuration_sha256": first_run[
-                "effective_configuration_sha256"
-            ],
+            "resolved_hyperparameters_sha256": result["resolved_hyperparameters_sha256"],
+            "effective_configuration_sha256": first_run["effective_configuration_sha256"],
             "environment_sha256": _json_sha256(semantic_environment),
-            "environment_rng_schedule": first_run[
-                "environment_rng_schedule"
-            ],
+            "environment_rng_schedule": first_run["environment_rng_schedule"],
             "jax_key_sha256": jax_key_sha256,
             "registry_sha256": result["registry_sha256"],
             "agent_access_sha256": result["agent_access_sha256"],
@@ -6220,9 +5804,7 @@ def prepare_official_foragax_batch_run(
         }
     ]
     environment = _command_environment(gpu=request.gpu)
-    trust_profile, trusted_configuration = _trusted_profile_from_identity(
-        first_plan.trust
-    )
+    trust_profile, trusted_configuration = _trusted_profile_from_identity(first_plan.trust)
     executor = cast(dict[str, Any], trust_profile["executor"])
     trusted_runs = cast(
         list[dict[str, Any]],
@@ -6250,9 +5832,7 @@ def prepare_official_foragax_batch_run(
                         index=index,
                         probe=probe,
                         expected_seed=(
-                            None
-                            if expected_seeds is None
-                            else expected_seeds[position]
+                            None if expected_seeds is None else expected_seeds[position]
                         ),
                         trusted_runs=trusted_runs,
                     )
@@ -6279,9 +5859,7 @@ def prepare_official_foragax_batch_run(
                             index=index,
                             probe=probe,
                             expected_seed=(
-                                None
-                                if expected_seeds is None
-                                else expected_seeds[position]
+                                None if expected_seeds is None else expected_seeds[position]
                             ),
                             trusted_runs=trusted_runs,
                         )
@@ -6290,13 +5868,9 @@ def prepare_official_foragax_batch_run(
     effective_seeds = tuple(int(item["effective_seed"]) for item in run_entries)
     jax_key_hashes = tuple(str(item["jax_key_sha256"]) for item in run_entries)
     if len(set(stored_seeds)) != len(stored_seeds):
-        raise OfficialForagaxValidationError(
-            "official batch resolved duplicate stored seeds"
-        )
+        raise OfficialForagaxValidationError("official batch resolved duplicate stored seeds")
     if len(set(effective_seeds)) != len(effective_seeds):
-        raise OfficialForagaxValidationError(
-            "official batch resolved duplicate effective seeds"
-        )
+        raise OfficialForagaxValidationError("official batch resolved duplicate effective seeds")
     if len(set(jax_key_hashes)) != len(jax_key_hashes):
         raise OfficialForagaxValidationError(
             "official batch resolved duplicate actual JAX PRNG keys"
@@ -6518,12 +6092,7 @@ def _open_output_file_at(
         create=True,
         label="output file",
     )
-    flags = (
-        os.O_WRONLY
-        | os.O_CREAT
-        | getattr(os, "O_CLOEXEC", 0)
-        | getattr(os, "O_NOFOLLOW", 0)
-    )
+    flags = os.O_WRONLY | os.O_CREAT | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
     flags |= os.O_EXCL if exclusive else os.O_TRUNC
     try:
         descriptor = os.open(
@@ -6573,10 +6142,9 @@ def _assert_bound_output_root(
         raise OfficialForagaxValidationError(
             "official output root disappeared during execution"
         ) from exc
-    if (
-        _stat_object_identity(opened) != _stat_object_identity(identity)
-        or _stat_object_identity(current) != _stat_object_identity(identity)
-    ):
+    if _stat_object_identity(opened) != _stat_object_identity(identity) or _stat_object_identity(
+        current
+    ) != _stat_object_identity(identity):
         raise OfficialForagaxValidationError(
             "official output root identity changed during execution"
         )
@@ -6635,16 +6203,12 @@ def _trusted_oci_invocation(
         for invocation in cast(list[dict[str, Any]], configuration["invocations"])
         if (
             invocation["index_expression"] == expression
-            and invocation["expected_result_env_steps"]
-            == plan.run["expected_result_env_steps"]
-            and invocation["max_steps_argument"]
-            == plan.run["max_steps_argument"]
+            and invocation["expected_result_env_steps"] == plan.run["expected_result_env_steps"]
+            and invocation["max_steps_argument"] == plan.run["max_steps_argument"]
         )
     ]
     if len(matches) != 1:
-        raise OfficialForagaxValidationError(
-            "requested OCI invocation is not uniquely allowlisted"
-        )
+        raise OfficialForagaxValidationError("requested OCI invocation is not uniquely allowlisted")
     return matches[0]
 
 
@@ -6679,15 +6243,11 @@ def _validate_foragax_results_database_bytes(
                 "official results.db contains an unexpected SQLite schema"
             )
         columns = [
-            str(row[1])
-            for row in connection.execute(
-                'PRAGMA table_info("_metadata_")'
-            ).fetchall()
+            str(row[1]) for row in connection.execute('PRAGMA table_info("_metadata_")').fetchall()
         ]
         if columns != list(OFFICIAL_FORAGAX_RESULTS_DB_COLUMNS):
             raise OfficialForagaxValidationError(
-                "official results.db metadata columns differ from the trusted "
-                "Foragax schema"
+                "official results.db metadata columns differ from the trusted Foragax schema"
             )
         rows = connection.execute(
             """
@@ -6696,14 +6256,10 @@ def _validate_foragax_results_database_bytes(
             ORDER BY id
             """
         ).fetchall()
-        expected = [
-            (index, index, "integer", "integer")
-            for index in expected_indices
-        ]
+        expected = [(index, index, "integer", "integer") for index in expected_indices]
         if rows != expected:
             raise OfficialForagaxValidationError(
-                "official results.db seed/id rows differ from the exact "
-                "invocation index set"
+                "official results.db seed/id rows differ from the exact invocation index set"
             )
     except sqlite3.DatabaseError as exc:
         raise OfficialForagaxValidationError(
@@ -6734,9 +6290,7 @@ def _verify_foragax_results_database(
         capture_bytes=True,
     )
     if contents is None:  # pragma: no cover - capture_bytes=True
-        raise OfficialForagaxValidationError(
-            "official results.db could not be read"
-        )
+        raise OfficialForagaxValidationError("official results.db could not be read")
     _validate_foragax_results_database_bytes(
         contents,
         expected_indices=expected_indices,
@@ -6755,9 +6309,7 @@ def _extract_trusted_oci_tar_at(
     maximum_total = cast(int, invocation["max_total_bytes"])
     os.lseek(archive_descriptor, 0, os.SEEK_SET)
     archive_size = os.fstat(archive_descriptor).st_size
-    maximum_archive_size = (
-        maximum_total + (2 * len(expected_members) + 20) * 512
-    )
+    maximum_archive_size = maximum_total + (2 * len(expected_members) + 20) * 512
     if (
         archive_size < (len(expected_members) + 2) * 512
         or archive_size > maximum_archive_size
@@ -6778,12 +6330,9 @@ def _extract_trusted_oci_tar_at(
                 )
             members = archive.getmembers()
             actual_paths = [member.name for member in members]
-            if actual_paths != expected_paths or len(actual_paths) != len(
-                set(actual_paths)
-            ):
+            if actual_paths != expected_paths or len(actual_paths) != len(set(actual_paths)):
                 raise OfficialForagaxValidationError(
-                    "OCI launcher tar member order/set differs from the trusted "
-                    "invocation contract"
+                    "OCI launcher tar member order/set differs from the trusted invocation contract"
                 )
             stream_cursor = 0
             for member, expected in zip(members, expected_members, strict=True):
@@ -6855,9 +6404,7 @@ def _extract_trusted_oci_tar_at(
                     member.name,
                     contents,
                 )
-                stream_cursor = member.offset_data + (
-                    (member.size + 511) // 512
-                ) * 512
+                stream_cursor = member.offset_data + ((member.size + 511) // 512) * 512
             trailer_size = archive_size - stream_cursor
             trailer_is_zero = trailer_size >= 1024
             trailer_offset = stream_cursor
@@ -6873,8 +6420,7 @@ def _extract_trusted_oci_tar_at(
                 trailer_offset += len(chunk)
             if not trailer_is_zero:
                 raise OfficialForagaxValidationError(
-                    "OCI launcher tar has a missing or nonzero end-of-archive "
-                    "trailer"
+                    "OCI launcher tar has a missing or nonzero end-of-archive trailer"
                 )
     except (tarfile.TarError, OSError) as exc:
         raise OfficialForagaxValidationError(
@@ -6890,15 +6436,11 @@ def _validate_running_lock_payload(value: Any) -> dict[str, Any]:
         label="official running lock",
     )
     if payload["schema_version"] != "1.0":
-        raise OfficialForagaxValidationError(
-            "official running lock schema is unsupported"
-        )
+        raise OfficialForagaxValidationError("official running lock schema is unsupported")
     _require_string(payload["hostname"], label="official running lock hostname")
     nonce = _require_string(payload["nonce"], label="official running lock nonce")
     if re.fullmatch(r"[0-9a-f]{32}", nonce) is None:
-        raise OfficialForagaxValidationError(
-            "official running lock nonce is invalid"
-        )
+        raise OfficialForagaxValidationError("official running lock nonce is invalid")
     _require_int(payload["pid"], label="official running lock pid", minimum=1)
     started = _require_string(
         payload["started_at_utc"],
@@ -6907,13 +6449,9 @@ def _validate_running_lock_payload(value: Any) -> dict[str, Any]:
     try:
         parsed = datetime.fromisoformat(started)
     except ValueError as exc:
-        raise OfficialForagaxValidationError(
-            "official running lock timestamp is invalid"
-        ) from exc
+        raise OfficialForagaxValidationError("official running lock timestamp is invalid") from exc
     if parsed.tzinfo != UTC:
-        raise OfficialForagaxValidationError(
-            "official running lock timestamp is not UTC"
-        )
+        raise OfficialForagaxValidationError("official running lock timestamp is not UTC")
     return payload
 
 
@@ -6926,8 +6464,7 @@ def _acquire_running_lock_at(root_descriptor: int) -> dict[str, Any]:
         "started_at_utc": datetime.now(UTC).isoformat(),
     }
     contents = (
-        json.dumps(payload, sort_keys=True, separators=(",", ":"), allow_nan=False)
-        + "\n"
+        json.dumps(payload, sort_keys=True, separators=(",", ":"), allow_nan=False) + "\n"
     ).encode()
     try:
         descriptor, parent_descriptor, _name = _open_output_file_at(
@@ -6944,9 +6481,7 @@ def _acquire_running_lock_at(root_descriptor: int) -> dict[str, Any]:
         while view:
             written = os.write(descriptor, view)
             if written <= 0:
-                raise OfficialForagaxValidationError(
-                    "official running lock write made no progress"
-                )
+                raise OfficialForagaxValidationError("official running lock write made no progress")
             view = view[written:]
         os.fsync(descriptor)
         os.fsync(parent_descriptor)
@@ -6964,9 +6499,7 @@ def _read_running_lock_at(root_descriptor: int) -> dict[str, Any]:
         capture_bytes=True,
     )
     if metadata["byte_size"] > 4096 or contents is None:
-        raise OfficialForagaxValidationError(
-            "official running lock has an invalid size"
-        )
+        raise OfficialForagaxValidationError("official running lock has an invalid size")
     return _validate_running_lock_payload(
         _strict_json_loads(contents, label="official running lock")
     )
@@ -6986,14 +6519,11 @@ def _recover_stale_running_lock_at(root_descriptor: int) -> None:
     payload = _read_running_lock_at(root_descriptor)
     if payload["hostname"] != os.uname().nodename:
         raise OfficialForagaxValidationError(
-            "official running lock belongs to another host and cannot be "
-            "safely recovered"
+            "official running lock belongs to another host and cannot be safely recovered"
         )
     pid = cast(int, payload["pid"])
     if _process_is_alive(pid):
-        raise OfficialForagaxValidationError(
-            f"official running lock belongs to live process {pid}"
-        )
+        raise OfficialForagaxValidationError(f"official running lock belongs to live process {pid}")
     _unlink_output_at(
         root_descriptor,
         ".running",
@@ -7006,9 +6536,7 @@ def _atomic_write_json_at(
     relative_value: str,
     payload: Mapping[str, Any],
 ) -> None:
-    encoded = (
-        json.dumps(payload, indent=2, sort_keys=True, allow_nan=False) + "\n"
-    ).encode()
+    encoded = (json.dumps(payload, indent=2, sort_keys=True, allow_nan=False) + "\n").encode()
     _atomic_write_bytes_at(root_descriptor, relative_value, encoded)
 
 
@@ -7094,9 +6622,7 @@ def _scan_bound_output_tree(
                     dir_fd=descriptor,
                     follow_symlinks=False,
                 )
-                if not stat.S_ISREG(metadata.st_mode) or stat.S_ISLNK(
-                    metadata.st_mode
-                ):
+                if not stat.S_ISREG(metadata.st_mode) or stat.S_ISLNK(metadata.st_mode):
                     raise OfficialForagaxValidationError(
                         "official manifest.json is not a regular file"
                     )
@@ -7113,13 +6639,11 @@ def _scan_bound_output_tree(
                     and not stat.S_ISLNK(lock_metadata.st_mode)
                     and 0 < lock_metadata.st_size <= 4096
                 ):
-                    running_file_metadata, contents, _identity = (
-                        _read_regular_at_nofollow(
-                            descriptor,
-                            name,
-                            label="running lock",
-                            capture_bytes=True,
-                        )
+                    running_file_metadata, contents, _identity = _read_regular_at_nofollow(
+                        descriptor,
+                        name,
+                        label="running lock",
+                        capture_bytes=True,
                     )
                     if (
                         running_file_metadata["byte_size"] == lock_metadata.st_size
@@ -7164,9 +6688,7 @@ def _scan_bound_output_tree(
                     dir_fd=descriptor,
                     follow_symlinks=False,
                 )
-                if _stat_object_identity(current) != _stat_object_identity(
-                    child_identity
-                ):
+                if _stat_object_identity(current) != _stat_object_identity(child_identity):
                     raise OfficialForagaxValidationError(
                         f"official output directory changed during scan: {relative}"
                     )
@@ -7181,9 +6703,7 @@ def _scan_bound_output_tree(
                 label=f"output file {relative}",
                 capture_bytes=False,
             )
-            entries.append(
-                {"path": relative, "type": "file", **file_metadata}
-            )
+            entries.append({"path": relative, "type": "file", **file_metadata})
         try:
             names_after = sorted(os.listdir(descriptor))
             after = os.fstat(descriptor)
@@ -7191,9 +6711,9 @@ def _scan_bound_output_tree(
             raise OfficialForagaxValidationError(
                 f"official output tree changed during enumeration: {exc}"
             ) from exc
-        if names_after != names_before or _stat_object_identity(
-            after
-        ) != _stat_object_identity(before):
+        if names_after != names_before or _stat_object_identity(after) != _stat_object_identity(
+            before
+        ):
             raise OfficialForagaxValidationError(
                 "official output directory entries changed during scan"
             )
@@ -7202,9 +6722,7 @@ def _scan_bound_output_tree(
         scan_directory(root_descriptor, ())
         root_after = root.lstat()
         if _stat_object_identity(root_after) != _stat_object_identity(root_identity):
-            raise OfficialForagaxValidationError(
-                "official output root changed during scan"
-            )
+            raise OfficialForagaxValidationError("official output root changed during scan")
     finally:
         os.close(root_descriptor)
     return sorted(
@@ -7229,26 +6747,16 @@ def _output_tree_sections(
         root,
         allow_running_lock=allow_running_lock,
     )
-    scanned_files = [
-        item for item in scanned if item.get("type") == "file"
-    ]
-    scanned_file_paths = {
-        cast(str, item["path"]) for item in scanned_files
-    }
+    scanned_files = [item for item in scanned if item.get("type") == "file"]
+    scanned_file_paths = {cast(str, item["path"]) for item in scanned_files}
     missing = sorted(set(primary_paths) - scanned_file_paths)
     if missing:
         raise OfficialForagaxValidationError(
             f"official output tree is missing primary files: {missing}"
         )
     primary = set(primary_paths)
-    auxiliary = [
-        item
-        for item in scanned_files
-        if cast(str, item["path"]) not in primary
-    ]
-    directories = [
-        item for item in scanned if item.get("type") == "directory"
-    ]
+    auxiliary = [item for item in scanned_files if cast(str, item["path"]) not in primary]
+    directories = [item for item in scanned if item.get("type") == "directory"]
     output_tree = {
         "hash_scheme": OFFICIAL_FORAGAX_OUTPUT_TREE_HASH_SCHEME,
         "entry_count": len(scanned),
@@ -7280,9 +6788,7 @@ def _verify_output_tree_sections(
             "official output directory set or type does not verify"
         )
     if manifest.get("output_tree") != output_tree:
-        raise OfficialForagaxValidationError(
-            "official complete output-tree digest does not verify"
-        )
+        raise OfficialForagaxValidationError("official complete output-tree digest does not verify")
 
 
 def _completion_attestation(
@@ -7291,9 +6797,7 @@ def _completion_attestation(
     """Re-probe all mutable execution inputs and fail on any mid-run drift."""
     repository = plan.request.repository
     environment = _command_environment(gpu=plan.request.gpu)
-    trust_profile, _trusted_configuration = _trusted_profile_from_identity(
-        plan.trust
-    )
+    trust_profile, _trusted_configuration = _trusted_profile_from_identity(plan.trust)
     executor = cast(dict[str, Any], trust_profile["executor"])
     snapshot_relative = cast(str, plan.source["config_snapshot_path"])
     snapshot_metadata, snapshot_bytes = _read_bound_regular_file(
@@ -7305,7 +6809,7 @@ def _completion_attestation(
     if snapshot_bytes != plan.config_snapshot_bytes:
         raise OfficialForagaxValidationError(
             "official historical config snapshot changed during execution"
-    )
+        )
     execution_config_relative = cast(str, plan.source["execution_config_path"])
     execution_config_metadata, execution_config_bytes = _read_bound_regular_file(
         plan.output_dir,
@@ -7314,9 +6818,7 @@ def _completion_attestation(
         capture_bytes=True,
     )
     if execution_config_bytes != plan.execution_config_bytes:
-        raise OfficialForagaxValidationError(
-            "official execution config changed during execution"
-        )
+        raise OfficialForagaxValidationError("official execution config changed during execution")
     status = _git_text(
         repository,
         "status",
@@ -7353,17 +6855,11 @@ def _completion_attestation(
     )
     historical_lock = _git_bytes(repository, "show", f"{config_commit}:uv.lock")
     execution_config = _git_bytes(repository, "show", "HEAD:config.json")
-    origin = _canonical_repository_url(
-        _git_text(repository, "remote", "get-url", "origin")
-    )
+    origin = _canonical_repository_url(_git_text(repository, "remote", "get-url", "origin"))
     entrypoint = cast(str, plan.source["entrypoint"])
     actual = {
-        "execution_commit": _git_text(
-            repository, "rev-parse", "--verify", "HEAD^{commit}"
-        ),
-        "execution_tree_git_sha1": _git_text(
-            repository, "rev-parse", "HEAD^{tree}"
-        ),
+        "execution_commit": _git_text(repository, "rev-parse", "--verify", "HEAD^{commit}"),
+        "execution_tree_git_sha1": _git_text(repository, "rev-parse", "HEAD^{tree}"),
         "origin": origin,
         "worktree_clean": not status,
         "source_tree_sha256": _tracked_tree_sha256(repository, "src"),
@@ -7388,9 +6884,7 @@ def _completion_attestation(
         "interpreter_sha256": _sha256(plan.request.interpreter),
         "package_freeze_sha256": _text_sha256(actual_freeze),
         "runtime_sha256": _json_sha256(actual_runtime),
-        "execution_environment_sha256": _json_sha256(
-            _relevant_environment(environment)
-        ),
+        "execution_environment_sha256": _json_sha256(_relevant_environment(environment)),
         "foragax_install_tree_sha256": cast(
             Mapping[str, Any],
             actual_runtime["foragax_implementation"],
@@ -7406,36 +6900,26 @@ def _completion_attestation(
         "entrypoint_sha256": plan.source["entrypoint_sha256"],
         "config_git_blob_sha1": plan.source["config_git_blob_sha1"],
         "config_sha256": plan.source["config_sha256"],
-        "config_commit_lock_sha256": plan.source[
-            "config_commit_lock_sha256"
-        ],
+        "config_commit_lock_sha256": plan.source["config_commit_lock_sha256"],
         "config_snapshot_sha256": plan.source["config_sha256"],
-        "execution_config_git_blob_sha1": plan.source[
-            "execution_config_git_blob_sha1"
-        ],
+        "execution_config_git_blob_sha1": plan.source["execution_config_git_blob_sha1"],
         "execution_config_sha256": plan.source["execution_config_sha256"],
         "execution_config_copy_sha256": plan.source["execution_config_sha256"],
         "harness_module_sha256": plan.source["harness_module_sha256"],
         "interpreter_sha256": plan.interpreter_sha256,
         "package_freeze_sha256": plan.package_freeze_sha256,
         "runtime_sha256": _json_sha256(plan.runtime),
-        "execution_environment_sha256": _json_sha256(
-            plan.relevant_environment
-        ),
+        "execution_environment_sha256": _json_sha256(plan.relevant_environment),
         "foragax_install_tree_sha256": cast(
             Mapping[str, Any],
             plan.runtime["foragax_implementation"],
         )["install_tree_sha256"],
     }
     mismatches = [
-        key for key, expected_value in expected.items()
-        if actual.get(key) != expected_value
+        key for key, expected_value in expected.items() if actual.get(key) != expected_value
     ]
     if mismatches:
-        detail = ", ".join(
-            f"{key}: {actual.get(key)!r} != {expected[key]!r}"
-            for key in mismatches
-        )
+        detail = ", ".join(f"{key}: '{actual.get(key)}' != '{expected[key]}'" for key in mismatches)
         raise OfficialForagaxValidationError(
             "official source/runtime changed during execution: " + detail
         )
@@ -7469,7 +6953,7 @@ def _inspect_npz(
             if names != expected_member_names or len(names) != len(set(names)):
                 raise OfficialForagaxValidationError(
                     f"{relative_path} NPZ members differ from the exact trusted "
-                    f"member order: {names!r} != {expected_member_names!r}"
+                    f"member order: {names} != {expected_member_names}"
                 )
             total_uncompressed = 0
             maximum_member_size = max(64 * 1024 * 1024, expected_steps * 4096)
@@ -7477,8 +6961,7 @@ def _inspect_npz(
                 if (
                     info.is_dir()
                     or info.flag_bits & 0x1
-                    or info.compress_type
-                    not in {zipfile.ZIP_STORED, zipfile.ZIP_DEFLATED}
+                    or info.compress_type not in {zipfile.ZIP_STORED, zipfile.ZIP_DEFLATED}
                     or info.file_size < 1
                     or info.file_size > maximum_member_size
                     or info.compress_size < 1
@@ -7486,8 +6969,7 @@ def _inspect_npz(
                     or info.comment
                 ):
                     raise OfficialForagaxValidationError(
-                        f"{relative_path} contains unsafe NPZ member metadata "
-                        f"for {info.filename!r}"
+                        f"{relative_path} contains unsafe NPZ member metadata for '{info.filename}'"
                     )
                 total_uncompressed += info.file_size
             if total_uncompressed > maximum_member_size * len(infos):
@@ -7497,17 +6979,11 @@ def _inspect_npz(
         with np.load(io.BytesIO(archive_bytes), allow_pickle=False) as archive:
             if list(archive.files) != array_names:
                 raise OfficialForagaxValidationError(
-                    f"{relative_path} NumPy member identities do not match its "
-                    "ZIP directory"
+                    f"{relative_path} NumPy member identities do not match its ZIP directory"
                 )
-            arrays = {
-                name: np.asarray(archive[name])
-                for name in array_names
-            }
+            arrays = {name: np.asarray(archive[name]) for name in array_names}
     except (OSError, ValueError, zipfile.BadZipFile) as exc:
-        raise OfficialForagaxValidationError(
-            f"{relative_path} is not a valid safe NPZ"
-        ) from exc
+        raise OfficialForagaxValidationError(f"{relative_path} is not a valid safe NPZ") from exc
     consumed_arrays: dict[str, Any] = {}
     for contract in contracts:
         name = cast(str, contract["name"])
@@ -7518,8 +6994,7 @@ def _inspect_npz(
         )
         if array.shape != expected_shape:
             raise OfficialForagaxValidationError(
-                f"{relative_path} {name} shape is {array.shape}; expected "
-                f"exactly {expected_shape}"
+                f"{relative_path} {name} shape is {array.shape}; expected exactly {expected_shape}"
             )
         if (
             np.issubdtype(array.dtype, np.bool_)
@@ -7527,14 +7002,12 @@ def _inspect_npz(
             or not np.issubdtype(array.dtype, np.number)
         ):
             raise OfficialForagaxValidationError(
-                f"{relative_path} {name} must have a real numeric, non-boolean "
-                "dtype"
+                f"{relative_path} {name} must have a real numeric, non-boolean dtype"
             )
         expected_dtype = cast(str, contract["dtype"])
         if str(array.dtype) != expected_dtype:
             raise OfficialForagaxValidationError(
-                f"{relative_path} {name} dtype is {array.dtype}; expected "
-                f"exactly {expected_dtype}"
+                f"{relative_path} {name} dtype is {array.dtype}; expected exactly {expected_dtype}"
             )
         all_finite = bool(np.all(np.isfinite(array)))
         if contract["finite_policy"] == "all_finite" and not all_finite:
@@ -7606,9 +7079,7 @@ def _find_batch_results(plan: OfficialForagaxBatchRunPlan) -> tuple[Path, ...]:
         by_index.setdefault(index, []).append(path)
     missing = [index for index in expected_indices if index not in by_index]
     extra = sorted(index for index in by_index if index not in expected_indices)
-    duplicate = sorted(
-        index for index, paths in by_index.items() if len(paths) != 1
-    )
+    duplicate = sorted(index for index, paths in by_index.items() if len(paths) != 1)
     if missing or extra or duplicate or invalid_names:
         raise OfficialForagaxValidationError(
             "official batch artifact set mismatch: "
@@ -7661,27 +7132,17 @@ def _manifest_payload(
             "relevant_environment": dict(plan.relevant_environment),
             "interpreter": "<OFFICIAL_PYTHON>",
             "interpreter_sha256": plan.interpreter_sha256,
-            "interpreter_sha256_at_completion": completion_attestation[
-                "interpreter_sha256"
-            ],
+            "interpreter_sha256_at_completion": completion_attestation["interpreter_sha256"],
             "package_freeze_method": "importlib.metadata_with_pep610",
             "package_freeze": list(plan.package_freeze),
             "package_inventory": list(_package_inventory(plan.package_freeze)),
-            "package_inventory_sha256": _text_sha256(
-                _package_inventory(plan.package_freeze)
-            ),
+            "package_inventory_sha256": _text_sha256(_package_inventory(plan.package_freeze)),
             "package_freeze_sha256": plan.package_freeze_sha256,
-            "package_freeze_sha256_at_completion": completion_attestation[
-                "package_freeze_sha256"
-            ],
+            "package_freeze_sha256_at_completion": completion_attestation["package_freeze_sha256"],
             "runtime": dict(plan.runtime),
             "runtime_sha256": _json_sha256(plan.runtime),
-            "runtime_sha256_at_completion": completion_attestation[
-                "runtime_sha256"
-            ],
-            "harness_module_sha256_at_completion": plan.source[
-                "harness_module_sha256"
-            ],
+            "runtime_sha256_at_completion": completion_attestation["runtime_sha256"],
+            "harness_module_sha256_at_completion": plan.source["harness_module_sha256"],
             "started_at_utc": started_at.isoformat(),
             "completed_at_utc": completed_at.isoformat(),
             "duration_s": duration_s,
@@ -7768,27 +7229,17 @@ def _batch_manifest_payload(
             "relevant_environment": dict(plan.relevant_environment),
             "interpreter": "<OFFICIAL_PYTHON>",
             "interpreter_sha256": plan.interpreter_sha256,
-            "interpreter_sha256_at_completion": completion_attestation[
-                "interpreter_sha256"
-            ],
+            "interpreter_sha256_at_completion": completion_attestation["interpreter_sha256"],
             "package_freeze_method": "importlib.metadata_with_pep610",
             "package_freeze": list(plan.package_freeze),
             "package_inventory": list(_package_inventory(plan.package_freeze)),
-            "package_inventory_sha256": _text_sha256(
-                _package_inventory(plan.package_freeze)
-            ),
+            "package_inventory_sha256": _text_sha256(_package_inventory(plan.package_freeze)),
             "package_freeze_sha256": plan.package_freeze_sha256,
-            "package_freeze_sha256_at_completion": completion_attestation[
-                "package_freeze_sha256"
-            ],
+            "package_freeze_sha256_at_completion": completion_attestation["package_freeze_sha256"],
             "runtime": dict(plan.runtime),
             "runtime_sha256": _json_sha256(plan.runtime),
-            "runtime_sha256_at_completion": completion_attestation[
-                "runtime_sha256"
-            ],
-            "harness_module_sha256_at_completion": completion_attestation[
-                "harness_module_sha256"
-            ],
+            "runtime_sha256_at_completion": completion_attestation["runtime_sha256"],
+            "harness_module_sha256_at_completion": completion_attestation["harness_module_sha256"],
             "started_at_utc": started_at.isoformat(),
             "completed_at_utc": completed_at.isoformat(),
             "duration_s": duration_s,
@@ -7850,9 +7301,7 @@ def _required_mapping(
 ) -> Mapping[str, Any]:
     value = parent.get(key)
     if not isinstance(value, dict):
-        raise OfficialForagaxValidationError(
-            f"official {label} {key} is invalid"
-        )
+        raise OfficialForagaxValidationError(f"official {label} {key} is invalid")
     return value
 
 
@@ -8074,9 +7523,7 @@ def _validate_agent_access_schema(value: Any, *, label: str) -> dict[str, Any]:
         access["schema_version"] != OFFICIAL_FORAGAX_AGENT_ACCESS_SCHEMA_VERSION
         or access["classification_rule"] != "official-foragax-agent-access-v2"
     ):
-        raise OfficialForagaxValidationError(
-            f"{label} uses an unsupported classifier"
-        )
+        raise OfficialForagaxValidationError(f"{label} uses an unsupported classifier")
     _require_bool(access["classified"], label=f"{label}.classified")
     if access["privileged"] is not None:
         _require_bool(access["privileged"], label=f"{label}.privileged")
@@ -8222,9 +7669,7 @@ def _validate_runtime_schema(
         runtime["executable"] != "<OFFICIAL_PYTHON>"
         or runtime["expected_executable"] != "<OFFICIAL_PYTHON>"
     ):
-        raise OfficialForagaxValidationError(
-            f"{label} contains an unbound interpreter path"
-        )
+        raise OfficialForagaxValidationError(f"{label} contains an unbound interpreter path")
     for key in (
         "implementation",
         "jax",
@@ -8246,24 +7691,18 @@ def _validate_runtime_schema(
         runtime["python_build"],
         label=f"{label}.python_build",
     )
-    if len(python_build) != 2 or not all(
-        type(item) is str and item for item in python_build
-    ):
+    if len(python_build) != 2 or not all(type(item) is str and item for item in python_build):
         raise OfficialForagaxValidationError(
             f"{label}.python_build must contain the exact build identity"
         )
     if runtime["python_hash_seed"] != "0":
-        raise OfficialForagaxValidationError(
-            f"{label}.python_hash_seed must be exactly '0'"
-        )
+        raise OfficialForagaxValidationError(f"{label}.python_hash_seed must be exactly '0'")
     distribution_records = _require_mapping(
         runtime["distribution_records"],
         label=f"{label}.distribution_records",
     )
     for name, raw_record in distribution_records.items():
-        if (
-            re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", name) is None
-        ):
+        if re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", name) is None:
             raise OfficialForagaxValidationError(
                 f"{label}.distribution_records has an invalid name"
             )
@@ -8283,18 +7722,13 @@ def _validate_runtime_schema(
         if record["record_sha256"] is not None:
             _require_sha256(
                 record["record_sha256"],
-                label=(
-                    f"{label}.distribution_records.{name}.record_sha256"
-                ),
+                label=(f"{label}.distribution_records.{name}.record_sha256"),
             )
     if executor["kind"] == "oci" and runtime["jax"] != executor["jax_version"]:
-        raise OfficialForagaxValidationError(
-            f"{label}.jax does not match the trusted OCI runtime"
-        )
+        raise OfficialForagaxValidationError(f"{label}.jax does not match the trusted OCI runtime")
     if (
         executor["kind"] == "oci"
-        and executor["scientific_runtime_class"]
-        == OFFICIAL_FORAGAX_MATCHED_RUNTIME_CLASS
+        and executor["scientific_runtime_class"] == OFFICIAL_FORAGAX_MATCHED_RUNTIME_CLASS
     ):
         required_record_names = {
             "continual-foragax",
@@ -8317,8 +7751,7 @@ def _validate_runtime_schema(
             or runtime["implementation"] != "CPython"
             or re.fullmatch(r"3\.12\.[0-9]+", runtime["python"]) is None
             or not cast(str, runtime["python_soabi"]).startswith("cpython-312")
-            or runtime["executable_sha256"]
-            != executor["runtime_binary_sha256"]
+            or runtime["executable_sha256"] != executor["runtime_binary_sha256"]
         ):
             raise OfficialForagaxValidationError(
                 f"{label} is not the exact CPython 3.12 wheel/runtime profile"
@@ -8331,13 +7764,11 @@ def _validate_runtime_schema(
             "jaxlib": "0.9.0.1",
         }
         if any(
-            cast(dict[str, Any], distribution_records[name])["version"]
-            != version
+            cast(dict[str, Any], distribution_records[name])["version"] != version
             for name, version in required_record_versions.items()
         ):
             raise OfficialForagaxValidationError(
-                f"{label} distribution RECORD versions differ from the "
-                "matched-current lock"
+                f"{label} distribution RECORD versions differ from the matched-current lock"
             )
     if executor["kind"] == "oci":
         _validate_bundled_executable_schema(
@@ -8351,17 +7782,14 @@ def _validate_runtime_schema(
         )
     if (
         executor["kind"] == "oci"
-        and executor["scientific_runtime_class"]
-        != OFFICIAL_FORAGAX_MATCHED_RUNTIME_CLASS
-        and runtime["executable_sha256"]
-        != executor["runtime_binary_sha256"]
+        and executor["scientific_runtime_class"] != OFFICIAL_FORAGAX_MATCHED_RUNTIME_CLASS
+        and runtime["executable_sha256"] != executor["runtime_binary_sha256"]
     ):
         raise OfficialForagaxValidationError(
             f"{label}.executable_sha256 differs from the OCI interpreter"
         )
     elif (
-        executor["kind"] != "oci"
-        and runtime["executable_sha256"] != executor["interpreter_sha256"]
+        executor["kind"] != "oci" and runtime["executable_sha256"] != executor["interpreter_sha256"]
     ):
         raise OfficialForagaxValidationError(
             f"{label}.executable_sha256 differs from the test interpreter"
@@ -8382,9 +7810,7 @@ def _validate_runtime_schema(
             )
         trusted_source_device = _require_int(
             import_shadow_contract.get("trusted_source_device"),
-            label=(
-                f"{label}.import_shadow_contract.trusted_source_device"
-            ),
+            label=(f"{label}.import_shadow_contract.trusted_source_device"),
             minimum=0,
         )
         trusted_source_inode = _require_int(
@@ -8400,10 +7826,7 @@ def _validate_runtime_schema(
         for position, raw_entry in enumerate(base_sys_path_contract):
             entry = _require_mapping(
                 raw_entry,
-                label=(
-                    f"{label}.import_shadow_contract."
-                    f"base_sys_path_contract[{position}]"
-                ),
+                label=(f"{label}.import_shadow_contract.base_sys_path_contract[{position}]"),
             )
             _expect_exact_keys(
                 entry,
@@ -8416,10 +7839,7 @@ def _validate_runtime_schema(
                     "resolved_path",
                     "writable",
                 },
-                label=(
-                    f"{label}.import_shadow_contract."
-                    f"base_sys_path_contract[{position}]"
-                ),
+                label=(f"{label}.import_shadow_contract.base_sys_path_contract[{position}]"),
             )
             path_value = _require_string(
                 entry["path"],
@@ -8427,9 +7847,7 @@ def _validate_runtime_schema(
             )
             resolved_path = _require_string(
                 entry["resolved_path"],
-                label=(
-                    f"{label}.base_sys_path_contract[{position}].resolved_path"
-                ),
+                label=(f"{label}.base_sys_path_contract[{position}].resolved_path"),
             )
             _require_bool(
                 entry["exists"],
@@ -8457,9 +7875,7 @@ def _validate_runtime_schema(
             if entry["exists"] is True:
                 base_device = _require_int(
                     entry["device"],
-                    label=(
-                        f"{label}.base_sys_path_contract[{position}].device"
-                    ),
+                    label=(f"{label}.base_sys_path_contract[{position}].device"),
                     minimum=0,
                 )
                 base_inode = _require_int(
@@ -8468,10 +7884,7 @@ def _validate_runtime_schema(
                     minimum=1,
                 )
                 identity = (base_device, base_inode)
-                if (
-                    identity == trusted_source_identity
-                    or identity in seen_base_identities
-                ):
+                if identity == trusted_source_identity or identity in seen_base_identities:
                     raise OfficialForagaxValidationError(
                         f"{label}.import_shadow_contract base sys.path aliases "
                         "the trusted source or another entry"
@@ -8486,9 +7899,7 @@ def _validate_runtime_schema(
                     f"{label}.import_shadow_contract nonexistent sys.path "
                     "entry has an impossible identity"
                 )
-        trusted_source_path = (
-            Path(cast(str, executor["source_root"])) / "src"
-        ).as_posix()
+        trusted_source_path = (Path(cast(str, executor["source_root"])) / "src").as_posix()
         workload_sys_path_contract = {
             "cwd_append_path": executor["source_root"],
             "launcher_mode": "isolated-runpy-prepend-v1",
@@ -8621,12 +8032,10 @@ def _validate_runtime_schema(
             _require_string(jax_config[key], label=f"{label}.jax_config.{key}")
     if (
         executor["kind"] == "oci"
-        and executor["scientific_runtime_class"]
-        == OFFICIAL_FORAGAX_MATCHED_RUNTIME_CLASS
+        and executor["scientific_runtime_class"] == OFFICIAL_FORAGAX_MATCHED_RUNTIME_CLASS
         and (
             jax_config["jax_enable_compilation_cache"] is not False
-            or jax_config["jax_compilation_cache_dir"]
-            != "/run/alberta/jax-cache"
+            or jax_config["jax_compilation_cache_dir"] != "/run/alberta/jax-cache"
         )
     ):
         raise OfficialForagaxValidationError(
@@ -8679,12 +8088,9 @@ def _validate_runtime_schema(
     if (
         implementation["distribution"] != "continual-foragax"
         or implementation["package"] != "foragax"
-        or implementation["install_tree_hash_scheme"]
-        != "relative-path+size+bytes-v1"
+        or implementation["install_tree_hash_scheme"] != "relative-path+size+bytes-v1"
     ):
-        raise OfficialForagaxValidationError(
-            f"{label}.foragax_implementation identity is invalid"
-        )
+        raise OfficialForagaxValidationError(f"{label}.foragax_implementation identity is invalid")
     _require_string(
         implementation["version"],
         label=f"{label}.foragax_implementation.version",
@@ -8737,12 +8143,8 @@ def _validate_runtime_schema(
                 executor["gpu_host_contract"],
             )["cuda_wheel_library_profile_sha256"],
             "dependency_lock_sha256": executor["dependency_lock_sha256"],
-            "determinism_qualification": executor[
-                "determinism_qualification"
-            ],
-            "determinism_qualification_sha256": _json_sha256(
-                executor["determinism_qualification"]
-            ),
+            "determinism_qualification": executor["determinism_qualification"],
+            "determinism_qualification_sha256": _json_sha256(executor["determinism_qualification"]),
             "cuda_wheel_library_paths": cast(
                 Mapping[str, Any],
                 executor["gpu_host_contract"],
@@ -8764,24 +8166,18 @@ def _validate_runtime_schema(
                 executor["gpu_host_contract"],
             )["libcuda_sha256"],
             "sbom_sha256": executor["sbom_sha256"],
-            "native_runtime_inventory_sha256": executor[
-                "native_runtime_inventory_sha256"
-            ],
+            "native_runtime_inventory_sha256": executor["native_runtime_inventory_sha256"],
             "native_runtime_inventory_hash_scheme": executor[
                 "native_runtime_inventory_hash_scheme"
             ],
-            "native_runtime_inventory_root": executor[
-                "native_runtime_inventory_root"
-            ],
+            "native_runtime_inventory_root": executor["native_runtime_inventory_root"],
             "gpu_user_library_bundle_sha256": cast(
                 Mapping[str, Any],
                 executor["gpu_host_contract"],
             )["user_library_bundle_sha256"],
             "runtime_profile_id": executor["runtime_profile_id"],
             "runtime_binary_sha256": executor["runtime_binary_sha256"],
-            "scientific_runtime_class": executor[
-                "scientific_runtime_class"
-            ],
+            "scientific_runtime_class": executor["scientific_runtime_class"],
         }
         if immutable != expected_immutable:
             raise OfficialForagaxValidationError(
@@ -8835,17 +8231,13 @@ def _validate_runtime_schema(
             executor["gpu_host_contract"],
         )
         if (
-            observed_gpu["kernel_driver_version"]
-            != expected_gpu["kernel_driver_version"]
-            or observed_gpu["libcuda_sha256"]
-            != expected_gpu["libcuda_sha256"]
+            observed_gpu["kernel_driver_version"] != expected_gpu["kernel_driver_version"]
+            or observed_gpu["libcuda_sha256"] != expected_gpu["libcuda_sha256"]
             or observed_gpu["device_paths"] != expected_gpu["device_paths"]
-            or observed_gpu["device_identities"]
-            != expected_gpu["device_identities"]
+            or observed_gpu["device_identities"] != expected_gpu["device_identities"]
         ):
             raise OfficialForagaxValidationError(
-                f"{label}.gpu_host_runtime does not match the trusted explicit "
-                "GPU contract"
+                f"{label}.gpu_host_runtime does not match the trusted explicit GPU contract"
             )
     elif gpu_host_runtime is not None:
         raise OfficialForagaxValidationError(
@@ -8938,9 +8330,7 @@ def _validate_run_cross_invariants(
         )
     family = run.get("entrypoint_family")
     if family not in {"continuing", "ppo"}:
-        raise OfficialForagaxValidationError(
-            "official manifest entrypoint family is invalid"
-        )
+        raise OfficialForagaxValidationError("official manifest entrypoint family is invalid")
     _require_bool(run.get("requested_gpu"), label="official run requested_gpu")
     configured_steps = _require_int(
         run.get("configured_env_steps"),
@@ -8965,9 +8355,7 @@ def _validate_run_cross_invariants(
         else "dedicated_environment_split_chain_v1"
     )
     expected_metric_horizon_policy = (
-        "full_effective_rollout_no_trim"
-        if family == "ppo"
-        else "exact_environment_steps_no_trim"
+        "full_effective_rollout_no_trim" if family == "ppo" else "exact_environment_steps_no_trim"
     )
     if run.get("environment_rng_schedule") != expected_rng:
         raise OfficialForagaxValidationError(
@@ -9006,16 +8394,10 @@ def _validate_run_cross_invariants(
                 minimum=1,
             )
         expected_updates = max_argument or configured_updates
-        if (
-            expected_steps != expected_updates * rollout_steps
-            or (
-                requested_steps is not None
-                and requested_steps != expected_steps
-            )
+        if expected_steps != expected_updates * rollout_steps or (
+            requested_steps is not None and requested_steps != expected_steps
         ):
-            raise OfficialForagaxValidationError(
-                "official PPO horizon conversion does not verify"
-            )
+            raise OfficialForagaxValidationError("official PPO horizon conversion does not verify")
     _validate_semantic_environment_schema(
         run.get("environment"),
         label="official run environment",
@@ -9070,14 +8452,10 @@ def _validate_run_cross_invariants(
         "expected_result_env_steps": expected_steps,
         "metric_horizon_policy": expected_metric_horizon_policy,
     }
-    if (
-        effective_configuration != effective_projection
-        or run.get("effective_configuration_sha256")
-        != _json_sha256(effective_projection)
-    ):
-        raise OfficialForagaxValidationError(
-            "official effective configuration does not verify"
-        )
+    if effective_configuration != effective_projection or run.get(
+        "effective_configuration_sha256"
+    ) != _json_sha256(effective_projection):
+        raise OfficialForagaxValidationError("official effective configuration does not verify")
     if batch:
         indices = _require_list(run.get("indices"), label="official batch indices")
         stored_seeds = _require_list(
@@ -9168,9 +8546,7 @@ def _validate_run_cross_invariants(
             raise OfficialForagaxValidationError(
                 "official batch contains duplicate seed or actual JAX key identities"
             )
-        expected_indices = list(
-            range(cast(int, indices[0]), cast(int, indices[-1]) + 1)
-        )
+        expected_indices = list(range(cast(int, indices[0]), cast(int, indices[-1]) + 1))
         expected_expression = f"{indices[0]}:{cast(int, indices[-1]) + 1}"
         if (
             indices != expected_indices
@@ -9205,9 +8581,8 @@ def _validate_run_cross_invariants(
             run.get("declared_nested_seed_offset"),
             label="official run nested seed offset",
         )
-        if (
-            stored_seed + applied_offset != effective_seed
-            or applied_offset != (top_offset if family == "ppo" else nested_offset)
+        if stored_seed + applied_offset != effective_seed or applied_offset != (
+            top_offset if family == "ppo" else nested_offset
         ):
             raise OfficialForagaxValidationError(
                 "official run seed-offset arithmetic does not verify"
@@ -9221,9 +8596,7 @@ def _validate_run_cross_invariants(
             or any(type(word) is not int for word in words)
             or run.get("jax_key_sha256") != _json_sha256(words)
         ):
-            raise OfficialForagaxValidationError(
-                "official run actual JAX key does not verify"
-            )
+            raise OfficialForagaxValidationError("official run actual JAX key does not verify")
 
 
 def _validate_manifest_schema14(
@@ -9257,9 +8630,7 @@ def _validate_manifest_schema14(
         or manifest["manifest_kind"]
         != ("official_foragax_batch" if batch else "official_foragax_single")
     ):
-        raise OfficialForagaxValidationError(
-            "official manifest identity/status is invalid"
-        )
+        raise OfficialForagaxValidationError("official manifest identity/status is invalid")
     _require_sha256(
         manifest["manifest_sha256"],
         label="official manifest manifest_sha256",
@@ -9364,9 +8735,7 @@ def _validate_manifest_schema14(
         started_at = datetime.fromisoformat(started)
         completed_at = datetime.fromisoformat(completed)
     except ValueError as exc:
-        raise OfficialForagaxValidationError(
-            "official execution timestamps are invalid"
-        ) from exc
+        raise OfficialForagaxValidationError("official execution timestamps are invalid") from exc
     duration = execution.get("duration_s")
     if (
         type(duration) is not float
@@ -9444,9 +8813,7 @@ def _validate_manifest_schema14(
         label="official manifest output_tree",
     )
     if output_tree["hash_scheme"] != OFFICIAL_FORAGAX_OUTPUT_TREE_HASH_SCHEME:
-        raise OfficialForagaxValidationError(
-            "official output-tree hash scheme is invalid"
-        )
+        raise OfficialForagaxValidationError("official output-tree hash scheme is invalid")
     for key in ("directory_count", "entry_count", "file_count"):
         _require_int(
             output_tree[key],
@@ -9495,9 +8862,7 @@ def _expected_normalized_command_from_manifest(
     profile, configuration = _trusted_profile_from_identity(trust)
     executor = cast(dict[str, Any], profile["executor"])
     index_expression = (
-        cast(str, run["index_expression"])
-        if "index_expression" in run
-        else str(run["index"])
+        cast(str, run["index_expression"]) if "index_expression" in run else str(run["index"])
     )
     if executor["kind"] == "oci":
         return list(
@@ -9543,12 +8908,8 @@ def _manifest_trusted_run_projection(
         "top_level_seed_offset": entry["declared_top_level_seed_offset"],
         "nested_seed_offset": entry["declared_nested_seed_offset"],
         "effective_seed": entry["effective_seed"],
-        "resolved_hyperparameters_sha256": entry[
-            "resolved_hyperparameters_sha256"
-        ],
-        "effective_configuration_sha256": run[
-            "effective_configuration_sha256"
-        ],
+        "resolved_hyperparameters_sha256": entry["resolved_hyperparameters_sha256"],
+        "effective_configuration_sha256": run["effective_configuration_sha256"],
         "environment_sha256": _json_sha256(run["environment"]),
         "environment_rng_schedule": run["environment_rng_schedule"],
         "jax_key_sha256": entry["jax_key_sha256"],
@@ -9572,9 +8933,7 @@ def _verify_manifest_against_trust(
         "execution_commit": profile["execution_commit"],
         "execution_tree_git_sha1": profile["execution_tree_git_sha1"],
         "source_tree_sha256": profile["source_tree_sha256"],
-        "execution_config_git_blob_sha1": profile[
-            "execution_config_git_blob_sha1"
-        ],
+        "execution_config_git_blob_sha1": profile["execution_config_git_blob_sha1"],
         "execution_config_sha256": profile["execution_config_sha256"],
         "lock_git_blob_sha1": profile["execution_lock_git_blob_sha1"],
         "lock_sha256": profile["execution_lock_sha256"],
@@ -9582,16 +8941,10 @@ def _verify_manifest_against_trust(
         "config_path": configuration["config_path"],
         "config_git_blob_sha1": configuration["config_git_blob_sha1"],
         "config_sha256": configuration["config_sha256"],
-        "config_commit_lock_git_blob_sha1": configuration[
-            "config_lock_git_blob_sha1"
-        ],
+        "config_commit_lock_git_blob_sha1": configuration["config_lock_git_blob_sha1"],
         "config_commit_lock_sha256": configuration["config_lock_sha256"],
     }
-    mismatches = [
-        key
-        for key, expected in expected_source.items()
-        if source.get(key) != expected
-    ]
+    mismatches = [key for key, expected in expected_source.items() if source.get(key) != expected]
     family = cast(str, run["entrypoint_family"])
     trusted_entrypoint = cast(
         Mapping[str, Any],
@@ -9606,26 +8959,16 @@ def _verify_manifest_against_trust(
         or run.get("agent") != configuration["agent"]
     ):
         raise OfficialForagaxValidationError(
-            "official manifest source/config/agent tuple is not the trusted "
-            "protocol profile"
+            "official manifest source/config/agent tuple is not the trusted protocol profile"
         )
     trusted_runs = cast(list[dict[str, Any]], configuration["runs"])
     if trusted_runs:
-        entries = (
-            cast(list[dict[str, Any]], run["runs"])
-            if batch
-            else [cast(dict[str, Any], run)]
-        )
-        projections = [
-            _manifest_trusted_run_projection(run=run, entry=entry)
-            for entry in entries
-        ]
+        entries = cast(list[dict[str, Any]], run["runs"]) if batch else [cast(dict[str, Any], run)]
+        projections = [_manifest_trusted_run_projection(run=run, entry=entry) for entry in entries]
         selected = [
             trusted_run
             for trusted_run in trusted_runs
-            if trusted_run["index"] in {
-                projection["index"] for projection in projections
-            }
+            if trusted_run["index"] in {projection["index"] for projection in projections}
         ]
         if selected != projections:
             raise OfficialForagaxValidationError(
@@ -9636,9 +8979,7 @@ def _verify_manifest_against_trust(
     trusted_invocation: Mapping[str, Any] | None = None
     if executor["kind"] == "oci":
         index_expression = (
-            f"{run['indices'][0]}:{run['indices'][-1] + 1}"
-            if batch
-            else str(run["index"])
+            f"{run['indices'][0]}:{run['indices'][-1] + 1}" if batch else str(run["index"])
         )
         invocation_matches = [
             invocation
@@ -9648,10 +8989,8 @@ def _verify_manifest_against_trust(
             )
             if (
                 invocation["index_expression"] == index_expression
-                and invocation["expected_result_env_steps"]
-                == run["expected_result_env_steps"]
-                and invocation["max_steps_argument"]
-                == run["max_steps_argument"]
+                and invocation["expected_result_env_steps"] == run["expected_result_env_steps"]
+                and invocation["max_steps_argument"] == run["max_steps_argument"]
             )
         ]
         if len(invocation_matches) != 1:
@@ -9664,13 +9003,11 @@ def _verify_manifest_against_trust(
         source=source,
         run=run,
     )
-    if (
-        execution.get("command") != expected_command
-        or execution.get("command_sha256") != _json_sha256(expected_command)
-    ):
+    if execution.get("command") != expected_command or execution.get(
+        "command_sha256"
+    ) != _json_sha256(expected_command):
         raise OfficialForagaxValidationError(
-            "official manifest command is not the command reconstructed from "
-            "the trusted profile"
+            "official manifest command is not the command reconstructed from the trusted profile"
         )
     return trusted_invocation
 
@@ -9690,22 +9027,16 @@ def _verify_config_snapshot_run_identity(
             "official historical config snapshot is not valid JSON"
         ) from exc
     if not isinstance(config, dict):
-        raise OfficialForagaxValidationError(
-            "official historical config snapshot is not an object"
-        )
+        raise OfficialForagaxValidationError("official historical config snapshot is not an object")
     expected_pairs = {
         "agent": run.get("agent"),
         "problem": run.get("problem"),
         "total_steps": run.get("configured_env_steps"),
     }
-    mismatches = [
-        key for key, expected in expected_pairs.items()
-        if config.get(key) != expected
-    ]
+    mismatches = [key for key, expected in expected_pairs.items() if config.get(key) != expected]
     if mismatches or not isinstance(config.get("metaParameters"), dict):
         raise OfficialForagaxValidationError(
-            "official run identity does not match its historical config "
-            "snapshot"
+            "official run identity does not match its historical config snapshot"
         )
 
 
@@ -9716,18 +9047,14 @@ def _verify_execution_and_logs(
     executor: Mapping[str, Any],
 ) -> None:
     command = execution.get("command")
-    if not isinstance(command, list) or not all(
-        type(argument) is str for argument in command
-    ):
+    if not isinstance(command, list) or not all(type(argument) is str for argument in command):
         raise OfficialForagaxValidationError("official manifest command is invalid")
     if any(Path(argument).is_absolute() for argument in command):
         raise OfficialForagaxValidationError(
             "official manifest command contains a host-absolute path"
         )
     if execution.get("command_sha256") != _json_sha256(command):
-        raise OfficialForagaxValidationError(
-            "official manifest command hash does not verify"
-        )
+        raise OfficialForagaxValidationError("official manifest command hash does not verify")
     if execution.get("cwd") != "<OUTPUT_DIR>":
         raise OfficialForagaxValidationError(
             "official manifest cwd must use the logical output placeholder"
@@ -9743,36 +9070,25 @@ def _verify_execution_and_logs(
         or not all(type(item) is str and item for item in freeze)
         or freeze != sorted(set(freeze))
     ):
-        raise OfficialForagaxValidationError(
-            "official manifest package freeze is invalid"
-        )
+        raise OfficialForagaxValidationError("official manifest package freeze is invalid")
     if execution.get("package_freeze_sha256") != _text_sha256(freeze):
-        raise OfficialForagaxValidationError(
-            "recorded package freeze hash does not verify"
-        )
+        raise OfficialForagaxValidationError("recorded package freeze hash does not verify")
     inventory = execution.get("package_inventory")
     if (
         not isinstance(inventory, list)
         or inventory != list(_package_inventory(freeze))
-        or execution.get("package_inventory_sha256")
-        != _text_sha256(cast(list[str], inventory))
+        or execution.get("package_inventory_sha256") != _text_sha256(cast(list[str], inventory))
     ):
-        raise OfficialForagaxValidationError(
-            "recorded package inventory does not verify"
-        )
+        raise OfficialForagaxValidationError("recorded package inventory does not verify")
     _validate_oci_scientific_package_inventory(
         cast(list[str], inventory),
         executor=executor,
     )
     runtime = execution.get("runtime")
     if not isinstance(runtime, dict):
-        raise OfficialForagaxValidationError(
-            "official manifest runtime is invalid"
-        )
+        raise OfficialForagaxValidationError("official manifest runtime is invalid")
     if execution.get("runtime_sha256") != _json_sha256(runtime):
-        raise OfficialForagaxValidationError(
-            "recorded runtime hash does not verify"
-        )
+        raise OfficialForagaxValidationError("recorded runtime hash does not verify")
     relevant_environment = execution.get("relevant_environment")
     required_environment_keys = {
         "LANG",
@@ -9840,14 +9156,12 @@ def verify_official_foragax_manifest(
         )
     if schema_version != OFFICIAL_FORAGAX_MANIFEST_SCHEMA_VERSION:
         raise OfficialForagaxValidationError(
-            f"unsupported official manifest schema {schema_version!r}"
+            f"unsupported official manifest schema '{schema_version}'"
         )
     if manifest.get("status") != "completed":
         raise OfficialForagaxValidationError("official manifest is not completed")
     if manifest.get("manifest_kind") != "official_foragax_single":
-        raise OfficialForagaxValidationError(
-            "official manifest is not a single-index result"
-        )
+        raise OfficialForagaxValidationError("official manifest is not a single-index result")
     _validate_manifest_schema14(manifest, batch=False)
     trusted_invocation = _verify_manifest_against_trust(manifest, batch=False)
     recorded_manifest_hash = manifest.get("manifest_sha256")
@@ -9861,9 +9175,7 @@ def verify_official_foragax_manifest(
     execution = _required_mapping(manifest, "execution")
     source_at_completion = _required_mapping(manifest, "source_at_completion")
     environment_provenance = _required_mapping(manifest, "environment")
-    profile, _configuration = _trusted_profile_from_identity(
-        _required_mapping(manifest, "trust")
-    )
+    profile, _configuration = _trusted_profile_from_identity(_required_mapping(manifest, "trust"))
     executor = cast(Mapping[str, Any], profile["executor"])
     _verified_agent_access_sections(source=source, run=run)
     if expected_plan is not None:
@@ -9898,15 +9210,10 @@ def verify_official_foragax_manifest(
         capture_bytes=True,
     )
     if snapshot_metadata["sha256"] != source.get("config_sha256"):
-        raise OfficialForagaxValidationError(
-            "official historical config snapshot does not verify"
-        )
+        raise OfficialForagaxValidationError("official historical config snapshot does not verify")
     assert snapshot_bytes is not None
     _verify_config_snapshot_run_identity(snapshot_bytes, run=run)
-    if (
-        expected_plan is not None
-        and snapshot_bytes != expected_plan.config_snapshot_bytes
-    ):
+    if expected_plan is not None and snapshot_bytes != expected_plan.config_snapshot_bytes:
         raise OfficialForagaxValidationError(
             "official historical config snapshot bytes do not match the verified plan"
         )
@@ -9922,16 +9229,9 @@ def verify_official_foragax_manifest(
         label="execution config copy",
         capture_bytes=True,
     )
-    if execution_config_metadata["sha256"] != source.get(
-        "execution_config_sha256"
-    ):
-        raise OfficialForagaxValidationError(
-            "official execution config copy does not verify"
-        )
-    if (
-        expected_plan is not None
-        and execution_config_bytes != expected_plan.execution_config_bytes
-    ):
+    if execution_config_metadata["sha256"] != source.get("execution_config_sha256"):
+        raise OfficialForagaxValidationError("official execution config copy does not verify")
+    if expected_plan is not None and execution_config_bytes != expected_plan.execution_config_bytes:
         raise OfficialForagaxValidationError(
             "official execution config bytes do not match the verified plan"
         )
@@ -9941,32 +9241,18 @@ def verify_official_foragax_manifest(
         executor=executor,
     )
     expected_execution: dict[str, Any] = {
-        "command": (
-            None
-            if expected_plan is None
-            else _normalized_command(expected_plan)
-        ),
+        "command": (None if expected_plan is None else _normalized_command(expected_plan)),
         "environment_overrides": (
-            None
-            if expected_plan is None
-            else dict(expected_plan.environment_overrides)
+            None if expected_plan is None else dict(expected_plan.environment_overrides)
         ),
         "relevant_environment": (
-            None
-            if expected_plan is None
-            else dict(expected_plan.relevant_environment)
+            None if expected_plan is None else dict(expected_plan.relevant_environment)
         ),
-        "interpreter_sha256": (
-            None if expected_plan is None else expected_plan.interpreter_sha256
-        ),
+        "interpreter_sha256": (None if expected_plan is None else expected_plan.interpreter_sha256),
         "package_freeze_sha256": (
-            None
-            if expected_plan is None
-            else expected_plan.package_freeze_sha256
+            None if expected_plan is None else expected_plan.package_freeze_sha256
         ),
-        "runtime": (
-            None if expected_plan is None else dict(expected_plan.runtime)
-        ),
+        "runtime": (None if expected_plan is None else dict(expected_plan.runtime)),
     }
     if expected_plan is not None:
         for key, execution_expected in expected_execution.items():
@@ -9981,22 +9267,17 @@ def verify_official_foragax_manifest(
     runtime = cast(Mapping[str, Any], execution["runtime"])
     expected_environment = {
         "semantic": dict(cast(Mapping[str, Any], run.get("environment"))),
-        "implementation": dict(
-            cast(Mapping[str, Any], runtime.get("foragax_implementation"))
-        ),
+        "implementation": dict(cast(Mapping[str, Any], runtime.get("foragax_implementation"))),
     }
     if environment_provenance != expected_environment:
         raise OfficialForagaxValidationError(
             "official environment provenance does not match run/runtime metadata"
         )
-    implementation = cast(
-        Mapping[str, Any], environment_provenance["implementation"]
-    )
+    implementation = cast(Mapping[str, Any], environment_provenance["implementation"])
     if (
         implementation.get("distribution") != "continual-foragax"
         or implementation.get("package") != "foragax"
-        or implementation.get("install_tree_hash_scheme")
-        != "relative-path+size+bytes-v1"
+        or implementation.get("install_tree_hash_scheme") != "relative-path+size+bytes-v1"
         or type(implementation.get("install_tree_sha256")) is not str
     ):
         raise OfficialForagaxValidationError(
@@ -10012,13 +9293,9 @@ def verify_official_foragax_manifest(
         "entrypoint_sha256": source.get("entrypoint_sha256"),
         "config_git_blob_sha1": source.get("config_git_blob_sha1"),
         "config_sha256": source.get("config_sha256"),
-        "config_commit_lock_sha256": source.get(
-            "config_commit_lock_sha256"
-        ),
+        "config_commit_lock_sha256": source.get("config_commit_lock_sha256"),
         "config_snapshot_sha256": source.get("config_sha256"),
-        "execution_config_git_blob_sha1": source.get(
-            "execution_config_git_blob_sha1"
-        ),
+        "execution_config_git_blob_sha1": source.get("execution_config_git_blob_sha1"),
         "execution_config_sha256": source.get("execution_config_sha256"),
         "execution_config_copy_sha256": source.get("execution_config_sha256"),
         "harness_module_sha256": source.get("harness_module_sha256"),
@@ -10028,9 +9305,7 @@ def verify_official_foragax_manifest(
         "execution_environment_sha256": _json_sha256(
             cast(Mapping[str, Any], execution.get("relevant_environment"))
         ),
-        "foragax_install_tree_sha256": implementation.get(
-            "install_tree_sha256"
-        ),
+        "foragax_install_tree_sha256": implementation.get("install_tree_sha256"),
     }
     if source_at_completion != completion_pairs:
         raise OfficialForagaxValidationError(
@@ -10045,13 +9320,8 @@ def verify_official_foragax_manifest(
         label="artifact path",
     )
     expected_steps = run.get("expected_result_env_steps")
-    if (
-        type(expected_steps) is not int
-        or expected_steps < 1
-    ):
-        raise OfficialForagaxValidationError(
-            "official manifest expected reward length is invalid"
-        )
+    if type(expected_steps) is not int or expected_steps < 1:
+        raise OfficialForagaxValidationError("official manifest expected reward length is invalid")
     inspected = _inspect_npz(
         path.parent,
         cast(str, relative_value),
@@ -10068,9 +9338,7 @@ def verify_official_foragax_manifest(
         )
     if cast(Mapping[str, Any], manifest["trust"])["executor_kind"] == "oci":
         if trusted_invocation is None:  # pragma: no cover - validated above
-            raise OfficialForagaxValidationError(
-                "official OCI manifest has no trusted invocation"
-            )
+            raise OfficialForagaxValidationError("official OCI manifest has no trusted invocation")
         result_layout = _descriptor_result_layout(
             trusted_invocation,
             label="trusted manifest invocation",
@@ -10096,8 +9364,7 @@ def verify_official_foragax_manifest(
         }
         if all_data_artifacts != {artifact_path}:
             raise OfficialForagaxValidationError(
-                "official single run contains missing, extra, or duplicate "
-                "data artifacts"
+                "official single run contains missing, extra, or duplicate data artifacts"
             )
     logs = cast(Mapping[str, Mapping[str, Any]], execution["logs"])
     _verify_output_tree_sections(
@@ -10113,9 +9380,7 @@ def verify_official_foragax_manifest(
         allow_running_lock=_allow_running_lock,
     )
     if _load_manifest(path) != manifest:
-        raise OfficialForagaxValidationError(
-            "official manifest changed during verification"
-        )
+        raise OfficialForagaxValidationError("official manifest changed during verification")
     evidence = (
         _verified_manifest_evidence(manifest_path=path, manifest=manifest)
         if _require_endorsement
@@ -10151,15 +9416,13 @@ def verify_official_foragax_batch_manifest(
         )
     if schema_version != OFFICIAL_FORAGAX_MANIFEST_SCHEMA_VERSION:
         raise OfficialForagaxValidationError(
-            f"unsupported official manifest schema {schema_version!r}"
+            f"unsupported official manifest schema '{schema_version}'"
         )
     if (
         manifest.get("status") != "completed"
         or manifest.get("manifest_kind") != "official_foragax_batch"
     ):
-        raise OfficialForagaxValidationError(
-            "official manifest is not a completed native batch"
-        )
+        raise OfficialForagaxValidationError("official manifest is not a completed native batch")
     if manifest.get("manifest_sha256") != _canonical_json_sha256(manifest):
         raise OfficialForagaxValidationError("official manifest hash does not verify")
     _validate_manifest_schema14(manifest, batch=True)
@@ -10171,9 +9434,7 @@ def verify_official_foragax_batch_manifest(
     execution = _required_mapping(manifest, "execution")
     source_at_completion = _required_mapping(manifest, "source_at_completion")
     environment_provenance = _required_mapping(manifest, "environment")
-    profile, _configuration = _trusted_profile_from_identity(
-        _required_mapping(manifest, "trust")
-    )
+    profile, _configuration = _trusted_profile_from_identity(_required_mapping(manifest, "trust"))
     executor = cast(Mapping[str, Any], profile["executor"])
     _verified_agent_access_sections(source=source, run=run)
     if expected_plan is not None:
@@ -10208,15 +9469,10 @@ def verify_official_foragax_batch_manifest(
         capture_bytes=True,
     )
     if snapshot_metadata["sha256"] != source.get("config_sha256"):
-        raise OfficialForagaxValidationError(
-            "official historical config snapshot does not verify"
-        )
+        raise OfficialForagaxValidationError("official historical config snapshot does not verify")
     assert snapshot_bytes is not None
     _verify_config_snapshot_run_identity(snapshot_bytes, run=run)
-    if (
-        expected_plan is not None
-        and snapshot_bytes != expected_plan.config_snapshot_bytes
-    ):
+    if expected_plan is not None and snapshot_bytes != expected_plan.config_snapshot_bytes:
         raise OfficialForagaxValidationError(
             "official historical config snapshot bytes do not match the batch plan"
         )
@@ -10232,16 +9488,9 @@ def verify_official_foragax_batch_manifest(
         label="execution config copy",
         capture_bytes=True,
     )
-    if execution_config_metadata["sha256"] != source.get(
-        "execution_config_sha256"
-    ):
-        raise OfficialForagaxValidationError(
-            "official execution config copy does not verify"
-        )
-    if (
-        expected_plan is not None
-        and execution_config_bytes != expected_plan.execution_config_bytes
-    ):
+    if execution_config_metadata["sha256"] != source.get("execution_config_sha256"):
+        raise OfficialForagaxValidationError("official execution config copy does not verify")
+    if expected_plan is not None and execution_config_bytes != expected_plan.execution_config_bytes:
         raise OfficialForagaxValidationError(
             "official execution config bytes do not match the batch plan"
         )
@@ -10265,18 +9514,12 @@ def verify_official_foragax_batch_manifest(
                     f"official batch execution.{key} does not match verified plan"
                 )
     if execution.get("returncode") != 0:
-        raise OfficialForagaxValidationError(
-            "official batch did not complete successfully"
-        )
+        raise OfficialForagaxValidationError("official batch did not complete successfully")
     runtime = _required_mapping(execution, "runtime", label="manifest execution")
     semantic_environment = run.get("environment")
     implementation = runtime.get("foragax_implementation")
-    if not isinstance(semantic_environment, dict) or not isinstance(
-        implementation, dict
-    ):
-        raise OfficialForagaxValidationError(
-            "official batch environment provenance is invalid"
-        )
+    if not isinstance(semantic_environment, dict) or not isinstance(implementation, dict):
+        raise OfficialForagaxValidationError("official batch environment provenance is invalid")
     if environment_provenance != {
         "semantic": semantic_environment,
         "implementation": implementation,
@@ -10287,8 +9530,7 @@ def verify_official_foragax_batch_manifest(
     if (
         implementation.get("distribution") != "continual-foragax"
         or implementation.get("package") != "foragax"
-        or implementation.get("install_tree_hash_scheme")
-        != "relative-path+size+bytes-v1"
+        or implementation.get("install_tree_hash_scheme") != "relative-path+size+bytes-v1"
         or type(implementation.get("install_tree_sha256")) is not str
     ):
         raise OfficialForagaxValidationError(
@@ -10304,13 +9546,9 @@ def verify_official_foragax_batch_manifest(
         "entrypoint_sha256": source.get("entrypoint_sha256"),
         "config_git_blob_sha1": source.get("config_git_blob_sha1"),
         "config_sha256": source.get("config_sha256"),
-        "config_commit_lock_sha256": source.get(
-            "config_commit_lock_sha256"
-        ),
+        "config_commit_lock_sha256": source.get("config_commit_lock_sha256"),
         "config_snapshot_sha256": source.get("config_sha256"),
-        "execution_config_git_blob_sha1": source.get(
-            "execution_config_git_blob_sha1"
-        ),
+        "execution_config_git_blob_sha1": source.get("execution_config_git_blob_sha1"),
         "execution_config_sha256": source.get("execution_config_sha256"),
         "execution_config_copy_sha256": source.get("execution_config_sha256"),
         "harness_module_sha256": source.get("harness_module_sha256"),
@@ -10320,9 +9558,7 @@ def verify_official_foragax_batch_manifest(
         "execution_environment_sha256": _json_sha256(
             cast(Mapping[str, Any], execution.get("relevant_environment"))
         ),
-        "foragax_install_tree_sha256": implementation.get(
-            "install_tree_sha256"
-        ),
+        "foragax_install_tree_sha256": implementation.get("install_tree_sha256"),
     }
     if source_at_completion != completion_pairs:
         raise OfficialForagaxValidationError(
@@ -10339,31 +9575,20 @@ def verify_official_foragax_batch_manifest(
         or not isinstance(run_entries, list)
         or not isinstance(artifacts, list)
         or not indices
-        or len(indices)
-        != len(effective_seeds)
-        != len(run_entries)
-        != len(artifacts)
+        or len(indices) != len(effective_seeds) != len(run_entries) != len(artifacts)
         or run.get("count") != len(indices)
     ):
         raise OfficialForagaxValidationError(
             "official batch ordered run/artifact metadata is invalid"
         )
     if (
-        any(
-            type(index) is not int
-            for index in indices
-        )
-        or any(
-            type(seed) is not int
-            for seed in effective_seeds
-        )
+        any(type(index) is not int for index in indices)
+        or any(type(seed) is not int for seed in effective_seeds)
         or indices != list(range(indices[0], indices[-1] + 1))
         or run.get("index_expression") != f"{indices[0]}:{indices[-1] + 1}"
         or len(set(cast(list[int], effective_seeds))) != len(effective_seeds)
     ):
-        raise OfficialForagaxValidationError(
-            "official batch range or seed identity is invalid"
-        )
+        raise OfficialForagaxValidationError("official batch range or seed identity is invalid")
     artifact_paths: list[Path] = []
     artifact_set_identity: list[dict[str, Any]] = []
     for position, (index, effective_seed, run_entry, artifact) in enumerate(
@@ -10389,19 +9614,14 @@ def verify_official_foragax_batch_manifest(
                 )
             )
         ):
-            raise OfficialForagaxValidationError(
-                f"official batch entry {position} is inconsistent"
-            )
+            raise OfficialForagaxValidationError(f"official batch entry {position} is inconsistent")
         artifact_path = _manifest_relative_file(
             path.parent,
             artifact.get("path"),
             label=f"artifact {index} path",
         )
         expected_steps = run_entry.get("expected_result_env_steps")
-        if (
-            type(expected_steps) is not int
-            or expected_steps < 1
-        ):
+        if type(expected_steps) is not int or expected_steps < 1:
             raise OfficialForagaxValidationError(
                 f"official batch index {index} expected length is invalid"
             )
@@ -10443,9 +9663,7 @@ def verify_official_foragax_batch_manifest(
             trusted_invocation,
             label="trusted batch manifest invocation",
         )
-        if tuple(str(item["path"]) for item in artifacts) != (
-            result_layout.result_paths
-        ):
+        if tuple(str(item["path"]) for item in artifacts) != (result_layout.result_paths):
             raise OfficialForagaxValidationError(
                 "official batch artifact paths differ from their descriptor"
             )
@@ -10476,9 +9694,7 @@ def verify_official_foragax_batch_manifest(
         "sha256": _json_sha256(artifact_set_identity),
     }
     if artifact_set != expected_set:
-        raise OfficialForagaxValidationError(
-            "official aggregate artifact-set hash does not verify"
-        )
+        raise OfficialForagaxValidationError("official aggregate artifact-set hash does not verify")
     logs = cast(Mapping[str, Mapping[str, Any]], execution["logs"])
     _verify_output_tree_sections(
         path.parent,
@@ -10493,9 +9709,7 @@ def verify_official_foragax_batch_manifest(
         allow_running_lock=_allow_running_lock,
     )
     if _load_manifest(path) != manifest:
-        raise OfficialForagaxValidationError(
-            "official batch manifest changed during verification"
-        )
+        raise OfficialForagaxValidationError("official batch manifest changed during verification")
     evidence = (
         _verified_manifest_evidence(manifest_path=path, manifest=manifest)
         if _require_endorsement
@@ -10523,16 +9737,13 @@ def reverify_official_foragax_evidence(
             "official evidence must be an exact verifier-issued evidence object"
         )
     if evidence.manifest_kind == "official_foragax_single":
-        verified: (
-            VerifiedOfficialForagaxManifest
-            | VerifiedOfficialForagaxBatchManifest
-        ) = verify_official_foragax_manifest(evidence.manifest_path)
+        verified: VerifiedOfficialForagaxManifest | VerifiedOfficialForagaxBatchManifest = (
+            verify_official_foragax_manifest(evidence.manifest_path)
+        )
     elif evidence.manifest_kind == "official_foragax_batch":
         verified = verify_official_foragax_batch_manifest(evidence.manifest_path)
     else:  # pragma: no cover - Literal is still caller-constructible at runtime
-        raise OfficialForagaxValidationError(
-            "official evidence manifest kind is invalid"
-        )
+        raise OfficialForagaxValidationError("official evidence manifest kind is invalid")
     if verified.evidence is None or verified.evidence != evidence:
         raise OfficialForagaxValidationError(
             "official evidence identity was not reproduced by the verifier"
@@ -10566,12 +9777,10 @@ def _execute_bound_plan(
             ".oci-output.tar.partial",
             exclusive=True,
         )
-        runtime_stderr_descriptor, stderr_parent, _stderr_name = (
-            _open_output_file_at(
-                root_descriptor,
-                ".oci-runtime.stderr.partial",
-                exclusive=True,
-            )
+        runtime_stderr_descriptor, stderr_parent, _stderr_name = _open_output_file_at(
+            root_descriptor,
+            ".oci-runtime.stderr.partial",
+            exclusive=True,
         )
         os.fsync(tar_parent)
         os.fsync(stderr_parent)
@@ -10602,21 +9811,15 @@ def _execute_bound_plan(
             os.fsync(runtime_stderr_descriptor)
             if completed.returncode != 0:
                 raise OfficialForagaxValidationError(
-                    "official immutable OCI launcher failed with exit code "
-                    f"{completed.returncode}"
+                    f"official immutable OCI launcher failed with exit code {completed.returncode}"
                 )
-            stderr_metadata, stderr_contents, _stderr_identity = (
-                _read_regular_at_nofollow(
-                    root_descriptor,
-                    ".oci-runtime.stderr.partial",
-                    label="OCI runtime stderr",
-                    capture_bytes=True,
-                )
+            stderr_metadata, stderr_contents, _stderr_identity = _read_regular_at_nofollow(
+                root_descriptor,
+                ".oci-runtime.stderr.partial",
+                label="OCI runtime stderr",
+                capture_bytes=True,
             )
-            if (
-                stderr_metadata["byte_size"] != 0
-                or stderr_contents not in {b"", None}
-            ):
+            if stderr_metadata["byte_size"] != 0 or stderr_contents not in {b"", None}:
                 raise OfficialForagaxValidationError(
                     "successful OCI runtime emitted unframed host stderr"
                 )
@@ -10752,9 +9955,7 @@ def run_official_foragax(
         _acquire_running_lock_at(root_descriptor)
         lock_acquired = True
         if _harness_sha256() != plan.source["harness_module_sha256"]:
-            raise OfficialForagaxValidationError(
-                "official runner harness changed after preflight"
-            )
+            raise OfficialForagaxValidationError("official runner harness changed after preflight")
         _atomic_write_bytes_at(
             root_descriptor,
             cast(str, plan.source["config_snapshot_path"]),
@@ -11057,8 +10258,8 @@ def _official_spec_shared_kwargs(
         raise OfficialForagaxValidationError(
             "verified manifest lacks importer execution provenance"
         )
-    resolved_hyperparameters, agent_access, registry = (
-        _verified_agent_access_sections(source=source, run=run)
+    resolved_hyperparameters, agent_access, registry = _verified_agent_access_sections(
+        source=source, run=run
     )
     if agent_access.get("classified") is not True:
         raise OfficialForagaxValidationError(
@@ -11073,30 +10274,22 @@ def _official_spec_shared_kwargs(
         "config_path": str(source["config_path"]),
         "config_sha256": str(source["config_sha256"]),
         "config_git_blob_sha1": str(source["config_git_blob_sha1"]),
-        "config_commit_lock_sha256": str(
-            source["config_commit_lock_sha256"]
-        ),
+        "config_commit_lock_sha256": str(source["config_commit_lock_sha256"]),
         "execution_lock_sha256": str(source["lock_sha256"]),
         "source_tree_sha256": str(source["source_tree_sha256"]),
         "interpreter_sha256": str(execution["interpreter_sha256"]),
         "package_freeze": tuple(cast(list[str], package_freeze)),
         "package_freeze_sha256": str(execution["package_freeze_sha256"]),
         "execution_runtime": runtime,
-        "relevant_environment": cast(
-            Mapping[str, str], relevant_environment
-        ),
+        "relevant_environment": cast(Mapping[str, str], relevant_environment),
         "environment_provenance": environment_provenance,
         "resolved_hyperparameters": resolved_hyperparameters,
-        "resolved_hyperparameters_sha256": str(
-            run["resolved_hyperparameters_sha256"]
-        ),
+        "resolved_hyperparameters_sha256": str(run["resolved_hyperparameters_sha256"]),
         "registry": registry,
         "registry_sha256": str(run["registry_sha256"]),
         "agent_access": agent_access,
         "agent_access_sha256": str(run["agent_access_sha256"]),
-        "agent_access_binding_sha256": str(
-            run["agent_access_binding_sha256"]
-        ),
+        "agent_access_binding_sha256": str(run["agent_access_binding_sha256"]),
         "environment_rng_schedule": str(run["environment_rng_schedule"]),
         "manifest_sha256": str(manifest["manifest_sha256"]),
     }
@@ -11113,9 +10306,7 @@ def official_foragax_batch_run_specs_from_manifest(
     run = cast(Mapping[str, Any], manifest["run"])
     run_entries = cast(Sequence[Mapping[str, Any]], run["runs"])
     artifacts = cast(Sequence[Mapping[str, Any]], manifest["artifacts"])
-    environment_provenance = cast(
-        Mapping[str, Any], manifest["environment"]
-    )
+    environment_provenance = cast(Mapping[str, Any], manifest["environment"])
     resolved_environment = _forager_environment_from_manifest(
         environment_provenance,
         environment,
@@ -11175,9 +10366,7 @@ def official_foragax_run_spec_from_manifest(
     verified = verify_official_foragax_manifest(manifest_path)
     run = cast(Mapping[str, Any], verified.manifest["run"])
     artifact = cast(Mapping[str, Any], verified.manifest["artifact"])
-    environment_provenance = cast(
-        Mapping[str, Any], verified.manifest["environment"]
-    )
+    environment_provenance = cast(Mapping[str, Any], verified.manifest["environment"])
     index = int(run["index"])
     effective_seed = int(run["effective_seed"])
     if index != effective_seed:
@@ -11194,9 +10383,7 @@ def official_foragax_run_spec_from_manifest(
     shared = _official_spec_shared_kwargs(verified.manifest)
     agent_access = cast(Mapping[str, Any], shared["agent_access"])
     if verified.evidence is None:  # pragma: no cover - public verifier requires it
-        raise OfficialForagaxValidationError(
-            "verified manifest did not issue endorsement evidence"
-        )
+        raise OfficialForagaxValidationError("verified manifest did not issue endorsement evidence")
     return OfficialForagaxRunSpec(
         agent=str(run["agent"]),
         seed=effective_seed,
@@ -11252,9 +10439,7 @@ def _parse_index_range(value: str) -> tuple[int, ...]:
         )
     start, stop = (int(item) for item in match.groups())
     if stop <= start:
-        raise OfficialForagaxValidationError(
-            "index range STOP must be greater than START"
-        )
+        raise OfficialForagaxValidationError("index range STOP must be greater than START")
     return tuple(range(start, stop))
 
 
@@ -11302,9 +10487,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
     else:
         if args.expected_seed is not None:
-            raise OfficialForagaxValidationError(
-                "--expected-seed is valid only with --index"
-            )
+            raise OfficialForagaxValidationError("--expected-seed is valid only with --index")
         batch_request = OfficialForagaxBatchRunRequest(
             repository=args.repository,
             execution_commit=args.execution_commit,
@@ -11313,11 +10496,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             interpreter=args.interpreter,
             output_dir=args.output_dir,
             indices=_parse_index_range(args.index_range),
-            expected_seeds=(
-                None
-                if args.expected_seeds is None
-                else tuple(args.expected_seeds)
-            ),
+            expected_seeds=(None if args.expected_seeds is None else tuple(args.expected_seeds)),
             max_env_steps=args.max_env_steps,
             gpu=args.gpu,
         )
