@@ -255,7 +255,7 @@ class GradualInputPairResult:
 
     def __post_init__(self) -> None:
         if type(self.schema) is not str or self.schema != _PAIR_RESULT_SCHEMA:
-            raise ValueError(f"schema must be {_PAIR_RESULT_SCHEMA!r}")
+            raise ValueError(f"schema must be '{_PAIR_RESULT_SCHEMA}'")
         if self.development_only is not True:
             raise ValueError("development_only must be true")
         if self.scientific_promotion_allowed is not False:
@@ -281,9 +281,7 @@ class GradualInputPairResult:
                 or type(item[1]) is not float
                 or item != expected_identity_item
             ):
-                raise ValueError(
-                    "learner_hyperparameters must identify the frozen AdamW control"
-                )
+                raise ValueError("learner_hyperparameters must identify the frozen AdamW control")
         if (
             type(self.prng_implementation) is not str
             or self.prng_implementation != _PRNG_IMPLEMENTATION
@@ -324,9 +322,7 @@ class GradualInputPairResult:
             snapshots["correct_counts"] > config.task_length
         ):
             raise ValueError("correct_counts must be valid per-task integer numerators")
-        if not np.all(np.isfinite(snapshots["loss_sums"])) or np.any(
-            snapshots["loss_sums"] < 0.0
-        ):
+        if not np.all(np.isfinite(snapshots["loss_sums"])) or np.any(snapshots["loss_sums"] < 0.0):
             raise ValueError("loss_sums must be finite and nonnegative")
         expected_persistent_bytes = (
             config.parameter_count * 16
