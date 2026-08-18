@@ -1056,23 +1056,26 @@ class ForagerMatchedProtocol:
 def _duplicate_free_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     result: dict[str, Any] = {}
     for key, value in pairs:
-        if key in result:
-            raise ForagerMatchedProtocolError(f"duplicate JSON object key {key!r}")
-        result[key] = value
+        host_key = _require_exact_str("key", key)
+        if host_key in result:
+            raise ForagerMatchedProtocolError(f"duplicate JSON object key '{host_key}'")
+        result[host_key] = value
     return result
 
 
 def _reject_nonfinite(token: str) -> Any:
-    raise ForagerMatchedProtocolError(f"non-finite JSON number {token!r} is forbidden")
+    host_token = _require_exact_str("token", token)
+    raise ForagerMatchedProtocolError(f"non-finite JSON number '{host_token}' is forbidden")
 
 
 def _parse_json_float(token: str) -> float:
+    host_token = _require_exact_str("token", token)
     try:
-        value = float(token)
+        value = float(host_token)
     except (OverflowError, ValueError) as exc:
-        raise ForagerMatchedProtocolError(f"invalid JSON number {token!r}") from exc
+        raise ForagerMatchedProtocolError(f"invalid JSON number '{host_token}'") from exc
     if not math.isfinite(value):
-        raise ForagerMatchedProtocolError(f"non-finite JSON number {token!r} is forbidden")
+        raise ForagerMatchedProtocolError(f"non-finite JSON number '{host_token}' is forbidden")
     return value
 
 
@@ -1172,6 +1175,14 @@ def _require_exact_keys(
         raise ForagerMatchedProtocolError(f"{path} is missing required keys: {', '.join(missing)}")
     if unknown:
         raise ForagerMatchedProtocolError(f"{path} contains unknown keys: {', '.join(unknown)}")
+
+
+def _require_exact_str(name: object, value: object) -> str:
+    if type(name) is not str:
+        raise ValueError("name must be an exact string")
+    if type(value) is not str:
+        raise ValueError(f"{name} must be an exact string")
+    return value
 
 
 def _require_string(value: Any, path: str, *, maximum: int = 512) -> str:
@@ -2609,13 +2620,13 @@ def _validate_cross_references(
         expected_ids = tuple(grouped_candidate_ids.get(group.selection_group, []))
         if group.candidate_ids != expected_ids:
             raise ForagerMatchedProtocolError(
-                f"protocol.selection_plan group {group.selection_group!r} candidate IDs/order "
+                f"protocol.selection_plan group '{group.selection_group}' candidate IDs/order "
                 "must exactly match pairing-eligible candidates"
             )
         strata = {index[candidate_id].stratum for candidate_id in group.candidate_ids}
         if len(strata) != 1:
             raise ForagerMatchedProtocolError(
-                f"protocol.selection_plan group {group.selection_group!r} may not mix strata"
+                f"protocol.selection_plan group '{group.selection_group}' may not mix strata"
             )
 
     expected_slots = selection_plan.slots
@@ -2766,7 +2777,7 @@ def parse_forager_matched_protocol(value: Any) -> ForagerMatchedProtocol:
     schema = _require_string(payload["schema_version"], "protocol.schema_version", maximum=64)
     if schema != FORAGER_MATCHED_PROTOCOL_SCHEMA_VERSION:
         raise ForagerMatchedProtocolError(
-            f"protocol.schema_version must be {FORAGER_MATCHED_PROTOCOL_SCHEMA_VERSION!r}"
+            f"protocol.schema_version must be '{FORAGER_MATCHED_PROTOCOL_SCHEMA_VERSION}'"
         )
     stage_value = _require_literal(
         payload["stage"], "protocol.stage", ("open_tuning", "sealed_evaluation")
@@ -2905,7 +2916,7 @@ def parse_forager_matched_selection_result(value: Any) -> ForagerMatchedSelectio
     schema = _require_string(payload["schema_version"], f"{path}.schema_version", maximum=64)
     if schema != FORAGER_MATCHED_SELECTION_RESULT_SCHEMA_VERSION:
         raise ForagerMatchedProtocolError(
-            f"{path}.schema_version must be {FORAGER_MATCHED_SELECTION_RESULT_SCHEMA_VERSION!r}"
+            f"{path}.schema_version must be '{FORAGER_MATCHED_SELECTION_RESULT_SCHEMA_VERSION}'"
         )
     group_values = _require_array(payload["ranked_groups"], f"{path}.ranked_groups")
     if not group_values or len(group_values) > _MAX_CANDIDATES:
@@ -3028,19 +3039,16 @@ def seal_forager_matched_protocol(
             "selection result groups/order do not match the selection plan"
         )
     resolutions: list[dict[str, Any]] = []
-    for plan_group, ranked_group in zip(
-        plan_groups, result.ranked_groups, strict=True
-    ):
+    for plan_group, ranked_group in zip(plan_groups, result.ranked_groups, strict=True):
         if ranked_group.selection_group != plan_group.selection_group:
             raise ForagerMatchedProtocolError(
                 "selection result groups/order do not match the selection plan"
             )
-        if (
-            len(ranked_group.ranked_candidate_ids) != len(plan_group.candidate_ids)
-            or set(ranked_group.ranked_candidate_ids) != set(plan_group.candidate_ids)
-        ):
+        if len(ranked_group.ranked_candidate_ids) != len(plan_group.candidate_ids) or set(
+            ranked_group.ranked_candidate_ids
+        ) != set(plan_group.candidate_ids):
             raise ForagerMatchedProtocolError(
-                f"selection result group {plan_group.selection_group!r} must rank every "
+                f"selection result group '{plan_group.selection_group}' must rank every "
                 "preregistered candidate exactly once"
             )
         resolutions.extend(
@@ -3142,7 +3150,7 @@ def validate_sealed_protocol_transition(
             ranked_group.ranked_candidate_ids
         ) != set(plan_group.candidate_ids):
             raise ForagerMatchedProtocolError(
-                f"selection result group {plan_group.selection_group!r} must rank every "
+                f"selection result group '{plan_group.selection_group}' must rank every "
                 "preregistered candidate exactly once"
             )
         expected_resolutions.extend(
