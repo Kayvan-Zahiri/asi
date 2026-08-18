@@ -1128,7 +1128,8 @@ def _validate_inventory_payload(payload: Any, *, label: str) -> str:
 
 
 def _expected_entrypoint_binding(candidate_id: str) -> dict[str, Any]:
-    if candidate_id in open_protocol.MATCHED_CURRENT_ALBERTA_CANDIDATE_IDS:
+    host_candidate_id = _require_identifier(candidate_id, "candidate_id")
+    if host_candidate_id in open_protocol.MATCHED_CURRENT_ALBERTA_CANDIDATE_IDS:
         source_key = "alberta"
         entrypoint_path = "alberta_framework/benchmarks/_forager_matched_alberta_worker.py"
         invocation_style = "alberta_single_seed_v1"
@@ -1136,11 +1137,11 @@ def _expected_entrypoint_binding(candidate_id: str) -> dict[str, Any]:
     else:
         try:
             raw_source, entrypoint_path, invocation_style, result_root, _agent = (
-                qualification._EXTERNAL_EXECUTION[candidate_id]
+                qualification._EXTERNAL_EXECUTION[host_candidate_id]
             )
         except KeyError as exc:
             raise ForagerMatchedFinalAnalysisError(
-                f"candidate {candidate_id!r} has no frozen entrypoint binding"
+                f"candidate '{host_candidate_id}' has no frozen entrypoint binding"
             ) from exc
         source_key = str(raw_source)
     return {
@@ -1851,8 +1852,9 @@ def _validate_plan_and_manifests(
             f"evaluation source manifest candidate {index}",
         )
         if candidate_id not in sealed_protocol.candidate_index:
+            host_candidate_id = _require_identifier(candidate_id, "candidate_id")
             raise ForagerMatchedFinalAnalysisError(
-                f"evaluation source manifest names unknown candidate {candidate_id!r}"
+                f"evaluation source manifest names unknown candidate '{host_candidate_id}'"
             )
         frozen_candidate = sealed_protocol.candidate_index[candidate_id]
         expected_entrypoint = _expected_entrypoint_binding(candidate_id)
@@ -2014,8 +2016,9 @@ def _validate_plan_and_manifests(
             f"evaluation candidate command template {index}",
         )
         if candidate_id not in sealed_protocol.candidate_index:
+            host_candidate_id = _require_identifier(candidate_id, "candidate_id")
             raise ForagerMatchedFinalAnalysisError(
-                f"evaluation command template names unknown candidate {candidate_id!r}"
+                f"evaluation command template names unknown candidate '{host_candidate_id}'"
             )
         expected_argv = _expected_candidate_command_template(
             sealed_protocol,
