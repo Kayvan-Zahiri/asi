@@ -115,8 +115,7 @@ def _create_reward_trace_sinks(
             sink = factory(int(seed), steps)
             if not isinstance(sink, ForagerRewardTraceSink):
                 raise TypeError(
-                    "reward_trace_sink_factory must return "
-                    "ForagerRewardTraceSink instances"
+                    "reward_trace_sink_factory must return ForagerRewardTraceSink instances"
                 )
             sinks.append(sink)
     except BaseException:
@@ -227,6 +226,14 @@ def _validated_seed(value: Any, *, name: str = "seed") -> int:
     if not 0 <= seed <= _MAX_JAX_INT32:
         raise ValueError(f"{name} must lie in [0, {_MAX_JAX_INT32}]")
     return seed
+
+
+def _require_exact_str(name: object, value: object) -> str:
+    if type(name) is not str:
+        raise ValueError("name must be an exact string")
+    if type(value) is not str:
+        raise ValueError(f"{name} must be an exact string")
+    return value
 
 
 def _require_builtin_int(
@@ -442,18 +449,13 @@ class ForagerEnvConfig:
     require_exact_version: bool = True
 
     def __post_init__(self) -> None:
-        if type(self.preset) is not str or self.preset not in _PRESET_ENV_IDS:
-            raise ValueError(f"unknown Forager preset {self.preset!r}")
-        if self.env_id is not None and (
-            type(self.env_id) is not str or not self.env_id
-        ):
+        host_preset = _require_exact_str("preset", self.preset)
+        if host_preset not in _PRESET_ENV_IDS:
+            raise ValueError(f"unknown Forager preset '{host_preset}'")
+        if self.env_id is not None and (type(self.env_id) is not str or not self.env_id):
             raise ValueError("env_id must be a non-empty string when provided")
         if type(self.aperture_size) is not int or (
-                self.aperture_size != -1
-                and (
-                    self.aperture_size < 1
-                    or self.aperture_size % 2 == 0
-                )
+            self.aperture_size != -1 and (self.aperture_size < 1 or self.aperture_size % 2 == 0)
         ):
             raise ValueError("aperture_size must be a positive odd integer or -1 for full world")
         _require_builtin_int(
@@ -466,11 +468,10 @@ class ForagerEnvConfig:
             name="random_shift_max_steps",
             minimum=0,
         )
-        if self.observation_type is not None and (
-            type(self.observation_type) is not str
-            or self.observation_type not in ("color", "rgb", "object")
-        ):
-            raise ValueError(f"unknown observation_type {self.observation_type!r}")
+        if self.observation_type is not None:
+            host_obs = _require_exact_str("observation_type", self.observation_type)
+            if host_obs not in ("color", "rgb", "object"):
+                raise ValueError(f"unknown observation_type '{host_obs}'")
         if type(self.extra_kwargs) is not dict or any(
             type(key) is not str for key in self.extra_kwargs
         ):
@@ -484,8 +485,7 @@ class ForagerEnvConfig:
         duplicated = sorted(reserved & self.extra_kwargs.keys())
         if duplicated:
             raise ValueError(
-                "extra_kwargs duplicates explicit environment fields: "
-                + ", ".join(duplicated)
+                "extra_kwargs duplicates explicit environment fields: " + ", ".join(duplicated)
             )
         try:
             copied_extra_kwargs = json.loads(
@@ -516,18 +516,20 @@ class ForagerEnvConfig:
         """Create the official environment and its immutable default params."""
         installed = foragax_version()
         if self.require_exact_version and installed != FORAGAX_VERSION:
+            host_installed = _require_exact_str("installed", installed)
             raise RuntimeError(
                 f"Forager benchmark requires {FORAGAX_DISTRIBUTION}=="
-                f"{FORAGAX_VERSION}; found {installed!r}. Set "
+                f"{FORAGAX_VERSION}; found '{host_installed}'. Set "
                 "require_exact_version=False only for an explicitly labelled "
                 "compatibility run."
             )
         installed_tree = foragax_install_tree_sha256()
         if self.require_exact_version and installed_tree != FORAGAX_INSTALL_TREE_SHA256:
+            host_installed_tree = _require_exact_str("installed_tree", installed_tree)
             raise RuntimeError(
                 f"{FORAGAX_DISTRIBUTION}=={FORAGAX_VERSION} package contents "
                 "do not match the audited release wheel; expected install-tree "
-                f"SHA-256 {FORAGAX_INSTALL_TREE_SHA256}, found {installed_tree!r}. "
+                f"SHA-256 {FORAGAX_INSTALL_TREE_SHA256}, found '{host_installed_tree}'. "
                 "Reinstall the pinned optional dependency, or set "
                 "require_exact_version=False only for an explicitly labelled "
                 "compatibility run."
@@ -651,8 +653,7 @@ class ForagerFeatureState:
         if type(self.last_action) is not int:
             raise ValueError("last_action must be an integer")
         if (
-            type(self.last_reward) is not int
-            and type(self.last_reward) is not float
+            type(self.last_reward) is not int and type(self.last_reward) is not float
         ) or not math.isfinite(self.last_reward):
             raise ValueError("last_reward must be a finite float")
         if type(self.reward_traces) is not tuple:
@@ -952,9 +953,10 @@ class AlbertaForagerConfig:
             ("actor_hidden_sizes", self.actor_hidden_sizes),
             ("critic_hidden_sizes", self.critic_hidden_sizes),
         ):
-            if type(widths) is not tuple or not widths or any(
-                type(width) is not int or width < 1
-                for width in widths
+            if (
+                type(widths) is not tuple
+                or not widths
+                or any(type(width) is not int or width < 1 for width in widths)
             ):
                 raise ValueError(f"{name} must contain positive integer widths")
         unit_interval = {
@@ -1000,14 +1002,11 @@ class AlbertaForagerConfig:
             or not 0.0 <= self.sparsity <= 1.0
         ):
             raise ValueError("sparsity must be finite and lie in [0, 1]")
-        if (
-            self.td_error_normalizer_decay is not None
-            and (
-                type(self.td_error_normalizer_decay) not in (int, float)
-                or not math.isfinite(self.td_error_normalizer_decay)
-                or not _finite_jax_float32(self.td_error_normalizer_decay)
-                or not 0.0 <= self.td_error_normalizer_decay < 1.0
-            )
+        if self.td_error_normalizer_decay is not None and (
+            type(self.td_error_normalizer_decay) not in (int, float)
+            or not math.isfinite(self.td_error_normalizer_decay)
+            or not _finite_jax_float32(self.td_error_normalizer_decay)
+            or not 0.0 <= self.td_error_normalizer_decay < 1.0
         ):
             raise ValueError("td_error_normalizer_decay must be finite and lie in [0, 1)")
         for name, optional_value in (
@@ -1116,9 +1115,7 @@ def _init_forager_recurrent_state(
         / jnp.sqrt(jnp.asarray(hidden_size, dtype=jnp.float32))
     )
     bias = jnp.zeros((3, hidden_size), dtype=jnp.float32)
-    bias = bias.at[0].set(
-        jnp.asarray(config.recurrent_update_bias, dtype=jnp.float32)
-    )
+    bias = bias.at[0].set(jnp.asarray(config.recurrent_update_bias, dtype=jnp.float32))
     return ForagerRecurrentState(
         input_kernel=jax.lax.stop_gradient(input_kernel),
         recurrent_kernel=jax.lax.stop_gradient(recurrent_kernel),
@@ -1143,23 +1140,17 @@ def _augment_with_recurrent_features(
         features,
     )
     update = jax.nn.sigmoid(
-        input_terms[0]
-        + recurrent_state.recurrent_kernel[0] @ hidden
-        + recurrent_state.bias[0]
+        input_terms[0] + recurrent_state.recurrent_kernel[0] @ hidden + recurrent_state.bias[0]
     )
     reset = jax.nn.sigmoid(
-        input_terms[1]
-        + recurrent_state.recurrent_kernel[1] @ hidden
-        + recurrent_state.bias[1]
+        input_terms[1] + recurrent_state.recurrent_kernel[1] @ hidden + recurrent_state.bias[1]
     )
     candidate = jnp.tanh(
         input_terms[2]
         + recurrent_state.recurrent_kernel[2] @ (reset * hidden)
         + recurrent_state.bias[2]
     )
-    next_hidden = jax.lax.stop_gradient(
-        (1.0 - update) * hidden + update * candidate
-    )
+    next_hidden = jax.lax.stop_gradient((1.0 - update) * hidden + update * candidate)
     next_state = recurrent_state._replace(hidden=next_hidden)
     return next_state, jnp.concatenate((features, next_hidden), axis=0)
 
@@ -1832,9 +1823,7 @@ class ForagerRunResult:
             or curve_steps[-1] > steps
             or any(left >= right for left, right in zip(curve_steps, curve_steps[1:]))
         ):
-            raise ValueError(
-                "curve_steps must be nonempty, increasing, and within [0, steps]"
-            )
+            raise ValueError("curve_steps must be nonempty, increasing, and within [0, steps]")
         object.__setattr__(self, "curve_steps", curve_steps)
         for name in ("curve_ewm_reward", "curve_window_reward"):
             values = getattr(self, name)
@@ -1888,15 +1877,18 @@ def run_forager(
         run_causal_map_forager,
     )
 
-    if isinstance(
-        policy,
-        (
-            AlbertaForagerAgent,
-            RTURTRLForagerAgent,
-            CausalMapForagerAgent,
-            RandomForagerAgent,
-        ),
-    ) and cast(Any, policy).seed != cfg.seed:
+    if (
+        isinstance(
+            policy,
+            (
+                AlbertaForagerAgent,
+                RTURTRLForagerAgent,
+                CausalMapForagerAgent,
+                RandomForagerAgent,
+            ),
+        )
+        and cast(Any, policy).seed != cfg.seed
+    ):
         raise ValueError("policy seed must equal benchmark_config.seed")
     if type(policy) is CausalMapForagerAgent:
         return run_causal_map_forager(policy, cfg)
@@ -1968,10 +1960,7 @@ def _run_forager_host(
         ewm_denominator = 1.0 + cfg.ewm_decay * ewm_denominator
         ewm_reward = ewm_numerator / ewm_denominator
         ewm_total += ewm_reward
-        fov_ema = (
-            FORAGER_FOV_EMA_DECAY * fov_ema
-            + (1.0 - FORAGER_FOV_EMA_DECAY) * reward
-        )
+        fov_ema = FORAGER_FOV_EMA_DECAY * fov_ema + (1.0 - FORAGER_FOV_EMA_DECAY) * reward
         if index % FORAGER_FOV_EMA_SUBSAMPLE == 0:
             fov_ema_samples.append(fov_ema)
 
@@ -2011,9 +2000,7 @@ def _run_forager_host(
     if metadata.get("name", policy_name) != policy_name:
         raise ValueError("policy metadata name does not match policy.name")
     if metadata.get("privileged", policy_privileged) is not policy_privileged:
-        raise ValueError(
-            "policy metadata privilege label does not match policy.privileged"
-        )
+        raise ValueError("policy metadata privilege label does not match policy.privileged")
     try:
         json.dumps(
             metadata,
@@ -2024,9 +2011,7 @@ def _run_forager_host(
     except (TypeError, ValueError) as exc:
         raise ValueError("policy metadata must contain finite JSON data") from exc
     metadata["environment_rng_schedule"] = FORAGER_ENVIRONMENT_RNG_SCHEDULE
-    metadata["environment_rng_schedule_sha256"] = (
-        environment_rng_schedule_sha256()
-    )
+    metadata["environment_rng_schedule_sha256"] = environment_rng_schedule_sha256()
     metadata["runner"] = {
         "kind": "host_loop",
         "overall_duration_s": time.perf_counter() - overall_started,
@@ -2230,9 +2215,7 @@ def _run_random_forager_scan(
             decay=FORAGER_FOV_EMA_DECAY,
             filter_state=fov_filter_state,
         )
-        fov_sample_mask = (
-            np.arange(completed, completed + active) % FORAGER_FOV_EMA_SUBSAMPLE == 0
-        )
+        fov_sample_mask = np.arange(completed, completed + active) % FORAGER_FOV_EMA_SUBSAMPLE == 0
         fov_ema_samples.extend(float(value) for value in fov_ema_values[fov_sample_mask])
         final_ewm_value = float(ewm_rewards[-1])
         if np.any(np.asarray(done_device[:active], dtype=np.bool_)):
@@ -2273,9 +2256,7 @@ def _run_random_forager_scan(
     overall_duration = time.perf_counter() - overall_started
     metadata = dict(policy.metadata())
     metadata["environment_rng_schedule"] = FORAGER_ENVIRONMENT_RNG_SCHEDULE
-    metadata["environment_rng_schedule_sha256"] = (
-        environment_rng_schedule_sha256()
-    )
+    metadata["environment_rng_schedule_sha256"] = environment_rng_schedule_sha256()
     metadata["random_backend"] = "jax"
     metadata["runner"] = {
         "kind": "jax_scan",
@@ -2462,13 +2443,10 @@ def _make_alberta_scan_chunk(
                 )
 
             if freeze_after is None:
-                next_core_state, next_action, td_error = learning_update(
-                    current_core_state
-                )
+                next_core_state, next_action, td_error = learning_update(current_core_state)
             else:
                 next_core_state, next_action, td_error = jax.lax.cond(
-                    current_core_state.step_count
-                    < jnp.asarray(freeze_after, dtype=jnp.int32),
+                    current_core_state.step_count < jnp.asarray(freeze_after, dtype=jnp.int32),
                     learning_update,
                     frozen_update,
                     current_core_state,
@@ -2478,11 +2456,7 @@ def _make_alberta_scan_chunk(
             denominator = 1.0 + cfg.ewm_decay * denominator
             ewm_reward = numerator / denominator
             biome_regret = _exact_float32_biome_regret(info)
-            finite = (
-                jnp.isfinite(reward)
-                & jnp.isfinite(td_error)
-                & jnp.isfinite(ewm_reward)
-            )
+            finite = jnp.isfinite(reward) & jnp.isfinite(td_error) & jnp.isfinite(ewm_reward)
             next_carry = (
                 next_env_state,
                 current_key,
@@ -2722,9 +2696,7 @@ def _run_alberta_forager_scan(
             decay=FORAGER_FOV_EMA_DECAY,
             filter_state=fov_filter_state,
         )
-        fov_sample_mask = (
-            np.arange(completed, completed + active) % FORAGER_FOV_EMA_SUBSAMPLE == 0
-        )
+        fov_sample_mask = np.arange(completed, completed + active) % FORAGER_FOV_EMA_SUBSAMPLE == 0
         fov_ema_samples.extend(float(value) for value in fov_ema_values[fov_sample_mask])
         final_ewm_value = float(ewm_rewards[-1])
         done_values = np.asarray(done_device[:active], dtype=np.bool_)
@@ -2806,9 +2778,7 @@ def _run_alberta_forager_scan(
     )
     metadata = dict(policy.metadata())
     metadata["environment_rng_schedule"] = FORAGER_ENVIRONMENT_RNG_SCHEDULE
-    metadata["environment_rng_schedule_sha256"] = (
-        environment_rng_schedule_sha256()
-    )
+    metadata["environment_rng_schedule_sha256"] = environment_rng_schedule_sha256()
     metadata["runner"] = {
         "kind": "jax_scan",
         "chunk_size": cfg.jax_chunk_size,
@@ -2869,8 +2839,7 @@ def run_alberta_forager_seeds(
     if not isinstance(benchmark_config, ForagerBenchmarkConfig):
         raise TypeError("benchmark_config must be a ForagerBenchmarkConfig")
     ordered_seeds = tuple(
-        _validated_seed(seed, name=f"seeds[{index}]")
-        for index, seed in enumerate(seeds)
+        _validated_seed(seed, name=f"seeds[{index}]") for index, seed in enumerate(seeds)
     )
     if not ordered_seeds:
         raise ValueError("seeds must be non-empty")
@@ -2983,9 +2952,7 @@ def run_alberta_forager_seeds(
     curve_steps: list[list[int]] = [[] for _ in ordered_seeds]
     curve_ewm: list[list[float]] = [[] for _ in ordered_seeds]
     curve_window: list[list[float]] = [[] for _ in ordered_seeds]
-    reward_tails = [
-        np.zeros((0,), dtype=np.float64) for _ in ordered_seeds
-    ]
+    reward_tails = [np.zeros((0,), dtype=np.float64) for _ in ordered_seeds]
     total_rewards = np.zeros((count,), dtype=np.float64)
     ewm_totals = np.zeros((count,), dtype=np.float64)
     ewm_filter_states = np.zeros((count, 1), dtype=np.float64)
@@ -3017,10 +2984,9 @@ def run_alberta_forager_seeds(
         jax.block_until_ready(outputs)  # type: ignore[no-untyped-call]
         raw_rewards_by_seed = np.asarray(rewards_device[:, :active])
         raw_regrets_by_seed = np.asarray(regrets_device[:, :active])
-        if (
-            raw_rewards_by_seed.dtype != np.dtype(np.float32)
-            or raw_regrets_by_seed.dtype != np.dtype(np.float32)
-        ):
+        if raw_rewards_by_seed.dtype != np.dtype(
+            np.float32
+        ) or raw_regrets_by_seed.dtype != np.dtype(np.float32):
             _abort_reward_trace_sinks(trace_sinks)
             raise TypeError("Foragax evaluator outputs must retain exact float32 dtype")
         rewards_by_seed = raw_rewards_by_seed.astype(np.float64)
@@ -3051,26 +3017,16 @@ def run_alberta_forager_seeds(
                 decay=FORAGER_FOV_EMA_DECAY,
                 filter_state=fov_filter_states[lane],
             )
-            fov_mask = (
-                np.arange(completed, completed + active)
-                % FORAGER_FOV_EMA_SUBSAMPLE
-                == 0
-            )
-            fov_ema_samples[lane].extend(
-                float(value) for value in fov_values[fov_mask]
-            )
+            fov_mask = np.arange(completed, completed + active) % FORAGER_FOV_EMA_SUBSAMPLE == 0
+            fov_ema_samples[lane].extend(float(value) for value in fov_values[fov_mask])
             final_ewm_values[lane] = float(ewm_rewards[-1])
-            all_finite[lane] = all_finite[lane] and bool(
-                np.all(finite_by_seed[lane])
-            )
+            all_finite[lane] = all_finite[lane] and bool(np.all(finite_by_seed[lane]))
             total_rewards[lane] += float(np.sum(rewards, dtype=np.float64))
             ewm_totals[lane] += float(np.sum(ewm_rewards, dtype=np.float64))
 
             finite_regrets = regrets[np.isfinite(regrets)]
             if finite_regrets.size:
-                regret_totals[lane] += float(
-                    np.sum(finite_regrets, dtype=np.float64)
-                )
+                regret_totals[lane] += float(np.sum(finite_regrets, dtype=np.float64))
                 regret_counts[lane] += int(finite_regrets.size)
                 final_regrets[lane] = float(regrets[-1])
 
@@ -3098,9 +3054,7 @@ def run_alberta_forager_seeds(
                     )
                 )
                 target_indices[lane] += 1
-            reward_tails[lane] = combined[
-                -min(cfg.final_window, combined.size) :
-            ]
+            reward_tails[lane] = combined[-min(cfg.final_window, combined.size) :]
         completed += active
 
     execution_duration = time.perf_counter() - execution_started
@@ -3119,19 +3073,13 @@ def run_alberta_forager_seeds(
         raise FloatingPointError("Alberta produced non-finite values during benchmark")
     trace_metadata = _finalize_reward_trace_sinks(trace_sinks)
 
-    aggregate_fps = (
-        count * cfg.steps / max(execution_duration, 1e-12)
-    )
+    aggregate_fps = count * cfg.steps / max(execution_duration, 1e-12)
     effective_seed_fps = cfg.steps / max(execution_duration, 1e-12)
     results: list[ForagerRunResult] = []
     for lane, seed in enumerate(ordered_seeds):
         metadata = dict(AlbertaForagerAgent(agent_config, seed=seed).metadata())
-        metadata["environment_rng_schedule"] = (
-            FORAGER_ENVIRONMENT_RNG_SCHEDULE
-        )
-        metadata["environment_rng_schedule_sha256"] = (
-            environment_rng_schedule_sha256()
-        )
+        metadata["environment_rng_schedule"] = FORAGER_ENVIRONMENT_RNG_SCHEDULE
+        metadata["environment_rng_schedule_sha256"] = environment_rng_schedule_sha256()
         metadata["runner"] = {
             "kind": "jax_batched_scan",
             "batch_mode": mode,
@@ -3167,9 +3115,7 @@ def run_alberta_forager_seeds(
                 final_window_mean_reward=float(np.mean(reward_tails[lane])),
                 final_ewm_reward=float(final_ewm_values[lane]),
                 mean_ewm_reward=float(ewm_totals[lane] / cfg.steps),
-                fov_last_10pct_ema_auc=_fov_last_tenth_ema_auc(
-                    fov_ema_samples[lane]
-                ),
+                fov_last_10pct_ema_auc=_fov_last_tenth_ema_auc(fov_ema_samples[lane]),
                 mean_biome_regret=(
                     float(regret_totals[lane] / regret_counts[lane])
                     if regret_counts[lane]
@@ -3282,8 +3228,8 @@ def _make_rtu_rtrl_scan_chunk(
                 )
 
             if freeze_after is None:
-                next_core_state, next_action, td_error, next_learning_count = (
-                    learning_update(current_core_state)
+                next_core_state, next_action, td_error, next_learning_count = learning_update(
+                    current_core_state
                 )
             else:
                 (
@@ -3302,11 +3248,7 @@ def _make_rtu_rtrl_scan_chunk(
             denominator = 1.0 + cfg.ewm_decay * denominator
             ewm_reward = numerator / denominator
             biome_regret = _exact_float32_biome_regret(info)
-            finite = (
-                jnp.isfinite(reward)
-                & jnp.isfinite(td_error)
-                & jnp.isfinite(ewm_reward)
-            )
+            finite = jnp.isfinite(reward) & jnp.isfinite(td_error) & jnp.isfinite(ewm_reward)
             next_carry = (
                 next_env_state,
                 current_env_key,
@@ -3504,10 +3446,9 @@ def _execute_rtu_rtrl_forager_seeds(
         jax.block_until_ready(outputs)  # type: ignore[no-untyped-call]
         raw_rewards_by_seed = np.asarray(rewards_device[:, :active])
         raw_regrets_by_seed = np.asarray(regrets_device[:, :active])
-        if (
-            raw_rewards_by_seed.dtype != np.dtype(np.float32)
-            or raw_regrets_by_seed.dtype != np.dtype(np.float32)
-        ):
+        if raw_rewards_by_seed.dtype != np.dtype(
+            np.float32
+        ) or raw_regrets_by_seed.dtype != np.dtype(np.float32):
             _abort_reward_trace_sinks(trace_sinks)
             raise TypeError("Foragax evaluator outputs must retain exact float32 dtype")
         rewards_by_seed = raw_rewards_by_seed.astype(np.float64)
@@ -3540,18 +3481,10 @@ def _execute_rtu_rtrl_forager_seeds(
                 decay=FORAGER_FOV_EMA_DECAY,
                 filter_state=fov_filter_states[lane],
             )
-            fov_mask = (
-                np.arange(completed, completed + active)
-                % FORAGER_FOV_EMA_SUBSAMPLE
-                == 0
-            )
-            fov_ema_samples[lane].extend(
-                float(value) for value in fov_values[fov_mask]
-            )
+            fov_mask = np.arange(completed, completed + active) % FORAGER_FOV_EMA_SUBSAMPLE == 0
+            fov_ema_samples[lane].extend(float(value) for value in fov_values[fov_mask])
             final_ewm_values[lane] = float(ewm_rewards[-1])
-            all_finite[lane] = all_finite[lane] and bool(
-                np.all(finite_by_seed[lane])
-            )
+            all_finite[lane] = all_finite[lane] and bool(np.all(finite_by_seed[lane]))
             last_executed_actions[lane] = int(actions_by_seed[lane, -1])
             learning_steps = (
                 active
@@ -3562,17 +3495,13 @@ def _execute_rtu_rtrl_forager_seeds(
                 )
             )
             if learning_steps:
-                last_learning_td_errors[lane] = float(
-                    td_errors_by_seed[lane, learning_steps - 1]
-                )
+                last_learning_td_errors[lane] = float(td_errors_by_seed[lane, learning_steps - 1])
             total_rewards[lane] += float(np.sum(rewards, dtype=np.float64))
             ewm_totals[lane] += float(np.sum(ewm_rewards, dtype=np.float64))
 
             finite_regrets = regrets[np.isfinite(regrets)]
             if finite_regrets.size:
-                regret_totals[lane] += float(
-                    np.sum(finite_regrets, dtype=np.float64)
-                )
+                regret_totals[lane] += float(np.sum(finite_regrets, dtype=np.float64))
                 regret_counts[lane] += int(finite_regrets.size)
                 final_regrets[lane] = float(regrets[-1])
 
@@ -3600,9 +3529,7 @@ def _execute_rtu_rtrl_forager_seeds(
                     )
                 )
                 target_indices[lane] += 1
-            reward_tails[lane] = combined[
-                -min(cfg.final_window, combined.size) :
-            ]
+            reward_tails[lane] = combined[-min(cfg.final_window, combined.size) :]
         completed += active
 
     execution_duration = time.perf_counter() - execution_started
@@ -3643,8 +3570,7 @@ def _execute_rtu_rtrl_forager_seeds(
         single_policy._feature_state = ForagerFeatureState(
             last_action=int(last_executed_actions[0]),
             last_reward=float(
-                np.float32(reward_tails[0][-1])
-                / np.float32(feature_cfg.reward_scale)
+                np.float32(reward_tails[0][-1]) / np.float32(feature_cfg.reward_scale)
             ),
             reward_traces=tuple(float(value) for value in np.asarray(final_traces)[0]),
         )
@@ -3655,9 +3581,7 @@ def _execute_rtu_rtrl_forager_seeds(
     for lane, seed in enumerate(ordered_seeds):
         metadata = dict(RTURTRLForagerAgent(agent_config, seed=seed).metadata())
         metadata["environment_rng_schedule"] = FORAGER_ENVIRONMENT_RNG_SCHEDULE
-        metadata["environment_rng_schedule_sha256"] = (
-            environment_rng_schedule_sha256()
-        )
+        metadata["environment_rng_schedule_sha256"] = environment_rng_schedule_sha256()
         if single_policy is None:
             metadata["runner"] = {
                 "kind": "jax_batched_scan",
@@ -3705,9 +3629,7 @@ def _execute_rtu_rtrl_forager_seeds(
                 final_window_mean_reward=float(np.mean(reward_tails[lane])),
                 final_ewm_reward=float(final_ewm_values[lane]),
                 mean_ewm_reward=float(ewm_totals[lane] / cfg.steps),
-                fov_last_10pct_ema_auc=_fov_last_tenth_ema_auc(
-                    fov_ema_samples[lane]
-                ),
+                fov_last_10pct_ema_auc=_fov_last_tenth_ema_auc(fov_ema_samples[lane]),
                 mean_biome_regret=(
                     float(regret_totals[lane] / regret_counts[lane])
                     if regret_counts[lane]
@@ -3767,8 +3689,7 @@ def run_rtu_rtrl_forager_seeds(
     if not isinstance(benchmark_config, ForagerBenchmarkConfig):
         raise TypeError("benchmark_config must be a ForagerBenchmarkConfig")
     ordered_seeds = tuple(
-        _validated_seed(seed, name=f"seeds[{index}]")
-        for index, seed in enumerate(seeds)
+        _validated_seed(seed, name=f"seeds[{index}]") for index, seed in enumerate(seeds)
     )
     if not ordered_seeds:
         raise ValueError("seeds must be non-empty")
@@ -3859,8 +3780,7 @@ class ForagerBenchmarkSummary:
         if type(self.seeds) is not tuple:
             raise ValueError("seeds must be an exact tuple")
         seeds = tuple(
-            _validated_seed(seed, name=f"seeds[{index}]")
-            for index, seed in enumerate(self.seeds)
+            _validated_seed(seed, name=f"seeds[{index}]") for index, seed in enumerate(self.seeds)
         )
         if seeds != tuple(run.seed for run in runs) or len(set(seeds)) != len(seeds):
             raise ValueError("seeds must exactly match the unique ordered runs")
@@ -3926,8 +3846,7 @@ def summarize_forager_runs(
     if len(names) != 1 or len(privileged) != 1:
         raise ValueError("runs must share one agent and privilege level")
     seeds = [
-        _validated_seed(run.seed, name=f"runs[{index}].seed")
-        for index, run in enumerate(runs)
+        _validated_seed(run.seed, name=f"runs[{index}].seed") for index, run in enumerate(runs)
     ]
     if len(set(seeds)) != len(seeds):
         raise ValueError("runs must contain unique seeds")
@@ -3970,13 +3889,8 @@ def summarize_forager_runs(
             raise ValueError("agent and environment seeds must match within each run")
         if run.agent_metadata.get("name", run.agent) != run.agent:
             raise ValueError("run agent metadata name does not match result agent")
-        if (
-            run.agent_metadata.get("privileged", run.privileged)
-            is not run.privileged
-        ):
-            raise ValueError(
-                "run agent metadata privilege label does not match result"
-            )
+        if run.agent_metadata.get("privileged", run.privileged) is not run.privileged:
+            raise ValueError("run agent metadata privilege label does not match result")
 
     def method_signature(run: ForagerRunResult) -> str:
         metadata = run.agent_metadata
@@ -3987,20 +3901,14 @@ def summarize_forager_runs(
             "source_commit": metadata.get("source_commit"),
             "config_path": metadata.get("config_path"),
             "attestation_state": metadata.get("attestation_state"),
-            "official_foragax_evidence": metadata.get(
-                "official_foragax_evidence"
-            ),
+            "official_foragax_evidence": metadata.get("official_foragax_evidence"),
             "protocol_attested": metadata.get("protocol_attested"),
             "runtime_profile_id": metadata.get("runtime_profile_id"),
             "environment_runtime_profile_sha256": metadata.get(
                 "environment_runtime_profile_sha256"
             ),
-            "environment_rng_schedule": metadata.get(
-                "environment_rng_schedule"
-            ),
-            "environment_rng_schedule_sha256": metadata.get(
-                "environment_rng_schedule_sha256"
-            ),
+            "environment_rng_schedule": metadata.get("environment_rng_schedule"),
+            "environment_rng_schedule_sha256": metadata.get("environment_rng_schedule_sha256"),
             "paper_search_oracle": metadata.get("paper_search_oracle"),
             "random_backend": metadata.get("random_backend"),
             "runner_kind": (
@@ -4027,9 +3935,7 @@ def summarize_forager_runs(
                 allow_nan=False,
             )
         except (TypeError, ValueError) as exc:
-            raise ValueError(
-                "run method provenance must contain finite JSON data"
-            ) from exc
+            raise ValueError("run method provenance must contain finite JSON data") from exc
 
     if len({method_signature(run) for run in runs}) != 1:
         raise ValueError("runs must share one method configuration and provenance")
@@ -4080,8 +3986,7 @@ def compare_forager_agents(
     if len(seeds) == 0:
         raise ValueError("at least one seed is required")
     ordered_seeds = tuple(
-        _validated_seed(seed, name=f"seeds[{index}]")
-        for index, seed in enumerate(seeds)
+        _validated_seed(seed, name=f"seeds[{index}]") for index, seed in enumerate(seeds)
     )
     if len(set(ordered_seeds)) != len(ordered_seeds):
         raise ValueError("seeds must be unique")
@@ -4091,16 +3996,11 @@ def compare_forager_agents(
         type(label) is not str or not label or not callable(factory)
         for label, factory in agent_factories.items()
     ):
-        raise TypeError(
-            "agent_factories must map non-empty labels to callable factories"
-        )
+        raise TypeError("agent_factories must map non-empty labels to callable factories")
     base = config if config is not None else ForagerBenchmarkConfig()
     summaries: dict[str, ForagerBenchmarkSummary] = {}
     for label, factory in agent_factories.items():
-        runs = [
-            run_forager(factory(seed), base.with_seed(seed))
-            for seed in ordered_seeds
-        ]
+        runs = [run_forager(factory(seed), base.with_seed(seed)) for seed in ordered_seeds]
         summaries[label] = summarize_forager_runs(
             runs,
             metric=metric,
@@ -4155,12 +4055,8 @@ class PaperForagerProtocol:
             "final_window_steps",
         ):
             _require_builtin_int(getattr(self, name), name=name, minimum=1)
-        _require_builtin_int(
-            self.tuning_seed_offset, name="tuning_seed_offset", minimum=0
-        )
-        _require_builtin_int(
-            self.evaluation_seed_start, name="evaluation_seed_start", minimum=0
-        )
+        _require_builtin_int(self.tuning_seed_offset, name="tuning_seed_offset", minimum=0)
+        _require_builtin_int(self.evaluation_seed_start, name="evaluation_seed_start", minimum=0)
         if self.frozen_ablation_after_steps is not None:
             _require_builtin_int(
                 self.frozen_ablation_after_steps,
@@ -4275,7 +4171,8 @@ def paper_protocol(preset: ForagerPreset = "relearning") -> PaperForagerProtocol
             "Per-seed adjusted EMA with alpha=1e-5 at step 10M, then bootstrapped across seeds."
         )
     else:  # pragma: no cover - Literal plus dataclass validation
-        raise ValueError(f"unknown preset {preset!r}")
+        host_preset = _require_exact_str("preset", preset)
+        raise ValueError(f"unknown preset '{host_preset}'")
     return PaperForagerProtocol(
         preset=preset,
         environment=environment,
