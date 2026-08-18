@@ -20,6 +20,8 @@ subject: ``TestUtilityTracking``/``TestPerturbation`` (up to ``sigma=1.0``
 so noise effects are unmistakable) and ``sparsity=0.5`` round-trips.
 """
 
+import dataclasses
+
 import chex
 import jax.numpy as jnp
 import jax.random as jr
@@ -54,9 +56,7 @@ class TestInitShapes:
         chex.assert_shape(state.trunk_params.biases[1], (16,))
 
     def test_head_shapes(self):
-        learner = UPGDLearner(
-            n_heads=4, hidden_sizes=(16,), sparsity=0.0, perturbation_sigma=0.0
-        )
+        learner = UPGDLearner(n_heads=4, hidden_sizes=(16,), sparsity=0.0, perturbation_sigma=0.0)
         state = learner.init(feature_dim=8, key=jr.key(0))
         assert len(state.head_params.weights) == 4
         assert len(state.readout_fast_head_params.weights) == 4
@@ -106,9 +106,7 @@ class TestInitShapes:
         chex.assert_shape(state.unit_replacement_accumulators, (2,))
 
     def test_utilities_initialized_to_zero(self):
-        learner = UPGDLearner(
-            n_heads=2, hidden_sizes=(16,), sparsity=0.0, perturbation_sigma=0.0
-        )
+        learner = UPGDLearner(n_heads=2, hidden_sizes=(16,), sparsity=0.0, perturbation_sigma=0.0)
         state = learner.init(feature_dim=5, key=jr.key(0))
         for u in state.utilities:
             chex.assert_trees_all_close(u, jnp.zeros_like(u))
@@ -122,16 +120,12 @@ class TestInitShapes:
             chex.assert_trees_all_close(age, jnp.zeros_like(age))
 
     def test_step_count_is_zero(self):
-        learner = UPGDLearner(
-            n_heads=2, hidden_sizes=(16,), sparsity=0.0, perturbation_sigma=0.0
-        )
+        learner = UPGDLearner(n_heads=2, hidden_sizes=(16,), sparsity=0.0, perturbation_sigma=0.0)
         state = learner.init(feature_dim=5, key=jr.key(0))
         assert int(state.step_count) == 0
 
     def test_linear_baseline_no_utilities(self):
-        learner = UPGDLearner(
-            n_heads=2, hidden_sizes=(), sparsity=0.0, perturbation_sigma=0.0
-        )
+        learner = UPGDLearner(n_heads=2, hidden_sizes=(), sparsity=0.0, perturbation_sigma=0.0)
         state = learner.init(feature_dim=5, key=jr.key(0))
         assert len(state.utilities) == 0
         assert len(state.unit_utilities) == 0
@@ -422,18 +416,14 @@ class TestPredictShapes:
     """Predictions should have shape (n_heads,) for any input."""
 
     def test_returns_n_heads(self):
-        learner = UPGDLearner(
-            n_heads=5, hidden_sizes=(16,), sparsity=0.0, perturbation_sigma=0.0
-        )
+        learner = UPGDLearner(n_heads=5, hidden_sizes=(16,), sparsity=0.0, perturbation_sigma=0.0)
         state = learner.init(feature_dim=7, key=jr.key(0))
         preds = learner.predict(state, jnp.ones(7))
         chex.assert_shape(preds, (5,))
         chex.assert_tree_all_finite(preds)
 
     def test_returns_n_heads_zero_input(self):
-        learner = UPGDLearner(
-            n_heads=3, hidden_sizes=(8, 4), sparsity=0.0, perturbation_sigma=0.0
-        )
+        learner = UPGDLearner(n_heads=3, hidden_sizes=(8, 4), sparsity=0.0, perturbation_sigma=0.0)
         state = learner.init(feature_dim=4, key=jr.key(0))
         preds = learner.predict(state, jnp.zeros(4))
         chex.assert_shape(preds, (3,))
@@ -687,8 +677,11 @@ class TestUpdateMetrics:
 
     def test_update_returns_finite_metrics(self):
         learner = UPGDLearner(
-            n_heads=2, hidden_sizes=(8,), sparsity=0.0,
-            step_size=0.01, perturbation_sigma=1e-3,
+            n_heads=2,
+            hidden_sizes=(8,),
+            sparsity=0.0,
+            step_size=0.01,
+            perturbation_sigma=1e-3,
         )
         state = learner.init(feature_dim=5, key=jr.key(0))
         for _ in range(5):
@@ -743,12 +736,10 @@ class TestUpdateMetrics:
         sum_result = sum_learner.update(state, obs, targets)
 
         mean_delta = jnp.linalg.norm(
-            mean_result.state.trunk_params.weights[0]
-            - state.trunk_params.weights[0]
+            mean_result.state.trunk_params.weights[0] - state.trunk_params.weights[0]
         )
         sum_delta = jnp.linalg.norm(
-            sum_result.state.trunk_params.weights[0]
-            - state.trunk_params.weights[0]
+            sum_result.state.trunk_params.weights[0] - state.trunk_params.weights[0]
         )
         assert float(sum_delta) > float(mean_delta)
 
@@ -825,9 +816,7 @@ class TestUpdateMetrics:
         )
 
         dense_zero_targets = jnp.array([0.5, 0.0, -0.25])
-        structure_dense_zero = structure_learner.update(
-            state, obs, dense_zero_targets
-        )
+        structure_dense_zero = structure_learner.update(state, obs, dense_zero_targets)
         mean_dense_zero = mean_learner.update(state, obs, dense_zero_targets)
         chex.assert_trees_all_close(
             structure_dense_zero.state.trunk_params,
@@ -902,20 +891,16 @@ class TestUpdateMetrics:
         scaled_result = scaled.update(state, obs, targets)
 
         plain_trunk_delta = jnp.linalg.norm(
-            plain_result.state.trunk_params.weights[0]
-            - state.trunk_params.weights[0]
+            plain_result.state.trunk_params.weights[0] - state.trunk_params.weights[0]
         )
         scaled_trunk_delta = jnp.linalg.norm(
-            scaled_result.state.trunk_params.weights[0]
-            - state.trunk_params.weights[0]
+            scaled_result.state.trunk_params.weights[0] - state.trunk_params.weights[0]
         )
         plain_head_delta = jnp.linalg.norm(
-            plain_result.state.head_params.weights[0]
-            - state.head_params.weights[0]
+            plain_result.state.head_params.weights[0] - state.head_params.weights[0]
         )
         scaled_head_delta = jnp.linalg.norm(
-            scaled_result.state.head_params.weights[0]
-            - state.head_params.weights[0]
+            scaled_result.state.head_params.weights[0] - state.head_params.weights[0]
         )
 
         chex.assert_trees_all_close(scaled_trunk_delta, plain_trunk_delta)
@@ -943,12 +928,10 @@ class TestUpdateMetrics:
         downweighted_result = downweighted.update(state, obs, targets)
 
         plain_negative_delta = jnp.linalg.norm(
-            plain_result.state.head_params.weights[1]
-            - state.head_params.weights[1]
+            plain_result.state.head_params.weights[1] - state.head_params.weights[1]
         )
         downweighted_negative_delta = jnp.linalg.norm(
-            downweighted_result.state.head_params.weights[1]
-            - state.head_params.weights[1]
+            downweighted_result.state.head_params.weights[1] - state.head_params.weights[1]
         )
         assert float(downweighted_negative_delta) < float(plain_negative_delta)
 
@@ -1067,12 +1050,10 @@ class TestUpdateMetrics:
             plain_result.state.trunk_params.weights[0],
         )
         plain_head_delta = jnp.linalg.norm(
-            plain_result.state.head_params.weights[0]
-            - state.head_params.weights[0]
+            plain_result.state.head_params.weights[0] - state.head_params.weights[0]
         )
         scaled_head_delta = jnp.linalg.norm(
-            scaled_result.state.head_params.weights[0]
-            - state.head_params.weights[0]
+            scaled_result.state.head_params.weights[0] - state.head_params.weights[0]
         )
         assert float(scaled_head_delta) > float(plain_head_delta)
 
@@ -1237,9 +1218,7 @@ class TestUpdateMetrics:
         after = learner.predict(result.state, obs)
 
         assert float(after[1]) > float(before[1])
-        assert float(jnp.linalg.norm(after - target)) < float(
-            jnp.linalg.norm(before - target)
-        )
+        assert float(jnp.linalg.norm(after - target)) < float(jnp.linalg.norm(before - target))
         assert not jnp.allclose(
             result.state.readout_label_adapter,
             state.readout_label_adapter,
@@ -1300,8 +1279,7 @@ class TestUpdateMetrics:
         active_result = active.update(state, obs, target)
 
         passive_delta = jnp.linalg.norm(
-            passive_result.state.trunk_params.weights[0]
-            - state.trunk_params.weights[0]
+            passive_result.state.trunk_params.weights[0] - state.trunk_params.weights[0]
         )
         active_delta = jnp.linalg.norm(
             active_result.state.trunk_params.weights[0]
@@ -1421,12 +1399,10 @@ class TestUpdateMetrics:
         suppressed_result = suppressed.update(state, obs, target)
 
         baseline_slow_delta = jnp.linalg.norm(
-            baseline_result.state.head_params.weights[1]
-            - state.head_params.weights[1]
+            baseline_result.state.head_params.weights[1] - state.head_params.weights[1]
         )
         suppressed_slow_delta = jnp.linalg.norm(
-            suppressed_result.state.head_params.weights[1]
-            - state.head_params.weights[1]
+            suppressed_result.state.head_params.weights[1] - state.head_params.weights[1]
         )
         suppressed_fast_delta = jnp.linalg.norm(
             suppressed_result.state.readout_fast_head_params.weights[1]
@@ -1457,8 +1433,8 @@ class TestUtilityTracking:
             n_heads=1,
             hidden_sizes=(16,),
             sparsity=0.0,
-            step_size=0.0,            # freeze SGD so weights stay constant
-            perturbation_sigma=0.0,   # no perturbation noise
+            step_size=0.0,  # freeze SGD so weights stay constant
+            perturbation_sigma=0.0,  # no perturbation noise
             utility_decay=0.99,
         )
         state = learner.init(feature_dim=feature_dim, key=jr.key(123))
@@ -1521,12 +1497,8 @@ class TestUtilityTracking:
         state = state.replace(  # type: ignore[attr-defined]
             utilities=tuple(jnp.full_like(u, jnp.inf) for u in state.utilities),
             unit_utilities=tuple(jnp.full_like(u, jnp.inf) for u in state.unit_utilities),
-            unit_long_utilities=tuple(
-                jnp.full_like(u, jnp.inf) for u in state.unit_long_utilities
-            ),
-            unit_gradient_emas=tuple(
-                jnp.full_like(u, jnp.inf) for u in state.unit_gradient_emas
-            ),
+            unit_long_utilities=tuple(jnp.full_like(u, jnp.inf) for u in state.unit_long_utilities),
+            unit_gradient_emas=tuple(jnp.full_like(u, jnp.inf) for u in state.unit_gradient_emas),
             loss_fast_ema=jnp.asarray(jnp.inf, dtype=jnp.float32),
             loss_slow_ema=jnp.asarray(jnp.inf, dtype=jnp.float32),
             target_repeat_ema=jnp.asarray(jnp.inf, dtype=jnp.float32),
@@ -1584,12 +1556,8 @@ class TestUtilityTracking:
         )
         state = learner.init(feature_dim=6, key=jr.key(12))
         state = state.replace(  # type: ignore[attr-defined]
-            unit_long_utilities=(
-                jnp.array([10.0, 1.0, 1.0, 1.0], dtype=jnp.float32),
-            ),
-            unit_gradient_emas=(
-                jnp.array([0.0, 1.0, 1.0, 1.0], dtype=jnp.float32),
-            ),
+            unit_long_utilities=(jnp.array([10.0, 1.0, 1.0, 1.0], dtype=jnp.float32),),
+            unit_gradient_emas=(jnp.array([0.0, 1.0, 1.0, 1.0], dtype=jnp.float32),),
             unit_ages=(jnp.array([5, 5, 5, 5], dtype=jnp.int32),),
         )
 
@@ -1749,9 +1717,7 @@ class TestUtilityTracking:
 
         head_deltas = [
             float(
-                jnp.linalg.norm(
-                    result.state.head_params.weights[i] - state.head_params.weights[i]
-                )
+                jnp.linalg.norm(result.state.head_params.weights[i] - state.head_params.weights[i])
             )
             for i in range(3)
         ]
@@ -1820,10 +1786,10 @@ class TestPerturbation:
             hidden_sizes=(8,),
             sparsity=0.0,
             step_size=0.0,
-            perturbation_sigma=1.0,   # large noise so the difference is obvious
+            perturbation_sigma=1.0,  # large noise so the difference is obvious
             perturbation_beta=2.0,
             perturbation_interval=1,
-            utility_decay=0.0,        # use the instantaneous |w*grad| as utility
+            utility_decay=0.0,  # use the instantaneous |w*grad| as utility
         )
         state = learner.init(feature_dim=4, key=jr.key(7))
 
@@ -2091,9 +2057,7 @@ class TestConfigRoundtrip:
     def test_roundtrip_with_bounder(self):
         from alberta_framework.core.optimizers import ObGDBounding
 
-        learner = UPGDLearner(
-            n_heads=2, hidden_sizes=(8,), bounder=ObGDBounding(kappa=2.0)
-        )
+        learner = UPGDLearner(n_heads=2, hidden_sizes=(8,), bounder=ObGDBounding(kappa=2.0))
         cfg = learner.to_config()
         assert cfg["bounder"] is not None
         rebuilt = UPGDLearner.from_config(cfg)
@@ -2140,9 +2104,7 @@ class TestNanMaskedTarget:
         assert jnp.isnan(result.errors[1])
 
         # Head 0 weights should have moved
-        assert not jnp.allclose(
-            result.state.head_params.weights[0], state.head_params.weights[0]
-        )
+        assert not jnp.allclose(result.state.head_params.weights[0], state.head_params.weights[0])
 
 
 # =============================================================================
@@ -2198,8 +2160,11 @@ class TestLoops:
 
     def test_run_upgd_arrays_smoke(self):
         learner = UPGDLearner(
-            n_heads=1, hidden_sizes=(8,), sparsity=0.0,
-            step_size=0.01, perturbation_sigma=1e-4,
+            n_heads=1,
+            hidden_sizes=(8,),
+            sparsity=0.0,
+            step_size=0.01,
+            perturbation_sigma=1e-4,
         )
         state = learner.init(feature_dim=4, key=jr.key(0))
         observations = jr.normal(jr.key(1), (50, 4))
@@ -2213,9 +2178,50 @@ class TestLoops:
         from alberta_framework.streams.synthetic import RandomWalkStream
 
         learner = UPGDLearner(
-            n_heads=1, hidden_sizes=(8,), sparsity=0.0,
-            step_size=0.01, perturbation_sigma=1e-4,
+            n_heads=1,
+            hidden_sizes=(8,),
+            sparsity=0.0,
+            step_size=0.01,
+            perturbation_sigma=1e-4,
         )
         stream = RandomWalkStream(feature_dim=4, drift_rate=0.0, noise_std=0.05)
         result = run_upgd_loop(learner, stream, num_steps=50, key=jr.key(0))
         chex.assert_shape(result.metrics, (50, 4))
+
+
+class TestUPGDLifetimeClock:
+    """Saturating lifetime clock keeps UPGDState.step_count non-negative."""
+
+    def test_upgd_step_count_saturates_at_int32_max(self) -> None:
+        learner = UPGDLearner(
+            n_heads=1,
+            hidden_sizes=(8,),
+            sparsity=0.0,
+            step_size=0.01,
+            perturbation_sigma=1e-4,
+        )
+        state = learner.init(feature_dim=4, key=jr.key(0))
+        near_max = dataclasses.replace(state, step_count=jnp.array(2147483647, dtype=jnp.int32))
+        res = learner.update(
+            near_max,
+            jnp.ones((4,), dtype=jnp.float32),
+            jnp.ones((1,), dtype=jnp.float32),
+        )
+        assert int(res.state.step_count) == 2147483647
+        assert int(res.state.step_count) >= 0
+
+    def test_upgd_step_count_increments_below_max(self) -> None:
+        learner = UPGDLearner(
+            n_heads=1,
+            hidden_sizes=(8,),
+            sparsity=0.0,
+            step_size=0.01,
+            perturbation_sigma=1e-4,
+        )
+        state = learner.init(feature_dim=4, key=jr.key(0))
+        res = learner.update(
+            state,
+            jnp.ones((4,), dtype=jnp.float32),
+            jnp.ones((1,), dtype=jnp.float32),
+        )
+        assert int(res.state.step_count) == 1
