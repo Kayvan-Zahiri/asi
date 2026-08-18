@@ -346,9 +346,7 @@ def _lean_upgd_noise_update(
 # =============================================================================
 
 
-def _sorted_flat_noise(
-    key: Array, params: dict[str, Array], noise_std: float
-) -> dict[str, Array]:
+def _sorted_flat_noise(key: Array, params: dict[str, Array], noise_std: float) -> dict[str, Array]:
     """Draw one flat N(0, sigma^2) vector and slice it per parameter.
 
     Identical construction (sorted names, one flat draw) to the lean UPGD-W
@@ -374,8 +372,7 @@ def _sorted_flat_noise(
     flat = jr.normal(key, (sum(counts),), jnp.float32) * noise_std
     chunks = jnp.split(flat, np.cumsum(counts)[:-1])
     return {
-        name: chunk.reshape(shape)
-        for name, chunk, shape in zip(names, chunks, shapes, strict=True)
+        name: chunk.reshape(shape) for name, chunk, shape in zip(names, chunks, shapes, strict=True)
     }
 
 
@@ -389,16 +386,14 @@ def _upgd_utility_and_gate(
     """UPGD utility EMA update + global-max sigmoid gate (lean-step equations)."""
     beta = utility_decay
     new_utility = {
-        name: beta * utility[name] + (1.0 - beta) * (-grads[name] * params[name])
-        for name in params
+        name: beta * utility[name] + (1.0 - beta) * (-grads[name] * params[name]) for name in params
     }
     global_max = jnp.max(jnp.stack([jnp.max(new_utility[name]) for name in sorted(params)]))
     bias_correction = 1.0 - jnp.power(
         jnp.asarray(beta, dtype=jnp.float32), count.astype(jnp.float32)
     )
     gate = {
-        name: jax.nn.sigmoid((new_utility[name] / bias_correction) / global_max)
-        for name in params
+        name: jax.nn.sigmoid((new_utility[name] / bias_correction) / global_max) for name in params
     }
     return new_utility, gate
 
@@ -431,9 +426,7 @@ def _step_metrics(
     """Protocol metrics: pre-update accuracy, loss, post-update plasticity."""
     accuracy = (jnp.argmax(logits) == y).astype(jnp.float32)
     loss_after, _ = cross_entropy_loss(params_after, x, y)
-    plasticity = jnp.clip(
-        1.0 - loss_after / jnp.maximum(loss, _PLASTICITY_LOSS_FLOOR), 0.0, 1.0
-    )
+    plasticity = jnp.clip(1.0 - loss_after / jnp.maximum(loss, _PLASTICITY_LOSS_FLOOR), 0.0, 1.0)
     return accuracy, loss, plasticity
 
 
@@ -459,9 +452,7 @@ _L2ER_HP_KEYS = frozenset(
 
 def _l2er_array(value: object, *, name: str, ndim: int | None = None) -> Array:
     actual_type = type(value)
-    if actual_type is not np.ndarray and not issubclass(
-        actual_type, (jax.Array, jax.core.Tracer)
-    ):
+    if actual_type is not np.ndarray and not issubclass(actual_type, (jax.Array, jax.core.Tracer)):
         raise ValueError(f"{name} must be an exact NumPy or JAX array")
     array = jnp.asarray(value)
     if (
@@ -504,10 +495,7 @@ def _l2er_preflight_svd(features: Array) -> None:
 def _l2er_params(params: object) -> dict[str, Array]:
     if type(params) is not dict or frozenset(params) != _L2ER_KEYS:
         raise ValueError("params must be one exact protocol MLP tree")
-    checked = {
-        name: _l2er_array(value, name=f"params.{name}")
-        for name, value in params.items()
-    }
+    checked = {name: _l2er_array(value, name=f"params.{name}") for name, value in params.items()}
     w1, b1 = checked["w1"], checked["b1"]
     w2, b2 = checked["w2"], checked["b2"]
     w3, b3 = checked["w3"], checked["b3"]
@@ -535,9 +523,7 @@ class L2ERState:
     transaction_valid: Array
 
 
-def l2er_effective_rank_transaction(
-    features: Array, epsilon: float = 1e-8
-) -> tuple[Array, Array]:
+def l2er_effective_rank_transaction(features: Array, epsilon: float = 1e-8) -> tuple[Array, Array]:
     """Return the scale-stable entropy rank and caller-visible validity."""
     features = _l2er_array(features, name="features", ndim=2)
     if type(epsilon) is not float or not math.isfinite(epsilon) or epsilon <= 0.0:
@@ -626,8 +612,7 @@ def l2er_update(
         name: _l2er_array(value, name=f"grads.{name}") for name, value in grads.items()
     }
     if any(
-        checked_grads[name].shape != value.shape
-        or checked_grads[name].dtype != value.dtype
+        checked_grads[name].shape != value.shape or checked_grads[name].dtype != value.dtype
         for name, value in checked_params.items()
     ):
         raise ValueError("params and grads must have identical shapes and dtypes")
@@ -681,9 +666,7 @@ def l2er_update(
     else:
         new_params = supervised_params
     candidate_state = L2ERState(  # type: ignore[call-arg]
-        example_buffer=jax.lax.cond(
-            complete, jnp.zeros_like, lambda value: value, buffered
-        ),
+        example_buffer=jax.lax.cond(complete, jnp.zeros_like, lambda value: value, buffered),
         buffer_count=jnp.where(complete, jnp.asarray(0, dtype=jnp.int32), next_count),
         transaction_valid=jnp.asarray(True, dtype=jnp.bool_),
     )
@@ -732,9 +715,7 @@ def _make_l2er_learner(
         params: dict[str, Array], state: L2ERState, x: Array, y: Array, key: Array
     ) -> tuple[dict[str, Array], L2ERState, StepMetrics]:
         del key
-        (loss, logits), grads = jax.value_and_grad(cross_entropy_loss, has_aux=True)(
-            params, x, y
-        )
+        (loss, logits), grads = jax.value_and_grad(cross_entropy_loss, has_aux=True)(params, x, y)
         new_params, new_state = l2er_update(params, state, grads, x, checked_hp)
         return new_params, new_state, _step_metrics(new_params, x, y, loss, logits)
 
@@ -753,9 +734,7 @@ def _wrap_grad_learner(
     def full_step(
         params: dict[str, Array], state: Any, x: Array, y: Array, key: Array
     ) -> tuple[dict[str, Array], Any, StepMetrics]:
-        (loss, logits), grads = jax.value_and_grad(cross_entropy_loss, has_aux=True)(
-            params, x, y
-        )
+        (loss, logits), grads = jax.value_and_grad(cross_entropy_loss, has_aux=True)(params, x, y)
         new_params, new_state = step_fn(params, state, grads, key)
         return new_params, new_state, _step_metrics(new_params, x, y, loss, logits)
 
@@ -802,18 +781,14 @@ def upgd_idbd_update(
     wd = hp["weight_decay"]
     meta = hp["meta_step_size"]
     count = state.step + jnp.array(1, dtype=jnp.int32)
-    utility, gate = _upgd_utility_and_gate(
-        params, grads, state.utility, count, hp["utility_decay"]
-    )
+    utility, gate = _upgd_utility_and_gate(params, grads, state.utility, count, hp["utility_decay"])
     new_params: dict[str, Array] = {}
     new_log_alpha: dict[str, Array] = {}
     new_trace: dict[str, Array] = {}
     for name in params:
         keep = 1.0 - gate[name]
         z = grads[name] * keep
-        log_alpha = _clip_finite_log_alpha(
-            state.log_alpha[name], meta * z * state.trace[name]
-        )
+        log_alpha = _clip_finite_log_alpha(state.log_alpha[name], meta * z * state.trace[name])
         alpha = jnp.exp(log_alpha)
         new_params[name] = params[name] * (1.0 - alpha * wd) - alpha * (
             (grads[name] + noise[name]) * keep
@@ -859,9 +834,7 @@ def upgd_idbd_swift_update(
     eta = hp["swift_eta"]
     log_eps = math.log(hp["swift_eps"])
     count = state.step + jnp.array(1, dtype=jnp.int32)
-    utility, gate = _upgd_utility_and_gate(
-        params, grads, state.utility, count, hp["utility_decay"]
-    )
+    utility, gate = _upgd_utility_and_gate(params, grads, state.utility, count, hp["utility_decay"])
     z_all: dict[str, Array] = {}
     log_alpha_all: dict[str, Array] = {}
     for name in params:
@@ -871,9 +844,7 @@ def upgd_idbd_swift_update(
         )
     alpha_all = {name: jnp.exp(log_alpha_all[name]) for name in params}
     tau = jnp.sum(
-        jnp.stack(
-            [jnp.sum(alpha_all[name] * z_all[name] * z_all[name]) for name in sorted(params)]
-        )
+        jnp.stack([jnp.sum(alpha_all[name] * z_all[name] * z_all[name]) for name in sorted(params)])
     )
     triggered = tau > eta
     bound_scale = jnp.where(triggered, eta / tau, 1.0)
@@ -920,18 +891,14 @@ def _make_idbd_family_learner(
         return UPGDIDBDState(  # type: ignore[call-arg]
             utility={name: jnp.zeros_like(value) for name, value in params.items()},
             step=jnp.array(0, dtype=jnp.int32),
-            log_alpha={
-                name: jnp.full_like(value, log_init) for name, value in params.items()
-            },
+            log_alpha={name: jnp.full_like(value, log_init) for name, value in params.items()},
             trace={name: jnp.zeros_like(value) for name, value in params.items()},
         )
 
     def full_step(
         params: dict[str, Array], state: UPGDIDBDState, x: Array, y: Array, key: Array
     ) -> tuple[dict[str, Array], UPGDIDBDState, StepMetrics]:
-        (loss, logits), grads = jax.value_and_grad(cross_entropy_loss, has_aux=True)(
-            params, x, y
-        )
+        (loss, logits), grads = jax.value_and_grad(cross_entropy_loss, has_aux=True)(params, x, y)
         noise = _sorted_flat_noise(key, params, noise_std)
         new_params, new_state = update(params, state, grads, noise, hp)
         return new_params, new_state, _step_metrics(new_params, x, y, loss, logits)
@@ -980,9 +947,7 @@ def upgd_autostep_update(
     mu = hp["meta_step_size"]
     tau = hp["tau"]
     count = state.step + jnp.array(1, dtype=jnp.int32)
-    utility, gate = _upgd_utility_and_gate(
-        params, grads, state.utility, count, hp["utility_decay"]
-    )
+    utility, gate = _upgd_utility_and_gate(params, grads, state.utility, count, hp["utility_decay"])
     z_all = {name: grads[name] * (1.0 - gate[name]) for name in params}
     raw_alpha: dict[str, Array] = {}
     new_normalizer: dict[str, Array] = {}
@@ -994,9 +959,7 @@ def upgd_autostep_update(
             abs_meta - state.normalizer[name]
         )
         v_candidate = jnp.maximum(abs_meta, v_update)
-        valid_meta_update = jnp.logical_and(
-            jnp.isfinite(meta_gradient), jnp.isfinite(v_candidate)
-        )
+        valid_meta_update = jnp.logical_and(jnp.isfinite(meta_gradient), jnp.isfinite(v_candidate))
         v_new = jnp.where(valid_meta_update, v_candidate, state.normalizer[name])
         safe_v = jnp.maximum(v_new, 1e-38)
         raw_alpha[name] = jnp.where(
@@ -1066,9 +1029,7 @@ def _make_upgd_autostep_learner(
     def full_step(
         params: dict[str, Array], state: UPGDAutostepState, x: Array, y: Array, key: Array
     ) -> tuple[dict[str, Array], UPGDAutostepState, StepMetrics]:
-        (loss, logits), grads = jax.value_and_grad(cross_entropy_loss, has_aux=True)(
-            params, x, y
-        )
+        (loss, logits), grads = jax.value_and_grad(cross_entropy_loss, has_aux=True)(params, x, y)
         noise = _sorted_flat_noise(key, params, noise_std)
         new_params, new_state = upgd_autostep_update(params, state, grads, noise, hp)
         return new_params, new_state, _step_metrics(new_params, x, y, loss, logits)
@@ -1156,9 +1117,7 @@ def upgd_w_fade_head_update(
     fade_alpha = hp["fade_alpha"]
     hidden_decay = 1.0 - step_size * hp["weight_decay"]
     count = state.step + jnp.array(1, dtype=jnp.int32)
-    utility, gate = _upgd_utility_and_gate(
-        params, grads, state.utility, count, hp["utility_decay"]
-    )
+    utility, gate = _upgd_utility_and_gate(params, grads, state.utility, count, hp["utility_decay"])
     head_sq = {
         "w3": (head_input * head_input)[:, None],
         "b3": jnp.ones_like(params["b3"]),
@@ -1202,9 +1161,7 @@ def _make_upgd_w_fade_head_learner(
     def full_step(
         params: dict[str, Array], state: UPGDFadeHeadState, x: Array, y: Array, key: Array
     ) -> tuple[dict[str, Array], UPGDFadeHeadState, StepMetrics]:
-        (loss, logits), grads = jax.value_and_grad(cross_entropy_loss, has_aux=True)(
-            params, x, y
-        )
+        (loss, logits), grads = jax.value_and_grad(cross_entropy_loss, has_aux=True)(params, x, y)
         _, _, _, _, a2 = _forward_with_activations(params, x)
         noise = _sorted_flat_noise(key, params, noise_std)
         new_params, new_state = upgd_w_fade_head_update(params, state, grads, noise, a2, hp)
@@ -1238,9 +1195,7 @@ def upgd_l2init_update(
     step_size = hp["step_size"]
     wd = hp["weight_decay"]
     count = state.step + jnp.array(1, dtype=jnp.int32)
-    utility, gate = _upgd_utility_and_gate(
-        params, grads, state.utility, count, hp["utility_decay"]
-    )
+    utility, gate = _upgd_utility_and_gate(params, grads, state.utility, count, hp["utility_decay"])
     new_params = {
         name: params[name]
         - step_size * wd * (params[name] - state.init_params[name])
@@ -1267,9 +1222,7 @@ def _make_upgd_l2init_learner(
     def full_step(
         params: dict[str, Array], state: UPGDL2InitState, x: Array, y: Array, key: Array
     ) -> tuple[dict[str, Array], UPGDL2InitState, StepMetrics]:
-        (loss, logits), grads = jax.value_and_grad(cross_entropy_loss, has_aux=True)(
-            params, x, y
-        )
+        (loss, logits), grads = jax.value_and_grad(cross_entropy_loss, has_aux=True)(params, x, y)
         noise = _sorted_flat_noise(key, params, noise_std)
         new_params, new_state = upgd_l2init_update(params, state, grads, noise, hp)
         return new_params, new_state, _step_metrics(new_params, x, y, loss, logits)
@@ -1353,9 +1306,13 @@ def _make_upgd_ema_norm_learner(
         )
         new_params, new_lean = lean_upgd_w_update(params, lean_state, grads, noise, lean_hp)
         metrics = _step_metrics(new_params, x_norm, y, loss, logits)
-        return new_params, UPGDNormState(  # type: ignore[call-arg]
-            utility=new_lean.utility, step=new_lean.step, norm=new_norm
-        ), metrics
+        return (
+            new_params,
+            UPGDNormState(  # type: ignore[call-arg]
+                utility=new_lean.utility, step=new_lean.step, norm=new_norm
+            ),
+            metrics,
+        )
 
     return init_fn, full_step
 
@@ -1406,8 +1363,7 @@ def _make_sgd_ema_norm_learner(
             params, x_norm, y
         )
         new_params = {
-            name: params[name] * decay_factor - step_size * grads[name]
-            for name in params
+            name: params[name] * decay_factor - step_size * grads[name] for name in params
         }
         metrics = _step_metrics(new_params, x_norm, y, loss, logits)
         return new_params, SGDNormState(norm=new_norm), metrics  # type: ignore[call-arg]
@@ -1533,12 +1489,14 @@ def _make_intentional_updates_learner(
     """
     checked_hp = _intentional_updates_hp(hp)
     if checked_hp["intentional_enabled"] == 0.0:
-        return _make_sgd_ema_norm_learner({
-            "step_size": checked_hp["fixed_step_size"],
-            "weight_decay": checked_hp["weight_decay"],
-            "norm_decay": checked_hp["norm_decay"],
-            "norm_epsilon": checked_hp["norm_epsilon"],
-        })
+        return _make_sgd_ema_norm_learner(
+            {
+                "step_size": checked_hp["fixed_step_size"],
+                "weight_decay": checked_hp["weight_decay"],
+                "norm_decay": checked_hp["norm_decay"],
+                "norm_epsilon": checked_hp["norm_epsilon"],
+            }
+        )
 
     eta = checked_hp["intended_fraction"]
     beta2 = checked_hp["beta2"]
@@ -1585,14 +1543,11 @@ def _make_intentional_updates_learner(
             raise ValueError("state must be an exact IntentionalUpdatesIPMNISTState")
         squared_gradient = _l2er_params(state.squared_gradient)
         if any(
-            squared_gradient[name].shape != value.shape
-            for name, value in checked_params.items()
+            squared_gradient[name].shape != value.shape for name, value in checked_params.items()
         ):
             raise ValueError("squared-gradient state must match the parameter tree")
         step = _intentional_updates_scalar_int_array(state.step, name="state.step")
-        clip_step = _intentional_updates_scalar_int_array(
-            state.clip_step, name="state.clip_step"
-        )
+        clip_step = _intentional_updates_scalar_int_array(state.clip_step, name="state.clip_step")
         clip_squared_error = _l2er_array(
             state.clip_squared_error, name="state.clip_squared_error", ndim=0
         )
@@ -1642,21 +1597,18 @@ def _make_intentional_updates_learner(
             ),
         )
         x_norm, new_norm = ema_normalize(safe_norm, safe_x, norm_decay, norm_epsilon)
-        (loss, logits), raw_grads = jax.value_and_grad(
-            cross_entropy_loss, has_aux=True
-        )(safe_params, x_norm, safe_y)
+        (loss, logits), raw_grads = jax.value_and_grad(cross_entropy_loss, has_aux=True)(
+            safe_params, x_norm, safe_y
+        )
         grads = {
             name: (
-                gradient
-                if update_features or name in ("w3", "b3")
-                else jnp.zeros_like(gradient)
+                gradient if update_features or name in ("w3", "b3") else jnp.zeros_like(gradient)
             )
             for name, gradient in raw_grads.items()
         }
         new_step = step + jnp.asarray(1, dtype=jnp.int32)
         next_squared_gradient = {
-            name: beta2 * squared_gradient[name]
-            + (1.0 - beta2) * jnp.square(gradient)
+            name: beta2 * squared_gradient[name] + (1.0 - beta2) * jnp.square(gradient)
             for name, gradient in grads.items()
         }
         bias_correction = 1.0 - beta2 ** new_step.astype(jnp.float32)
@@ -1669,24 +1621,18 @@ def _make_intentional_updates_learner(
             for name, value in next_squared_gradient.items()
         }
         denominator = sum(
-            (
-                jnp.vdot(grads[name], scale[name] * grads[name]).real
-                for name in sorted(grads)
-            ),
+            (jnp.vdot(grads[name], scale[name] * grads[name]).real for name in sorted(grads)),
             jnp.asarray(0.0, dtype=jnp.float32),
         )
 
         new_clip_step = clip_step + jnp.asarray(1, dtype=jnp.int32)
-        clip_squared_error = (
-            beta_clip * clip_squared_error + (1.0 - beta_clip) * jnp.square(loss)
-        )
+        clip_squared_error = beta_clip * clip_squared_error + (1.0 - beta_clip) * jnp.square(loss)
         clip_bias_correction = 1.0 - beta_clip ** new_clip_step.astype(jnp.float32)
         adaptive_cap = clip_mult * jnp.sqrt(clip_squared_error / clip_bias_correction)
         safe_loss = jnp.minimum(loss, adaptive_cap) if use_adaptive_clip else loss
         multiplier = eta * safe_loss / jnp.maximum(denominator, epsilon)
         new_params = {
-            name: safe_params[name] - multiplier * scale[name] * grads[name]
-            for name in safe_params
+            name: safe_params[name] - multiplier * scale[name] * grads[name] for name in safe_params
         }
         metrics = _step_metrics(new_params, x_norm, safe_y, loss, logits)
         new_state = IntentionalUpdatesIPMNISTState(  # type: ignore[call-arg]
@@ -1770,9 +1716,7 @@ def _make_upgd_ema_norm_ext_learner(
     hidden_rms = hp.get("hidden_rms", 0.0) != 0.0
     rms_epsilon = hp.get("hidden_rms_epsilon", 1e-8)
 
-    def _hidden_rms_loss(
-        params: dict[str, Array], x: Array, y: Array
-    ) -> tuple[Array, Array]:
+    def _hidden_rms_loss(params: dict[str, Array], x: Array, y: Array) -> tuple[Array, Array]:
         z1 = x @ params["w1"] + params["b1"]
         h1 = _hidden_rms_normalize(jax.nn.relu(z1), rms_epsilon)
         z2 = h1 @ params["w2"] + params["b2"]
@@ -1798,9 +1742,7 @@ def _make_upgd_ema_norm_ext_learner(
         params: dict[str, Array], state: UPGDNormState, x: Array, y: Array, key: Array
     ) -> tuple[dict[str, Array], UPGDNormState, StepMetrics]:
         x_norm, new_norm = ema_normalize(state.norm, x, norm_decay, norm_epsilon)
-        (loss, logits), grads = jax.value_and_grad(loss_fn, has_aux=True)(
-            params, x_norm, y
-        )
+        (loss, logits), grads = jax.value_and_grad(loss_fn, has_aux=True)(params, x_norm, y)
         if not hidden_rms and not local_gate and gate_beta == 1.0:
             # Keep the inert extension on the authoritative lean-UPGD path.
             # Repeating the same equations here can produce low-bit parameter
@@ -1821,9 +1763,13 @@ def _make_upgd_ema_norm_ext_learner(
                 params, lean_state, grads, noise, lean_hp
             )
             metrics = _step_metrics(reduced_params, x_norm, y, loss, logits)
-            return reduced_params, UPGDNormState(  # type: ignore[call-arg]
-                utility=reduced_lean.utility, step=reduced_lean.step, norm=new_norm
-            ), metrics
+            return (
+                reduced_params,
+                UPGDNormState(  # type: ignore[call-arg]
+                    utility=reduced_lean.utility, step=reduced_lean.step, norm=new_norm
+                ),
+                metrics,
+            )
         noise = _sorted_flat_noise(key, params, noise_std)
         count = state.step + jnp.array(1, dtype=jnp.int32)
         utility = {
@@ -1834,9 +1780,7 @@ def _make_upgd_ema_norm_ext_learner(
         bias_correction = 1.0 - jnp.power(
             jnp.asarray(utility_decay, dtype=jnp.float32), count.astype(jnp.float32)
         )
-        global_max = jnp.max(
-            jnp.stack([jnp.max(utility[name]) for name in sorted(params)])
-        )
+        global_max = jnp.max(jnp.stack([jnp.max(utility[name]) for name in sorted(params)]))
         new_params: dict[str, Array] = {}
         for name in params:
             if local_gate:
@@ -1856,9 +1800,13 @@ def _make_upgd_ema_norm_ext_learner(
         plasticity = jnp.clip(
             1.0 - loss_after / jnp.maximum(loss, _PLASTICITY_LOSS_FLOOR), 0.0, 1.0
         )
-        return new_params, UPGDNormState(  # type: ignore[call-arg]
-            utility=utility, step=count, norm=new_norm
-        ), (accuracy, loss, plasticity)
+        return (
+            new_params,
+            UPGDNormState(  # type: ignore[call-arg]
+                utility=utility, step=count, norm=new_norm
+            ),
+            (accuracy, loss, plasticity),
+        )
 
     return init_fn, full_step
 
@@ -1925,9 +1873,7 @@ def shift_adaptive_normalize(
     effective_fast = jnp.minimum(fast_decay, 1.0 - 1.0 / (state.count + 2.0))
     new_fast = effective_fast * fast_mean + (1.0 - effective_fast) * observation
     threshold = shift_k * jnp.sqrt(state.var) + shift_delta
-    shifted = (jnp.abs(new_fast - state.mean) > threshold) & (
-        state.count >= shift_refractory
-    )
+    shifted = (jnp.abs(new_fast - state.mean) > threshold) & (state.count >= shift_refractory)
     new_count = jnp.where(shifted, 0.0, state.count) + 1.0
     effective_decay = jnp.minimum(decay, 1.0 - 1.0 / (new_count + 1.0))
     delta = observation - state.mean
@@ -1937,9 +1883,14 @@ def shift_adaptive_normalize(
         effective_decay * state.var + (1.0 - effective_decay) * delta * delta2, epsilon
     )
     normalized = (observation - new_mean) / (jnp.sqrt(new_var) + epsilon)
-    return normalized, EMANormState(  # type: ignore[call-arg]
-        mean=new_mean, var=new_var, count=new_count
-    ), new_fast, shifted
+    return (
+        normalized,
+        EMANormState(  # type: ignore[call-arg]
+            mean=new_mean, var=new_var, count=new_count
+        ),
+        new_fast,
+        shifted,
+    )
 
 
 def warm_restart_normalize(
@@ -1980,9 +1931,14 @@ def warm_restart_normalize(
         effective_decay * state.var + (1.0 - effective_decay) * delta * delta2, epsilon
     )
     normalized = (observation - new_mean) / (jnp.sqrt(new_var) + epsilon)
-    return normalized, EMANormState(  # type: ignore[call-arg]
-        mean=new_mean, var=new_var, count=new_count
-    ), new_fast, triggered
+    return (
+        normalized,
+        EMANormState(  # type: ignore[call-arg]
+            mean=new_mean, var=new_var, count=new_count
+        ),
+        new_fast,
+        triggered,
+    )
 
 
 _AdaptiveNormalizeFn = Callable[
@@ -2038,21 +1994,21 @@ def _make_adaptive_norm_sigma0_learner(
         bias_correction = 1.0 - jnp.power(
             jnp.asarray(utility_decay, dtype=jnp.float32), count.astype(jnp.float32)
         )
-        global_max = jnp.max(
-            jnp.stack([jnp.max(utility[name]) for name in sorted(params)])
-        )
+        global_max = jnp.max(jnp.stack([jnp.max(utility[name]) for name in sorted(params)]))
         new_params = {
             name: params[name] * param_decay
             - step_size
-            * (grads[name] * (1.0 - jax.nn.sigmoid(
-                (utility[name] / bias_correction) / global_max
-            )))
+            * (grads[name] * (1.0 - jax.nn.sigmoid((utility[name] / bias_correction) / global_max)))
             for name in params
         }
         metrics = _step_metrics(new_params, x_norm, y, loss, logits)
-        return new_params, UPGDAdaptiveNormState(  # type: ignore[call-arg]
-            utility=utility, step=count, norm=new_norm, fast_mean=new_fast
-        ), metrics
+        return (
+            new_params,
+            UPGDAdaptiveNormState(  # type: ignore[call-arg]
+                utility=utility, step=count, norm=new_norm, fast_mean=new_fast
+            ),
+            metrics,
+        )
 
     return init_fn, full_step
 
@@ -2066,7 +2022,9 @@ def _make_upgd_shiftnorm_learner(
         state: EMANormState, fast_mean: Array, x: Array
     ) -> tuple[Array, EMANormState, Array, Array]:
         return shift_adaptive_normalize(
-            state, fast_mean, x,
+            state,
+            fast_mean,
+            x,
             decay=hp["norm_decay"],
             fast_decay=hp["fast_decay"],
             epsilon=hp["norm_epsilon"],
@@ -2089,7 +2047,9 @@ def _make_upgd_warmnorm_learner(
         state: EMANormState, fast_mean: Array, x: Array
     ) -> tuple[Array, EMANormState, Array, Array]:
         return warm_restart_normalize(
-            state, fast_mean, x,
+            state,
+            fast_mean,
+            x,
             decay=hp["norm_decay"],
             fast_decay=hp["fast_decay"],
             epsilon=hp["norm_epsilon"],
@@ -2204,7 +2164,12 @@ _DISCOVERED_NB_VAR_FLOOR = 1e-3
 _DISCOVERED_ANNEAL_R_HI = 2.0
 _DISCOVERED_KALMAN_SHIFT_BOOST = 25.0
 _DISCOVERED_LAYER_EXPONENT: dict[str, float] = {
-    "w1": -1.0, "b1": -1.0, "w2": 0.0, "b2": 0.0, "w3": 1.0, "b3": 1.0,
+    "w1": -1.0,
+    "b1": -1.0,
+    "w2": 0.0,
+    "b2": 0.0,
+    "w3": 1.0,
+    "b3": 1.0,
 }
 
 
@@ -2320,8 +2285,11 @@ def _make_discovered_rule_learner(
         )
 
     def _general_normalize(
-        norm: EMANormState, fast_mean: Array, x: Array,
-        err_autocorr: Array, err_var: Array,
+        norm: EMANormState,
+        fast_mean: Array,
+        x: Array,
+        err_autocorr: Array,
+        err_var: Array,
     ) -> tuple[Array, EMANormState, Array, Array]:
         """Detector + EMA statistics for the non-champion flag combinations
         (count reset and meta decay composable independently)."""
@@ -2349,13 +2317,22 @@ def _make_discovered_rule_learner(
             norm_epsilon,
         )
         normalized = (x - new_mean) / (jnp.sqrt(new_var) + norm_epsilon)
-        return normalized, EMANormState(  # type: ignore[call-arg]
-            mean=new_mean, var=new_var, count=new_count
-        ), new_fast, shifted
+        return (
+            normalized,
+            EMANormState(  # type: ignore[call-arg]
+                mean=new_mean, var=new_var, count=new_count
+            ),
+            new_fast,
+            shifted,
+        )
 
     def _kalman_normalize(
-        norm: EMANormState, fast_mean: Array, kalman_p: Array, x: Array,
-        err_autocorr: Array, err_var: Array,
+        norm: EMANormState,
+        fast_mean: Array,
+        kalman_p: Array,
+        x: Array,
+        err_autocorr: Array,
+        err_var: Array,
     ) -> tuple[Array, EMANormState, Array, Array, Array]:
         """Wave-2 conditioning alternative: per-feature predict-update Kalman
         mean tracking (process noise ``kalman_q`` scaled to the tracked
@@ -2382,9 +2359,7 @@ def _make_discovered_rule_learner(
         r_obs = jnp.maximum(norm.var, 1e-8)
         p_pred = kalman_p + kalman_q * r_obs
         if f_shift_reset:
-            p_pred = p_pred + (
-                shifted.astype(jnp.float32) * _DISCOVERED_KALMAN_SHIFT_BOOST * r_obs
-            )
+            p_pred = p_pred + (shifted.astype(jnp.float32) * _DISCOVERED_KALMAN_SHIFT_BOOST * r_obs)
         gain = p_pred / (p_pred + r_obs)
         new_mean = norm.mean + gain * delta
         new_kalman_p = (1.0 - gain) * p_pred
@@ -2394,9 +2369,15 @@ def _make_discovered_rule_learner(
             norm_epsilon,
         )
         normalized = (x - new_mean) / (jnp.sqrt(new_var) + norm_epsilon)
-        return normalized, EMANormState(  # type: ignore[call-arg]
-            mean=new_mean, var=new_var, count=new_count
-        ), new_fast, shifted, new_kalman_p
+        return (
+            normalized,
+            EMANormState(  # type: ignore[call-arg]
+                mean=new_mean, var=new_var, count=new_count
+            ),
+            new_fast,
+            shifted,
+            new_kalman_p,
+        )
 
     def full_step(
         params: dict[str, Array],
@@ -2409,13 +2390,19 @@ def _make_discovered_rule_learner(
         new_kalman_p = state.kalman_p
         if f_kalman:
             x_norm, new_norm, new_fast, shifted, new_kalman_p = _kalman_normalize(
-                state.norm, state.fast_mean, state.kalman_p, x,
-                state.err_autocorr, state.err_var,
+                state.norm,
+                state.fast_mean,
+                state.kalman_p,
+                x,
+                state.err_autocorr,
+                state.err_var,
             )
         elif f_shift_reset and not f_meta:
             # Exact champion normalizer call (bit-exact reduction path).
             x_norm, new_norm, new_fast, shifted = shift_adaptive_normalize(
-                state.norm, state.fast_mean, x,
+                state.norm,
+                state.fast_mean,
+                x,
                 decay=norm_decay,
                 fast_decay=fast_decay,
                 epsilon=norm_epsilon,
@@ -2430,20 +2417,16 @@ def _make_discovered_rule_learner(
         x_used = x_norm if f_norm else x
         hidden2: Array | None = None
         if f_rls:
-            (loss, (logits, hidden2)), grads = jax.value_and_grad(
-                _loss_with_hidden, has_aux=True
-            )(params, x_used, y)
-        else:
-            (loss, logits), grads = jax.value_and_grad(loss_fn, has_aux=True)(
+            (loss, (logits, hidden2)), grads = jax.value_and_grad(_loss_with_hidden, has_aux=True)(
                 params, x_used, y
             )
+        else:
+            (loss, logits), grads = jax.value_and_grad(loss_fn, has_aux=True)(params, x_used, y)
         count = state.step + jnp.array(1, dtype=jnp.int32)
         prev_utility = state.utility
         if f_ureset:
             prev_utility = dict(prev_utility)
-            prev_utility["w1"] = prev_utility["w1"] * (
-                1.0 - shifted[:, None].astype(jnp.float32)
-            )
+            prev_utility["w1"] = prev_utility["w1"] * (1.0 - shifted[:, None].astype(jnp.float32))
         utility = {
             name: utility_decay * prev_utility[name]
             + (1.0 - utility_decay) * (-grads[name] * params[name])
@@ -2452,17 +2435,13 @@ def _make_discovered_rule_learner(
         bias_correction = 1.0 - jnp.power(
             jnp.asarray(utility_decay, dtype=jnp.float32), count.astype(jnp.float32)
         )
-        global_max = jnp.max(
-            jnp.stack([jnp.max(utility[name]) for name in sorted(params)])
-        )
+        global_max = jnp.max(jnp.stack([jnp.max(utility[name]) for name in sorted(params)]))
         ratio: Array | None = None
         if f_budget or f_anneal:
             ratio = (state.err_fast + 1e-8) / (state.err_slow + 1e-8)
         if f_budget:
             assert ratio is not None
-            budget = jnp.clip(
-                jnp.exp(surprise_gain * jnp.log(jnp.maximum(ratio, 1e-8))), 0.25, 4.0
-            )
+            budget = jnp.clip(jnp.exp(surprise_gain * jnp.log(jnp.maximum(ratio, 1e-8))), 0.25, 4.0)
             lr_eff: Array | float = step_size * budget
         else:
             lr_eff = step_size
@@ -2471,9 +2450,7 @@ def _make_discovered_rule_learner(
             # runs at anneal_lo, ratio >= _DISCOVERED_ANNEAL_R_HI (fresh
             # surprise) at anneal_hi. Mirrors rule_discovery.rule_step.
             assert ratio is not None
-            surprise_score = jnp.clip(
-                (ratio - 1.0) / (_DISCOVERED_ANNEAL_R_HI - 1.0), 0.0, 1.0
-            )
+            surprise_score = jnp.clip((ratio - 1.0) / (_DISCOVERED_ANNEAL_R_HI - 1.0), 0.0, 1.0)
             lr_eff = lr_eff * (anneal_lo + (anneal_hi - anneal_lo) * surprise_score)
         if f_budget or f_anneal:
             decay_eff: Array | float = 1.0 - lr_eff * weight_decay
@@ -2493,23 +2470,18 @@ def _make_discovered_rule_learner(
             weights = [state.member_acc[0]]
             if f_rls:
                 assert hidden2 is not None
-                h_aug = jnp.concatenate(
-                    [hidden2, jnp.ones((1,), dtype=jnp.float32)]
-                )
+                h_aug = jnp.concatenate([hidden2, jnp.ones((1,), dtype=jnp.float32)])
                 rls_scores = jnp.clip(
                     h_aug @ state.rls_w,
                     -_DISCOVERED_RLS_SCORE_CLIP,
                     _DISCOVERED_RLS_SCORE_CLIP,
                 )
-                members.append(
-                    jax.nn.log_softmax(_DISCOVERED_RLS_VOTE_TEMP * rls_scores)
-                )
+                members.append(jax.nn.log_softmax(_DISCOVERED_RLS_VOTE_TEMP * rls_scores))
                 weights.append(state.member_acc[1])
             if f_nb:
                 nb_var_safe = jnp.maximum(state.nb_var, _DISCOVERED_NB_VAR_FLOOR)
                 nb_ll = -0.5 * jnp.sum(
-                    jnp.log(nb_var_safe)
-                    + (x_used[None, :] - state.nb_mean) ** 2 / nb_var_safe,
+                    jnp.log(nb_var_safe) + (x_used[None, :] - state.nb_mean) ** 2 / nb_var_safe,
                     axis=1,
                 )
                 members.append(jax.nn.log_softmax(nb_ll / float(x_used.shape[0])))
@@ -2565,14 +2537,11 @@ def _make_discovered_rule_learner(
             ph = state.rls_p @ h_aug
             k_rls = ph / (rls_lambda + h_aug @ ph)
             rls_err = (
-                jax.nn.one_hot(y, state.rls_w.shape[1], dtype=jnp.float32)
-                - h_aug @ state.rls_w
+                jax.nn.one_hot(y, state.rls_w.shape[1], dtype=jnp.float32) - h_aug @ state.rls_w
             )
             new_rls_w = state.rls_w + jnp.outer(k_rls, rls_err)
             p_upd = (state.rls_p - jnp.outer(k_rls, ph)) / rls_lambda
-            rls_eye = _DISCOVERED_RLS_P0 * jnp.eye(
-                state.rls_p.shape[0], dtype=jnp.float32
-            )
+            rls_eye = _DISCOVERED_RLS_P0 * jnp.eye(state.rls_p.shape[0], dtype=jnp.float32)
             leak = 2.0 * (1.0 - rls_lambda)
             p_upd = (1.0 - leak) * p_upd + leak * rls_eye
             p_upd = 0.5 * (p_upd + p_upd.T)
@@ -2580,15 +2549,11 @@ def _make_discovered_rule_learner(
                 reset_p = jnp.max(shifted.astype(jnp.float32))
                 p_upd = (1.0 - reset_p) * p_upd + reset_p * rls_eye
             new_rls_p = p_upd
-        new_nb_mean, new_nb_var, new_nb_count = (
-            state.nb_mean, state.nb_var, state.nb_count
-        )
+        new_nb_mean, new_nb_var, new_nb_count = (state.nb_mean, state.nb_var, state.nb_count)
         if f_nb:
             n_classes_nb = state.nb_mean.shape[0]
             sel = jax.nn.one_hot(y, n_classes_nb, dtype=jnp.float32)
-            eff_nb = jnp.minimum(
-                nb_decay, 1.0 - 1.0 / (state.nb_count + 2.0)
-            )[:, None]
+            eff_nb = jnp.minimum(nb_decay, 1.0 - 1.0 / (state.nb_count + 2.0))[:, None]
             delta_nb = x_used[None, :] - state.nb_mean
             mean_cand = state.nb_mean + (1.0 - eff_nb) * delta_nb
             new_nb_mean = state.nb_mean + sel[:, None] * (mean_cand - state.nb_mean)
@@ -2617,27 +2582,31 @@ def _make_discovered_rule_learner(
         else:
             metrics = _step_metrics(new_params, x_used, y, loss, logits)
         delta_e = loss - state.err_slow
-        return new_params, DiscoveredRuleState(  # type: ignore[call-arg]
-            utility=utility,
-            step=count,
-            norm=new_norm,
-            fast_mean=new_fast,
-            init_params=state.init_params,
-            err_fast=surprise_fast * state.err_fast + (1.0 - surprise_fast) * loss,
-            err_slow=surprise_slow * state.err_slow + (1.0 - surprise_slow) * loss,
-            err_autocorr=_DISCOVERED_AUTOCORR_DECAY * state.err_autocorr
-            + (1.0 - _DISCOVERED_AUTOCORR_DECAY) * (delta_e * state.err_prev_delta),
-            err_var=_DISCOVERED_AUTOCORR_DECAY * state.err_var
-            + (1.0 - _DISCOVERED_AUTOCORR_DECAY) * (delta_e * delta_e),
-            err_prev_delta=delta_e,
-            kalman_p=new_kalman_p,
-            rls_p=new_rls_p,
-            rls_w=new_rls_w,
-            nb_mean=new_nb_mean,
-            nb_var=new_nb_var,
-            nb_count=new_nb_count,
-            member_acc=new_member_acc,
-        ), metrics
+        return (
+            new_params,
+            DiscoveredRuleState(  # type: ignore[call-arg]
+                utility=utility,
+                step=count,
+                norm=new_norm,
+                fast_mean=new_fast,
+                init_params=state.init_params,
+                err_fast=surprise_fast * state.err_fast + (1.0 - surprise_fast) * loss,
+                err_slow=surprise_slow * state.err_slow + (1.0 - surprise_slow) * loss,
+                err_autocorr=_DISCOVERED_AUTOCORR_DECAY * state.err_autocorr
+                + (1.0 - _DISCOVERED_AUTOCORR_DECAY) * (delta_e * state.err_prev_delta),
+                err_var=_DISCOVERED_AUTOCORR_DECAY * state.err_var
+                + (1.0 - _DISCOVERED_AUTOCORR_DECAY) * (delta_e * delta_e),
+                err_prev_delta=delta_e,
+                kalman_p=new_kalman_p,
+                rls_p=new_rls_p,
+                rls_w=new_rls_w,
+                nb_mean=new_nb_mean,
+                nb_var=new_nb_var,
+                nb_count=new_nb_count,
+                member_acc=new_member_acc,
+            ),
+            metrics,
+        )
 
     return init_fn, full_step
 
@@ -2701,9 +2670,7 @@ def _make_upgd_w_wclip_learner(
     def full_step(
         params: dict[str, Array], state: LeanUPGDState, x: Array, y: Array, key: Array
     ) -> tuple[dict[str, Array], LeanUPGDState, StepMetrics]:
-        (loss, logits), grads = jax.value_and_grad(cross_entropy_loss, has_aux=True)(
-            params, x, y
-        )
+        (loss, logits), grads = jax.value_and_grad(cross_entropy_loss, has_aux=True)(params, x, y)
         noise = _sorted_flat_noise(key, params, noise_std)
         new_params, new_state = upgd_w_wclip_update(params, state, grads, noise, hp)
         return new_params, new_state, _step_metrics(new_params, x, y, loss, logits)
@@ -2773,9 +2740,7 @@ def _make_upgd_w_localgate_learner(
     def full_step(
         params: dict[str, Array], state: LeanUPGDState, x: Array, y: Array, key: Array
     ) -> tuple[dict[str, Array], LeanUPGDState, StepMetrics]:
-        (loss, logits), grads = jax.value_and_grad(cross_entropy_loss, has_aux=True)(
-            params, x, y
-        )
+        (loss, logits), grads = jax.value_and_grad(cross_entropy_loss, has_aux=True)(params, x, y)
         noise = _sorted_flat_noise(key, params, noise_std)
         new_params, new_state = upgd_w_localgate_update(params, state, grads, noise, hp)
         return new_params, new_state, _step_metrics(new_params, x, y, loss, logits)
@@ -2861,9 +2826,7 @@ def cbp_maybe_replace_layer(
     bound = 1.0 / math.sqrt(fan_in)
     fresh_col = jr.uniform(key, (fan_in,), jnp.float32, -bound, bound)
     new_params = dict(params)
-    new_params[layer.in_weight] = w_in.at[:, idx].set(
-        jnp.where(fire, fresh_col, w_in[:, idx])
-    )
+    new_params[layer.in_weight] = w_in.at[:, idx].set(jnp.where(fire, fresh_col, w_in[:, idx]))
     b_in = params[layer.in_bias]
     new_params[layer.in_bias] = b_in.at[idx].set(jnp.where(fire, 0.0, b_in[idx]))
     w_out = params[layer.out_weight]
@@ -2957,9 +2920,7 @@ def _make_upgd_cbp_learner(
         params: dict[str, Array], state: UPGDCBPState, x: Array, y: Array, key: Array
     ) -> tuple[dict[str, Array], UPGDCBPState, StepMetrics]:
         key_noise, key_cbp = jr.split(key)
-        (loss, logits), grads = jax.value_and_grad(cross_entropy_loss, has_aux=True)(
-            params, x, y
-        )
+        (loss, logits), grads = jax.value_and_grad(cross_entropy_loss, has_aux=True)(params, x, y)
         _, _, a1, z2, a2 = _forward_with_activations(params, x)
         da1, da2 = _activation_loss_grads(params, logits, y, z2)
         noise = _sorted_flat_noise(key_noise, params, noise_std)
@@ -2974,9 +2935,13 @@ def _make_upgd_cbp_learner(
         assert updated_opt_arrays is not None
         new_utility = {name: updated_opt_arrays[name][0] for name in new_params}
         metrics = _step_metrics(new_params, x, y, loss, logits)
-        return new_params, UPGDCBPState(  # type: ignore[call-arg]
-            utility=new_utility, step=new_lean.step, cbp=new_cbp
-        ), metrics
+        return (
+            new_params,
+            UPGDCBPState(  # type: ignore[call-arg]
+                utility=new_utility, step=new_lean.step, cbp=new_cbp
+            ),
+            metrics,
+        )
 
     return init_fn, full_step
 
@@ -3056,9 +3021,7 @@ def _make_adamw_cbp_learner(
     def full_step(
         params: dict[str, Array], state: AdamCBPState, x: Array, y: Array, key: Array
     ) -> tuple[dict[str, Array], AdamCBPState, StepMetrics]:
-        (loss, logits), grads = jax.value_and_grad(cross_entropy_loss, has_aux=True)(
-            params, x, y
-        )
+        (loss, logits), grads = jax.value_and_grad(cross_entropy_loss, has_aux=True)(params, x, y)
         _, _, a1, z2, a2 = _forward_with_activations(params, x)
         da1, da2 = _activation_loss_grads(params, logits, y, z2)
         new_params: dict[str, Array] = {}
@@ -3071,8 +3034,7 @@ def _make_adamw_cbp_learner(
             )
         if reset_recycled_optimizer:
             opt_arrays: dict[str, Array] | None = {
-                name: jnp.stack([new_m[name], new_v[name], new_count[name]])
-                for name in new_params
+                name: jnp.stack([new_m[name], new_v[name], new_count[name]]) for name in new_params
             }
             new_params, opt_arrays, new_cbp = _cbp_update(
                 new_params, opt_arrays, state.cbp, a1, da1, a2, da2, key, hp
@@ -3086,9 +3048,13 @@ def _make_adamw_cbp_learner(
                 new_params, None, state.cbp, a1, da1, a2, da2, key, hp
             )
         metrics = _step_metrics(new_params, x, y, loss, logits)
-        return new_params, AdamCBPState(  # type: ignore[call-arg]
-            m=new_m, v=new_v, count=new_count, cbp=new_cbp
-        ), metrics
+        return (
+            new_params,
+            AdamCBPState(  # type: ignore[call-arg]
+                m=new_m, v=new_v, count=new_count, cbp=new_cbp
+            ),
+            metrics,
+        )
 
     return init_fn, full_step
 
@@ -3169,21 +3135,24 @@ def _make_adamw_cbp_ema_norm_learner(
                 value, state.m[name], state.v[name], state.count[name], grads[name], hp
             )
         opt_arrays: dict[str, Array] | None = {
-            name: jnp.stack([new_m[name], new_v[name], new_count[name]])
-            for name in new_params
+            name: jnp.stack([new_m[name], new_v[name], new_count[name]]) for name in new_params
         }
         new_params, opt_arrays, new_cbp = _cbp_update(
             new_params, opt_arrays, state.cbp, a1, da1, a2, da2, key, hp
         )
         assert opt_arrays is not None
         metrics = _step_metrics(new_params, x_in, y, loss, logits)
-        return new_params, AdamCBPNormState(  # type: ignore[call-arg]
-            m={name: opt_arrays[name][0] for name in new_params},
-            v={name: opt_arrays[name][1] for name in new_params},
-            count={name: opt_arrays[name][2] for name in new_params},
-            cbp=new_cbp,
-            norm=new_norm,
-        ), metrics
+        return (
+            new_params,
+            AdamCBPNormState(  # type: ignore[call-arg]
+                m={name: opt_arrays[name][0] for name in new_params},
+                v={name: opt_arrays[name][1] for name in new_params},
+                count={name: opt_arrays[name][2] for name in new_params},
+                cbp=new_cbp,
+                norm=new_norm,
+            ),
+            metrics,
+        )
 
     return init_fn, full_step
 
@@ -3260,9 +3229,7 @@ def _make_guarded_cbp_adam_learner(
         y: Array,
         key: Array,
     ) -> tuple[dict[str, Array], GuardedAdamCBPState, StepMetrics]:
-        (loss, logits), grads = jax.value_and_grad(cross_entropy_loss, has_aux=True)(
-            params, x, y
-        )
+        (loss, logits), grads = jax.value_and_grad(cross_entropy_loss, has_aux=True)(params, x, y)
         _, _, a1, z2, a2 = _forward_with_activations(params, x)
         da1, da2 = _activation_loss_grads(params, logits, y, z2)
         clock = state.step + jnp.array(1, dtype=jnp.int32)
@@ -3275,9 +3242,7 @@ def _make_guarded_cbp_adam_learner(
         # Recycled units also reset their guard utility (row 3): fresh units
         # restart at the neutral sigmoid(0) = 0.5 gate.
         opt_arrays: dict[str, Array] | None = {
-            name: jnp.stack(
-                [new_m[name], new_v[name], new_count[name], utility[name]]
-            )
+            name: jnp.stack([new_m[name], new_v[name], new_count[name], utility[name]])
             for name in new_params
         }
         new_params, opt_arrays, new_cbp = _cbp_update(
@@ -3285,14 +3250,18 @@ def _make_guarded_cbp_adam_learner(
         )
         assert opt_arrays is not None
         metrics = _step_metrics(new_params, x, y, loss, logits)
-        return new_params, GuardedAdamCBPState(  # type: ignore[call-arg]
-            m={name: opt_arrays[name][0] for name in new_params},
-            v={name: opt_arrays[name][1] for name in new_params},
-            count={name: opt_arrays[name][2] for name in new_params},
-            utility={name: opt_arrays[name][3] for name in new_params},
-            step=clock,
-            cbp=new_cbp,
-        ), metrics
+        return (
+            new_params,
+            GuardedAdamCBPState(  # type: ignore[call-arg]
+                m={name: opt_arrays[name][0] for name in new_params},
+                v={name: opt_arrays[name][1] for name in new_params},
+                count={name: opt_arrays[name][2] for name in new_params},
+                utility={name: opt_arrays[name][3] for name in new_params},
+                step=clock,
+                cbp=new_cbp,
+            ),
+            metrics,
+        )
 
     return init_fn, full_step
 
@@ -3314,9 +3283,7 @@ def _make_upgd_w_sigma0_learner(
     ``noise_std = 0`` (pinned by a unit test).
     """
     if hp["noise_std"] != 0.0:
-        raise ValueError(
-            f"upgd_w_sigma0 requires noise_std=0, got {hp['noise_std']!r}"
-        )
+        raise ValueError(f"upgd_w_sigma0 requires noise_std=0, got {hp['noise_std']}")
 
     def init_fn(params: dict[str, Array]) -> LeanUPGDState:
         return LeanUPGDState(  # type: ignore[call-arg]
@@ -3328,9 +3295,7 @@ def _make_upgd_w_sigma0_learner(
         params: dict[str, Array], state: LeanUPGDState, x: Array, y: Array, key: Array
     ) -> tuple[dict[str, Array], LeanUPGDState, StepMetrics]:
         del key  # no perturbation: the step consumes no randomness
-        (loss, logits), grads = jax.value_and_grad(cross_entropy_loss, has_aux=True)(
-            params, x, y
-        )
+        (loss, logits), grads = jax.value_and_grad(cross_entropy_loss, has_aux=True)(params, x, y)
         zeros = {name: jnp.zeros_like(value) for name, value in params.items()}
         new_params, new_state = lean_upgd_w_update(params, state, grads, zeros, dict(hp))
         return new_params, new_state, _step_metrics(new_params, x, y, loss, logits)
@@ -3393,22 +3358,16 @@ def upgd_alpha_utility_update(
     new_trace: dict[str, Array] = {}
     for name in params:
         g = grads[name]
-        la = _clip_finite_log_alpha(
-            state.log_alpha[name], meta * g * state.trace[name]
-        )
+        la = _clip_finite_log_alpha(state.log_alpha[name], meta * g * state.trace[name])
         alpha = jnp.exp(la)
         new_log_alpha[name] = la
         new_trace[name] = state.trace[name] * jnp.maximum(0.0, 1.0 - alpha * g * g) + alpha * g
     drift = {name: new_log_alpha[name] - la0 for name in params}
-    drift_max = jnp.max(
-        jnp.stack([jnp.max(jnp.abs(drift[name])) for name in sorted(params)])
-    )
+    drift_max = jnp.max(jnp.stack([jnp.max(jnp.abs(drift[name])) for name in sorted(params)]))
     safe_max = jnp.where(drift_max > 0.0, drift_max, 1.0)
     new_params: dict[str, Array] = {}
     for name in params:
-        gate = jax.nn.sigmoid(
-            jnp.where(drift_max > 0.0, drift[name] / safe_max, 0.0)
-        )
+        gate = jax.nn.sigmoid(jnp.where(drift_max > 0.0, drift[name] / safe_max, 0.0))
         new_params[name] = params[name] * decay - step_size * (
             (grads[name] + noise[name]) * (1.0 - gate)
         )
@@ -3426,18 +3385,14 @@ def _make_upgd_alpha_utility_learner(
     def init_fn(params: dict[str, Array]) -> UPGDAlphaGateState:
         return UPGDAlphaGateState(  # type: ignore[call-arg]
             step=jnp.array(0, dtype=jnp.int32),
-            log_alpha={
-                name: jnp.full_like(value, la0) for name, value in params.items()
-            },
+            log_alpha={name: jnp.full_like(value, la0) for name, value in params.items()},
             trace={name: jnp.zeros_like(value) for name, value in params.items()},
         )
 
     def full_step(
         params: dict[str, Array], state: UPGDAlphaGateState, x: Array, y: Array, key: Array
     ) -> tuple[dict[str, Array], UPGDAlphaGateState, StepMetrics]:
-        (loss, logits), grads = jax.value_and_grad(cross_entropy_loss, has_aux=True)(
-            params, x, y
-        )
+        (loss, logits), grads = jax.value_and_grad(cross_entropy_loss, has_aux=True)(params, x, y)
         noise = _sorted_flat_noise(key, params, noise_std)
         new_params, new_state = upgd_alpha_utility_update(params, state, grads, noise, hp)
         return new_params, new_state, _step_metrics(new_params, x, y, loss, logits)
@@ -3537,8 +3492,9 @@ def _make_colnorm_gate_learner(
             utility={name: jnp.zeros_like(value) for name, value in params.items()},
             step=jnp.array(0, dtype=jnp.int32),
             vcol={
-                name: jnp.zeros(value.shape[0] if value.ndim == 2 else value.shape,
-                                dtype=jnp.float32)
+                name: jnp.zeros(
+                    value.shape[0] if value.ndim == 2 else value.shape, dtype=jnp.float32
+                )
                 for name, value in params.items()
             },
             norm=_init_input_norm_state(params),
@@ -3553,9 +3509,7 @@ def _make_colnorm_gate_learner(
             params, x_norm, y
         )
         count = state.step + jnp.array(1, dtype=jnp.int32)
-        utility, gate = _upgd_utility_and_gate(
-            params, grads, state.utility, count, utility_decay
-        )
+        utility, gate = _upgd_utility_and_gate(params, grads, state.utility, count, utility_decay)
         new_params: dict[str, Array] = {}
         new_vcol: dict[str, Array] = {}
         for name in params:
@@ -3572,9 +3526,13 @@ def _make_colnorm_gate_learner(
             )
             new_vcol[name] = v
         metrics = _step_metrics(new_params, x_norm, y, loss, logits)
-        return new_params, ColNormGateState(  # type: ignore[call-arg]
-            utility=utility, step=count, vcol=new_vcol, norm=new_norm
-        ), metrics
+        return (
+            new_params,
+            ColNormGateState(  # type: ignore[call-arg]
+                utility=utility, step=count, vcol=new_vcol, norm=new_norm
+            ),
+            metrics,
+        )
 
     return init_fn, full_step
 
@@ -3626,9 +3584,7 @@ def _make_muon_gate_learner(
             utility={name: jnp.zeros_like(value) for name, value in params.items()},
             step=jnp.array(0, dtype=jnp.int32),
             momentum={
-                name: jnp.zeros_like(value)
-                for name, value in params.items()
-                if value.ndim == 2
+                name: jnp.zeros_like(value) for name, value in params.items() if value.ndim == 2
             },
             norm=_init_input_norm_state(params),
         )
@@ -3642,9 +3598,7 @@ def _make_muon_gate_learner(
             params, x_norm, y
         )
         count = state.step + jnp.array(1, dtype=jnp.int32)
-        utility, gate = _upgd_utility_and_gate(
-            params, grads, state.utility, count, utility_decay
-        )
+        utility, gate = _upgd_utility_and_gate(params, grads, state.utility, count, utility_decay)
         new_params: dict[str, Array] = {}
         new_momentum: dict[str, Array] = {}
         for name in params:
@@ -3662,9 +3616,13 @@ def _make_muon_gate_learner(
             else:
                 new_params[name] = params[name] * param_decay - step_size * (keep * g)
         metrics = _step_metrics(new_params, x_norm, y, loss, logits)
-        return new_params, MuonGateState(  # type: ignore[call-arg]
-            utility=utility, step=count, momentum=new_momentum, norm=new_norm
-        ), metrics
+        return (
+            new_params,
+            MuonGateState(  # type: ignore[call-arg]
+                utility=utility, step=count, momentum=new_momentum, norm=new_norm
+            ),
+            metrics,
+        )
 
     return init_fn, full_step
 
@@ -3723,9 +3681,7 @@ def _make_lion_gate_learner(
             params, x_norm, y
         )
         count = state.step + jnp.array(1, dtype=jnp.int32)
-        utility, gate = _upgd_utility_and_gate(
-            params, grads, state.utility, count, utility_decay
-        )
+        utility, gate = _upgd_utility_and_gate(params, grads, state.utility, count, utility_decay)
         new_params: dict[str, Array] = {}
         new_momentum: dict[str, Array] = {}
         for name in params:
@@ -3736,9 +3692,13 @@ def _make_lion_gate_learner(
             )
             new_momentum[name] = beta2 * state.momentum[name] + (1.0 - beta2) * g
         metrics = _step_metrics(new_params, x_norm, y, loss, logits)
-        return new_params, LionGateState(  # type: ignore[call-arg]
-            utility=utility, step=count, momentum=new_momentum, norm=new_norm
-        ), metrics
+        return (
+            new_params,
+            LionGateState(  # type: ignore[call-arg]
+                utility=utility, step=count, momentum=new_momentum, norm=new_norm
+            ),
+            metrics,
+        )
 
     return init_fn, full_step
 
@@ -3838,9 +3798,7 @@ def _make_rff_rls_learner(
         key = jr.fold_in(key, w1_bits[-1])
         key_omega, key_phase = jr.split(key)
         omega = jr.normal(key_omega, (m, input_dim), jnp.float32) * math.sqrt(gamma)
-        phase = jr.uniform(
-            key_phase, (m,), jnp.float32, 0.0, 2.0 * math.pi
-        )
+        phase = jr.uniform(key_phase, (m,), jnp.float32, 0.0, 2.0 * math.pi)
         return RFFRLSState(  # type: ignore[call-arg]
             omega=omega,
             phase=phase,
@@ -3871,13 +3829,17 @@ def _make_rff_rls_learner(
         plasticity = jnp.clip(
             1.0 - loss_after / jnp.maximum(loss, _PLASTICITY_LOSS_FLOOR), 0.0, 1.0
         )
-        return params, RFFRLSState(  # type: ignore[call-arg]
-            omega=state.omega,
-            phase=state.phase,
-            p=new_p,
-            wout=new_wout,
-            norm=new_norm,
-        ), (accuracy, loss, plasticity)
+        return (
+            params,
+            RFFRLSState(  # type: ignore[call-arg]
+                omega=state.omega,
+                phase=state.phase,
+                p=new_p,
+                wout=new_wout,
+                norm=new_norm,
+            ),
+            (accuracy, loss, plasticity),
+        )
 
     return init_fn, full_step
 
@@ -3919,9 +3881,7 @@ def _make_lin_rls_learner(
         del key
         x_norm, new_norm = ema_normalize(state.norm, x, norm_decay, norm_epsilon)
         z = jnp.clip(x_norm, -clip, clip)
-        phi = jnp.concatenate(
-            [z / jnp.sqrt(jnp.float32(z.shape[0])), jnp.ones((1,), jnp.float32)]
-        )
+        phi = jnp.concatenate([z / jnp.sqrt(jnp.float32(z.shape[0])), jnp.ones((1,), jnp.float32)])
         logits = state.wout.T @ phi
         accuracy = (jnp.argmax(logits) == y).astype(jnp.float32)
         y_onehot = jax.nn.one_hot(y, state.wout.shape[1], dtype=jnp.float32)
@@ -3937,13 +3897,17 @@ def _make_lin_rls_learner(
         plasticity = jnp.clip(
             1.0 - loss_after / jnp.maximum(loss, _PLASTICITY_LOSS_FLOOR), 0.0, 1.0
         )
-        return params, RFFRLSState(  # type: ignore[call-arg]
-            omega=state.omega,
-            phase=state.phase,
-            p=new_p,
-            wout=new_wout,
-            norm=new_norm,
-        ), (accuracy, loss, plasticity)
+        return (
+            params,
+            RFFRLSState(  # type: ignore[call-arg]
+                omega=state.omega,
+                phase=state.phase,
+                p=new_p,
+                wout=new_wout,
+                norm=new_norm,
+            ),
+            (accuracy, loss, plasticity),
+        )
 
     return init_fn, full_step
 
@@ -3982,8 +3946,7 @@ def naive_bayes_logits(state: NaiveBayesState, x: Array) -> Array:
     class and cancel in the argmax.
     """
     log_lik = -0.5 * jnp.sum(
-        jnp.log(2.0 * math.pi * state.cvar)
-        + (x[None, :] - state.cmean) ** 2 / state.cvar,
+        jnp.log(2.0 * math.pi * state.cvar) + (x[None, :] - state.cmean) ** 2 / state.cvar,
         axis=1,
     )
     return jnp.log(state.prior) + log_lik
@@ -4049,9 +4012,7 @@ def _make_naive_bayes_learner(
         delta = x[None, :] - state.cmean
         new_cmean = state.cmean + mask * (1.0 - eff) * delta
         delta2 = x[None, :] - new_cmean
-        cand_var = jnp.maximum(
-            eff * state.cvar + (1.0 - eff) * delta * delta2, epsilon
-        )
+        cand_var = jnp.maximum(eff * state.cvar + (1.0 - eff) * delta * delta2, epsilon)
         new_cvar = jnp.where(mask > 0.0, cand_var, state.cvar)
         new_step = state.step + 1.0
         prior_eff = jnp.minimum(decay, 1.0 - 1.0 / (new_step + 1.0))
@@ -4230,9 +4191,7 @@ def _make_rls_head_l2init_learner(
     """Build the one frozen body-only L2-Init arm, failing closed on drift."""
     expected = _rls_head_l2init_hp()
     if set(hp) != set(expected):
-        raise ValueError(
-            "frozen L2-Init configuration requires exactly the registered keys"
-        )
+        raise ValueError("frozen L2-Init configuration requires exactly the registered keys")
     invalid = [
         name
         for name, expected_value in expected.items()
@@ -4241,9 +4200,7 @@ def _make_rls_head_l2init_learner(
         or hp[name].hex() != expected_value.hex()
     ]
     if invalid:
-        raise ValueError(
-            "frozen L2-Init configuration differs at: " + ", ".join(invalid)
-        )
+        raise ValueError("frozen L2-Init configuration differs at: " + ", ".join(invalid))
     base_hp = dict(hp)
     del base_hp["decay_to_init"]
     return _make_rls_head_learner(base_hp, _decay_to_init=True)
@@ -4295,9 +4252,7 @@ def _make_rls_head_learner(
     resid = hp["head_resid"] != 0.0
     gate_scale = hp.get("gate_scale", 1.0)
     if gate_scale not in (0.0, 1.0):
-        raise ValueError(
-            "gate_scale is a frozen ablation endpoint and must be 0.0 or 1.0"
-        )
+        raise ValueError("gate_scale is a frozen ablation endpoint and must be 0.0 or 1.0")
     gate_enabled = gate_scale == 1.0
     if not gate_enabled and not resid:
         raise ValueError("gate_scale=0.0 is supported only for the residual body")
@@ -4308,7 +4263,9 @@ def _make_rls_head_learner(
         state: EMANormState, fast_mean: Array, x: Array
     ) -> tuple[Array, EMANormState, Array, Array]:
         return shift_adaptive_normalize(
-            state, fast_mean, x,
+            state,
+            fast_mean,
+            x,
             decay=hp["norm_decay"],
             fast_decay=hp["fast_decay"],
             epsilon=hp["norm_epsilon"],
@@ -4325,9 +4282,7 @@ def _make_rls_head_learner(
         n_classes = params["w3"].shape[1]
         if _decay_to_init:
             return RLSHeadL2InitState(  # type: ignore[call-arg]
-                utility={
-                    name: jnp.zeros_like(value) for name, value in params.items()
-                },
+                utility={name: jnp.zeros_like(value) for name, value in params.items()},
                 step=jnp.array(0, dtype=jnp.int32),
                 norm=EMANormState(  # type: ignore[call-arg]
                     mean=jnp.zeros(input_dim, dtype=jnp.float32),
@@ -4372,15 +4327,13 @@ def _make_rls_head_learner(
         over ``names``; other tensors pass through with untouched utility."""
         new_utility = dict(utility)
         for name in names:
-            new_utility[name] = utility_decay * utility[name] + (
-                1.0 - utility_decay
-            ) * (-grads[name] * params[name])
+            new_utility[name] = utility_decay * utility[name] + (1.0 - utility_decay) * (
+                -grads[name] * params[name]
+            )
         bias_correction = 1.0 - jnp.power(
             jnp.asarray(utility_decay, dtype=jnp.float32), count.astype(jnp.float32)
         )
-        global_max = jnp.max(
-            jnp.stack([jnp.max(new_utility[name]) for name in sorted(names)])
-        )
+        global_max = jnp.max(jnp.stack([jnp.max(new_utility[name]) for name in sorted(names)]))
         if guard_zero_max:
             global_max = jnp.where(global_max == 0.0, 1.0, global_max)
         new_params = dict(params)
@@ -4389,28 +4342,16 @@ def _make_rls_head_learner(
                 # Keep the incumbent expression byte-for-byte unchanged.
                 new_params[name] = params[name] * param_decay - step_size * (
                     grads[name]
-                    * (
-                        1.0
-                        - jax.nn.sigmoid(
-                            (new_utility[name] / bias_correction) / global_max
-                        )
-                    )
+                    * (1.0 - jax.nn.sigmoid((new_utility[name] / bias_correction) / global_max))
                 )
             else:
                 new_params[name] = (
                     params[name]
-                    - step_size
-                    * weight_decay
-                    * (params[name] - init_params[name])
+                    - step_size * weight_decay * (params[name] - init_params[name])
                     - step_size
                     * (
                         grads[name]
-                        * (
-                            1.0
-                            - jax.nn.sigmoid(
-                                (new_utility[name] / bias_correction) / global_max
-                            )
-                        )
+                        * (1.0 - jax.nn.sigmoid((new_utility[name] / bias_correction) / global_max))
                     )
                 )
         return new_params, new_utility
@@ -4421,9 +4362,7 @@ def _make_rls_head_learner(
         x: Array,
         y: Array,
         key: Array,
-    ) -> tuple[
-        dict[str, Array], RLSHeadState | RLSHeadL2InitState, StepMetrics
-    ]:
+    ) -> tuple[dict[str, Array], RLSHeadState | RLSHeadL2InitState, StepMetrics]:
         del key  # sigma-0 body, closed-form head: no randomness consumed
         if _decay_to_init:
             if not isinstance(state, RLSHeadL2InitState):
@@ -4431,14 +4370,8 @@ def _make_rls_head_learner(
             init_params: Mapping[str, Array] | None = state.init_params
         else:
             init_params = None
-        x_norm, new_norm, new_fast, shifted = normalize(
-            state.norm, state.fast_mean, x
-        )
-        count = (
-            state.step + jnp.array(1, dtype=jnp.int32)
-            if gate_enabled
-            else state.step
-        )
+        x_norm, new_norm, new_fast, shifted = normalize(state.norm, state.fast_mean, x)
+        count = state.step + jnp.array(1, dtype=jnp.int32) if gate_enabled else state.step
         n_classes = state.wout.shape[1]
         y_onehot = jax.nn.one_hot(y, n_classes, dtype=jnp.float32)
         if resid:
@@ -4454,9 +4387,7 @@ def _make_rls_head_learner(
                 err = y_onehot - logits
                 return 0.5 * jnp.sum(err * err), (logits, phi)
 
-            (loss, (logits, phi)), body_grads = jax.value_and_grad(
-                head_loss, has_aux=True
-            )(body)
+            (loss, (logits, phi)), body_grads = jax.value_and_grad(head_loss, has_aux=True)(body)
             if gate_enabled:
                 new_params, new_utility = _gated_sgd(
                     params,
@@ -4474,17 +4405,17 @@ def _make_rls_head_learner(
                 # the no-gate compiled graph contains only decayed SGD.
                 new_params = dict(params)
                 for name in _RLS_HEAD_BODY:
-                    new_params[name] = (
-                        params[name] * param_decay - step_size * body_grads[name]
-                    )
+                    new_params[name] = params[name] * param_decay - step_size * body_grads[name]
                 new_utility = state.utility
         else:
-            _, grads = jax.value_and_grad(cross_entropy_loss, has_aux=True)(
-                params, x_norm, y
-            )
+            _, grads = jax.value_and_grad(cross_entropy_loss, has_aux=True)(params, x_norm, y)
             new_params, new_utility = _gated_sgd(
-                params, grads, state.utility, count,
-                tuple(sorted(params)), guard_zero_max=False,
+                params,
+                grads,
+                state.utility,
+                count,
+                tuple(sorted(params)),
+                guard_zero_max=False,
             )
             phi = _phi(params, x_norm)
             logits = state.wout.T @ phi
@@ -4500,9 +4431,7 @@ def _make_rls_head_learner(
         if reset_enabled:
             m = new_p.shape[0]
             trigger = jnp.mean(shifted.astype(jnp.float32)) >= reset_frac
-            new_p = jnp.where(
-                trigger, jnp.eye(m, dtype=jnp.float32) / ridge_init, new_p
-            )
+            new_p = jnp.where(trigger, jnp.eye(m, dtype=jnp.float32) / ridge_init, new_p)
         if cap_enabled:
             # Covariance wind-up guard: exponential forgetting grows P as
             # (1/lambda)^t along unexcited (dead-ReLU) feature directions —
@@ -4518,23 +4447,31 @@ def _make_rls_head_learner(
         )
         if _decay_to_init:
             assert isinstance(state, RLSHeadL2InitState)
-            return new_params, RLSHeadL2InitState(  # type: ignore[call-arg]
+            return (
+                new_params,
+                RLSHeadL2InitState(  # type: ignore[call-arg]
+                    utility=new_utility,
+                    step=count,
+                    norm=new_norm,
+                    fast_mean=new_fast,
+                    p=new_p,
+                    wout=new_wout,
+                    init_params=state.init_params,
+                ),
+                (accuracy, loss, plasticity),
+            )
+        return (
+            new_params,
+            RLSHeadState(  # type: ignore[call-arg]
                 utility=new_utility,
                 step=count,
                 norm=new_norm,
                 fast_mean=new_fast,
                 p=new_p,
                 wout=new_wout,
-                init_params=state.init_params,
-            ), (accuracy, loss, plasticity)
-        return new_params, RLSHeadState(  # type: ignore[call-arg]
-            utility=new_utility,
-            step=count,
-            norm=new_norm,
-            fast_mean=new_fast,
-            p=new_p,
-            wout=new_wout,
-        ), (accuracy, loss, plasticity)
+            ),
+            (accuracy, loss, plasticity),
+        )
 
     return init_fn, full_step
 
@@ -4723,9 +4660,7 @@ def _make_nb_ensemble_learner(
         """The lin_rls feature map (pre-update statistics, no state write)."""
         x_norm, _ = ema_normalize(state.norm, x, norm_decay, norm_epsilon)
         z = jnp.clip(x_norm, -rls_clip, rls_clip)
-        return jnp.concatenate(
-            [z / jnp.sqrt(jnp.float32(z.shape[0])), jnp.ones((1,), jnp.float32)]
-        )
+        return jnp.concatenate([z / jnp.sqrt(jnp.float32(z.shape[0])), jnp.ones((1,), jnp.float32)])
 
     def _members_update(
         params: dict[str, Array],
@@ -4841,9 +4776,7 @@ def _make_nb_ensemble_learner(
         ]
         if use_rls:
             assert new_state.rls is not None and phi is not None
-            member_logp_after.append(
-                jax.nn.log_softmax(new_state.rls.wout.T @ phi)
-            )
+            member_logp_after.append(jax.nn.log_softmax(new_state.rls.wout.T @ phi))
         mixture_after = jax.nn.log_softmax(
             jax.nn.logsumexp(jnp.stack(member_logp_after) + log_w[:, None], axis=0)
         )
@@ -4962,7 +4895,9 @@ def _make_norm_adam_fastv_learner(
         state: EMANormState, fast_mean: Array, x: Array
     ) -> tuple[Array, EMANormState, Array, Array]:
         return shift_adaptive_normalize(
-            state, fast_mean, x,
+            state,
+            fast_mean,
+            x,
             decay=hp["norm_decay"],
             fast_decay=hp["fast_decay"],
             epsilon=hp["norm_epsilon"],
@@ -4997,9 +4932,7 @@ def _make_norm_adam_fastv_learner(
             params, x_norm, y
         )
         clock = state.step + jnp.array(1, dtype=jnp.int32)
-        utility, gate = _upgd_utility_and_gate(
-            params, grads, state.utility, clock, utility_decay
-        )
+        utility, gate = _upgd_utility_and_gate(params, grads, state.utility, clock, utility_decay)
         m, v, count = state.m, state.v, state.count
         if vreset:
             row_mask = shifted[:, None]
@@ -5017,19 +4950,21 @@ def _make_norm_adam_fastv_learner(
             delta, new_m[name], new_v[name], new_count[name] = adam_elem_step(
                 params[name], m[name], v[name], count[name], grads[name], adam_hp
             )
-            new_params[name] = params[name] * param_decay - (
-                delta * (1.0 - gate[name])
-            )
+            new_params[name] = params[name] * param_decay - (delta * (1.0 - gate[name]))
         metrics = _step_metrics(new_params, x_norm, y, loss, logits)
-        return new_params, NormAdamGateState(  # type: ignore[call-arg]
-            utility=utility,
-            step=clock,
-            m=new_m,
-            v=new_v,
-            count=new_count,
-            norm=new_norm,
-            fast_mean=new_fast,
-        ), metrics
+        return (
+            new_params,
+            NormAdamGateState(  # type: ignore[call-arg]
+                utility=utility,
+                step=clock,
+                m=new_m,
+                v=new_v,
+                count=new_count,
+                norm=new_norm,
+                fast_mean=new_fast,
+            ),
+            metrics,
+        )
 
     return init_fn, full_step
 
@@ -5087,9 +5022,7 @@ def _make_norm_rmsprop_gate_learner(
             params, x_norm, y
         )
         clock = state.step + jnp.array(1, dtype=jnp.int32)
-        utility, gate = _upgd_utility_and_gate(
-            params, grads, state.utility, clock, utility_decay
-        )
+        utility, gate = _upgd_utility_and_gate(params, grads, state.utility, clock, utility_decay)
         new_params: dict[str, Array] = {}
         new_v: dict[str, Array] = {}
         for name in params:
@@ -5101,9 +5034,13 @@ def _make_norm_rmsprop_gate_learner(
             )
             new_v[name] = v
         metrics = _step_metrics(new_params, x_norm, y, loss, logits)
-        return new_params, NormRMSGateState(  # type: ignore[call-arg]
-            utility=utility, step=clock, v=new_v, norm=new_norm
-        ), metrics
+        return (
+            new_params,
+            NormRMSGateState(  # type: ignore[call-arg]
+                utility=utility, step=clock, v=new_v, norm=new_norm
+            ),
+            metrics,
+        )
 
     return init_fn, full_step
 
@@ -5203,9 +5140,7 @@ def _make_norm_apollo_gate_learner(
             params, x_norm, y
         )
         clock = state.step + jnp.array(1, dtype=jnp.int32)
-        utility, gate = _upgd_utility_and_gate(
-            params, grads, state.utility, clock, utility_decay
-        )
+        utility, gate = _upgd_utility_and_gate(params, grads, state.utility, clock, utility_decay)
         new_params: dict[str, Array] = {}
         new_vchan: dict[str, Array] = {}
         for name in params:
@@ -5222,9 +5157,13 @@ def _make_norm_apollo_gate_learner(
             )
             new_vchan[name] = v
         metrics = _step_metrics(new_params, x_norm, y, loss, logits)
-        return new_params, NormApolloGateState(  # type: ignore[call-arg]
-            utility=utility, step=clock, vchan=new_vchan, norm=new_norm
-        ), metrics
+        return (
+            new_params,
+            NormApolloGateState(  # type: ignore[call-arg]
+                utility=utility, step=clock, vchan=new_vchan, norm=new_norm
+            ),
+            metrics,
+        )
 
     return init_fn, full_step
 
@@ -5282,25 +5221,23 @@ def _make_sgd_momentum_gate_learner(
             params, x_norm, y
         )
         clock = state.step + jnp.array(1, dtype=jnp.int32)
-        utility, gate = _upgd_utility_and_gate(
-            params, grads, state.utility, clock, utility_decay
-        )
-        correction = 1.0 - jnp.power(
-            jnp.asarray(mu, dtype=jnp.float32), clock.astype(jnp.float32)
-        )
+        utility, gate = _upgd_utility_and_gate(params, grads, state.utility, clock, utility_decay)
+        correction = 1.0 - jnp.power(jnp.asarray(mu, dtype=jnp.float32), clock.astype(jnp.float32))
         new_params: dict[str, Array] = {}
         new_momentum: dict[str, Array] = {}
         for name in params:
             momentum = mu * state.momentum[name] + (1.0 - mu) * grads[name]
             m_hat = momentum / correction
-            new_params[name] = params[name] * param_decay - step_size * (
-                m_hat * (1.0 - gate[name])
-            )
+            new_params[name] = params[name] * param_decay - step_size * (m_hat * (1.0 - gate[name]))
             new_momentum[name] = momentum
         metrics = _step_metrics(new_params, x_norm, y, loss, logits)
-        return new_params, NormMomentumGateState(  # type: ignore[call-arg]
-            utility=utility, step=clock, momentum=new_momentum, norm=new_norm
-        ), metrics
+        return (
+            new_params,
+            NormMomentumGateState(  # type: ignore[call-arg]
+                utility=utility, step=clock, momentum=new_momentum, norm=new_norm
+            ),
+            metrics,
+        )
 
     return init_fn, full_step
 
@@ -5408,13 +5345,8 @@ def _make_fade_head_ema_norm_learner(
 
     def init_fn(params: dict[str, Array]) -> FadeHeadNormState:
         return FadeHeadNormState(  # type: ignore[call-arg]
-            gamma={
-                name: jnp.full_like(params[name], gamma0)
-                for name in _FADE_HEAD_PARAMS
-            },
-            fade_trace={
-                name: jnp.zeros_like(params[name]) for name in _FADE_HEAD_PARAMS
-            },
+            gamma={name: jnp.full_like(params[name], gamma0) for name in _FADE_HEAD_PARAMS},
+            fade_trace={name: jnp.zeros_like(params[name]) for name in _FADE_HEAD_PARAMS},
             norm=_init_input_norm_state(params),
         )
 
@@ -5442,8 +5374,7 @@ def _make_fade_head_ema_norm_learner(
             descent = step_size * grads[name]
             if name in _FADE_HEAD_PARAMS:
                 gamma = jnp.minimum(
-                    state.gamma[name]
-                    + theta * (-grads[name]) * state.fade_trace[name],
+                    state.gamma[name] + theta * (-grads[name]) * state.fade_trace[name],
                     _FADE_GAMMA_MAX,
                 )
                 lam = jnp.exp(gamma)
@@ -5454,9 +5385,13 @@ def _make_fade_head_ema_norm_learner(
             else:
                 new_params[name] = params[name] * hidden_decay - descent
         metrics = _step_metrics(new_params, x_norm, y, loss, logits)
-        return new_params, FadeHeadNormState(  # type: ignore[call-arg]
-            gamma=new_gamma, fade_trace=new_trace, norm=new_norm
-        ), metrics
+        return (
+            new_params,
+            FadeHeadNormState(  # type: ignore[call-arg]
+                gamma=new_gamma, fade_trace=new_trace, norm=new_norm
+            ),
+            metrics,
+        )
 
     return init_fn, full_step
 
@@ -5507,9 +5442,7 @@ def snr_reset_mask(
     correction = 1.0 - jnp.power(
         jnp.asarray(rate_decay, dtype=jnp.float32), age.astype(jnp.float32)
     )
-    p = jnp.clip(
-        rate / jnp.maximum(correction, 1e-12), rate_floor, 1.0 - rate_floor
-    )
+    p = jnp.clip(rate / jnp.maximum(correction, 1e-12), rate_floor, 1.0 - rate_floor)
     excess = jnp.maximum(silence.astype(jnp.float32) - 1.0, 0.0)
     return excess * jnp.log1p(-p) <= math.log(eta)
 
@@ -5547,9 +5480,7 @@ def snr_maybe_reset_layer(
     bound = 1.0 / math.sqrt(fan_in)
     key_w, key_b = jr.split(key)
     fresh_w = jr.uniform(key_w, w_in.shape, jnp.float32, -bound, bound)
-    fresh_b = jr.uniform(
-        key_b, params[layer.in_bias].shape, jnp.float32, -bound, bound
-    )
+    fresh_b = jr.uniform(key_b, params[layer.in_bias].shape, jnp.float32, -bound, bound)
     new_params = dict(params)
     new_params[layer.in_weight] = jnp.where(mask[None, :], fresh_w, w_in)
     new_params[layer.in_bias] = jnp.where(mask, fresh_b, params[layer.in_bias])
@@ -5615,8 +5546,7 @@ def _make_snr_ema_norm_learner(
         )
         _, _, a1, _, a2 = _forward_with_activations(params, x_norm)
         new_params = {
-            name: params[name] * decay_factor - step_size * grads[name]
-            for name in params
+            name: params[name] * decay_factor - step_size * grads[name] for name in params
         }
         fired1 = a1 > 0.0
         fired2 = a2 > 0.0
@@ -5634,15 +5564,19 @@ def _make_snr_ema_norm_learner(
             new_params, silence2, rate2, age2, _CBP_LAYERS[1], key2, hp
         )
         metrics = _step_metrics(new_params, x_norm, y, loss, logits)
-        return new_params, SNRNormState(  # type: ignore[call-arg]
-            silence1=silence1,
-            silence2=silence2,
-            rate1=rate1,
-            rate2=rate2,
-            age1=age1,
-            age2=age2,
-            norm=new_norm,
-        ), metrics
+        return (
+            new_params,
+            SNRNormState(  # type: ignore[call-arg]
+                silence1=silence1,
+                silence2=silence2,
+                rate1=rate1,
+                rate2=rate2,
+                age1=age1,
+                age2=age2,
+                norm=new_norm,
+            ),
+            metrics,
+        )
 
     return init_fn, full_step
 
@@ -5701,9 +5635,13 @@ def _make_l2init_ema_norm_learner(
             for name in params
         }
         metrics = _step_metrics(new_params, x_norm, y, loss, logits)
-        return new_params, L2InitNormState(  # type: ignore[call-arg]
-            init_params=state.init_params, norm=new_norm
-        ), metrics
+        return (
+            new_params,
+            L2InitNormState(  # type: ignore[call-arg]
+                init_params=state.init_params, norm=new_norm
+            ),
+            metrics,
+        )
 
     return init_fn, full_step
 
@@ -5812,9 +5750,7 @@ def _make_sigma0_gated_l2init_learner(
             name: beta * state.utility[name] + (1.0 - beta) * (-grads[name] * params[name])
             for name in params
         }
-        global_max = jnp.max(
-            jnp.stack([jnp.max(utility[name]) for name in sorted(params)])
-        )
+        global_max = jnp.max(jnp.stack([jnp.max(utility[name]) for name in sorted(params)]))
         bias_correction = 1.0 - jnp.power(
             jnp.asarray(beta, dtype=jnp.float32), count.astype(jnp.float32)
         )
@@ -6046,9 +5982,7 @@ def _make_adamo_raw_learner(
     )
 
     def init_fn(params: dict[str, Array]) -> dict[str, Any]:
-        return {
-            name: optimizer.init_for_shape(value.shape) for name, value in params.items()
-        }
+        return {name: optimizer.init_for_shape(value.shape) for name, value in params.items()}
 
     def step_fn(
         params: dict[str, Array],
@@ -6103,9 +6037,7 @@ def _make_joint_adam_isometry_learner(
     )
 
     def init_fn(params: dict[str, Array]) -> dict[str, Any]:
-        return {
-            name: optimizer.init_for_shape(value.shape) for name, value in params.items()
-        }
+        return {name: optimizer.init_for_shape(value.shape) for name, value in params.items()}
 
     def step_fn(
         params: dict[str, Array],
@@ -6120,9 +6052,8 @@ def _make_joint_adam_isometry_learner(
         for name, value in params.items():
             combined_gradient = grads[name]
             if value.ndim == 2 and hp["isometry_strength"] != 0.0:
-                combined_gradient = (
-                    combined_gradient
-                    + hp["isometry_strength"] * isometry_gradient(value)
+                combined_gradient = combined_gradient + hp["isometry_strength"] * isometry_gradient(
+                    value
                 )
             update = optimizer.update_from_gradient_checked(
                 state[name], combined_gradient, error=None, param=value
@@ -6235,9 +6166,7 @@ def _build_registry() -> dict[str, ScreeningSpec]:
             name="upgd_autostep",
             base_learner="upgd_w",
             mechanism="per_weight_step_sizes",
-            hyperparameters=_upgd_hp(
-                meta_step_size=1e-2, initial_step_size=0.01, tau=1e4
-            ),
+            hyperparameters=_upgd_hp(meta_step_size=1e-2, initial_step_size=0.01, tau=1e4),
             factory=_make_upgd_autostep_learner,
             description="UPGD-W with Autostep per-weight step-sizes on the gated gradient.",
         ),
@@ -6261,9 +6190,7 @@ def _build_registry() -> dict[str, ScreeningSpec]:
             name="upgd_w_fade_head",
             base_learner="upgd_w",
             mechanism="meta_learned_weight_decay",
-            hyperparameters=_upgd_hp(
-                fade_alpha=0.005, fade_gamma0=-6.9, fade_theta_lambda=0.1
-            ),
+            hyperparameters=_upgd_hp(fade_alpha=0.005, fade_gamma0=-6.9, fade_theta_lambda=0.1),
             factory=_make_upgd_w_fade_head_learner,
             description=(
                 "UPGD-W with FADE meta-learned per-parameter weight decay on "
@@ -6305,9 +6232,7 @@ def _build_registry() -> dict[str, ScreeningSpec]:
             name="upgd_ema_norm_wd0005",
             base_learner="upgd_w",
             mechanism="input_normalization",
-            hyperparameters=_upgd_hp(
-                norm_decay=0.999, norm_epsilon=1e-8, weight_decay=0.005
-            ),
+            hyperparameters=_upgd_hp(norm_decay=0.999, norm_epsilon=1e-8, weight_decay=0.005),
             factory=_make_upgd_ema_norm_learner,
             frozen_probe_input=_ema_frozen_probe_input,
             description=(
@@ -6319,9 +6244,7 @@ def _build_registry() -> dict[str, ScreeningSpec]:
             name="upgd_ema_norm_lr003",
             base_learner="upgd_w",
             mechanism="input_normalization",
-            hyperparameters=_upgd_hp(
-                norm_decay=0.999, norm_epsilon=1e-8, step_size=0.03
-            ),
+            hyperparameters=_upgd_hp(norm_decay=0.999, norm_epsilon=1e-8, step_size=0.03),
             factory=_make_upgd_ema_norm_learner,
             frozen_probe_input=_ema_frozen_probe_input,
             description="upgd_ema_norm at 3x step size (normalized inputs change scale).",
@@ -6330,9 +6253,7 @@ def _build_registry() -> dict[str, ScreeningSpec]:
             name="upgd_ema_norm_lr0003",
             base_learner="upgd_w",
             mechanism="input_normalization",
-            hyperparameters=_upgd_hp(
-                norm_decay=0.999, norm_epsilon=1e-8, step_size=0.003
-            ),
+            hyperparameters=_upgd_hp(norm_decay=0.999, norm_epsilon=1e-8, step_size=0.003),
             factory=_make_upgd_ema_norm_learner,
             frozen_probe_input=_ema_frozen_probe_input,
             description="upgd_ema_norm at 1/3 step size.",
@@ -6341,9 +6262,7 @@ def _build_registry() -> dict[str, ScreeningSpec]:
             name="upgd_ema_norm_sigma0",
             base_learner="upgd_w",
             mechanism="input_normalization",
-            hyperparameters=_upgd_hp(
-                norm_decay=0.999, norm_epsilon=1e-8, noise_std=0.0
-            ),
+            hyperparameters=_upgd_hp(norm_decay=0.999, norm_epsilon=1e-8, noise_std=0.0),
             factory=_make_upgd_ema_norm_learner,
             frozen_probe_input=_ema_frozen_probe_input,
             description=(
@@ -6589,8 +6508,7 @@ def _build_registry() -> dict[str, ScreeningSpec]:
                 factory=_make_upgd_ema_norm_ext_learner,
                 frozen_probe_input=_ema_frozen_probe_input,
                 description=(
-                    f"upgd_ema_norm_sigma0 with normalizer decay {value} "
-                    "(champion 0.999)."
+                    f"upgd_ema_norm_sigma0 with normalizer decay {value} (champion 0.999)."
                 ),
             )
         )
@@ -6664,9 +6582,7 @@ def _build_registry() -> dict[str, ScreeningSpec]:
                 name="colnorm_gate",
                 base_learner="upgd_w",
                 mechanism="update_rule_family",
-                hyperparameters=_update_rule_hp(
-                    step_size=0.001, col_decay=0.99, col_epsilon=1e-8
-                ),
+                hyperparameters=_update_rule_hp(step_size=0.001, col_decay=0.99, col_epsilon=1e-8),
                 factory=_make_colnorm_gate_learner,
                 frozen_probe_input=_ema_frozen_probe_input,
                 description=(
@@ -6748,9 +6664,7 @@ def _build_registry() -> dict[str, ScreeningSpec]:
                 name=name,
                 base_learner="upgd_w",
                 mechanism="adaptive_input_normalization",
-                hyperparameters=_sigma0_ext_hp(
-                    **{**shiftnorm_defaults, **shift_overrides}
-                ),
+                hyperparameters=_sigma0_ext_hp(**{**shiftnorm_defaults, **shift_overrides}),
                 factory=_make_upgd_shiftnorm_learner,
                 frozen_probe_input=_ema_frozen_probe_input,
                 description=(
@@ -6758,8 +6672,7 @@ def _build_registry() -> dict[str, ScreeningSpec]:
                     "re-conditioning: a fast detection EMA resets a feature's "
                     "anneal count when it diverges from the slow statistics ("
                     + ", ".join(
-                        f"{k}={v}"
-                        for k, v in {**shiftnorm_defaults, **shift_overrides}.items()
+                        f"{k}={v}" for k, v in {**shiftnorm_defaults, **shift_overrides}.items()
                     )
                     + ")."
                 ),
@@ -6791,9 +6704,7 @@ def _build_registry() -> dict[str, ScreeningSpec]:
             name="sigma0_gateplus",
             base_learner="upgd_w",
             mechanism="gate_refinement_composition",
-            hyperparameters=_sigma0_ext_hp(
-                norm_decay=0.99, local_gate=1.0, gate_beta=2.0
-            ),
+            hyperparameters=_sigma0_ext_hp(norm_decay=0.99, local_gate=1.0, gate_beta=2.0),
             factory=_make_upgd_ema_norm_ext_learner,
             frozen_probe_input=_ema_frozen_probe_input,
             description=(
@@ -6817,10 +6728,15 @@ def _build_registry() -> dict[str, ScreeningSpec]:
         (
             "disc_r1",
             {
-                "flag_norm": 1.0, "flag_shift_reset": 1.0, "flag_gate": 0.0,
-                "flag_decay_to_init": 0.0, "flag_surprise_budget": 1.0,
-                "flag_meta_decay": 0.0, "flag_utility_shift_reset": 0.0,
-                "flag_w1_shift_reset": 0.0, "flag_hidden_rms": 1.0,
+                "flag_norm": 1.0,
+                "flag_shift_reset": 1.0,
+                "flag_gate": 0.0,
+                "flag_decay_to_init": 0.0,
+                "flag_surprise_budget": 1.0,
+                "flag_meta_decay": 0.0,
+                "flag_utility_shift_reset": 0.0,
+                "flag_w1_shift_reset": 0.0,
+                "flag_hidden_rms": 1.0,
                 "step_size": 0.0370901404621786,
                 "weight_decay": 0.0001,
                 "norm_decay": 0.9911066947977325,
@@ -6840,10 +6756,15 @@ def _build_registry() -> dict[str, ScreeningSpec]:
         (
             "disc_r2",
             {
-                "flag_norm": 1.0, "flag_shift_reset": 1.0, "flag_gate": 0.0,
-                "flag_decay_to_init": 1.0, "flag_surprise_budget": 1.0,
-                "flag_meta_decay": 0.0, "flag_utility_shift_reset": 0.0,
-                "flag_w1_shift_reset": 0.0, "flag_hidden_rms": 1.0,
+                "flag_norm": 1.0,
+                "flag_shift_reset": 1.0,
+                "flag_gate": 0.0,
+                "flag_decay_to_init": 1.0,
+                "flag_surprise_budget": 1.0,
+                "flag_meta_decay": 0.0,
+                "flag_utility_shift_reset": 0.0,
+                "flag_w1_shift_reset": 0.0,
+                "flag_hidden_rms": 1.0,
                 "step_size": 0.04385333652867646,
                 "weight_decay": 0.008445640828094932,
                 "norm_decay": 0.9645936290647181,
@@ -6863,10 +6784,15 @@ def _build_registry() -> dict[str, ScreeningSpec]:
         (
             "disc_r3",
             {
-                "flag_norm": 1.0, "flag_shift_reset": 0.0, "flag_gate": 0.0,
-                "flag_decay_to_init": 1.0, "flag_surprise_budget": 1.0,
-                "flag_meta_decay": 0.0, "flag_utility_shift_reset": 0.0,
-                "flag_w1_shift_reset": 1.0, "flag_hidden_rms": 1.0,
+                "flag_norm": 1.0,
+                "flag_shift_reset": 0.0,
+                "flag_gate": 0.0,
+                "flag_decay_to_init": 1.0,
+                "flag_surprise_budget": 1.0,
+                "flag_meta_decay": 0.0,
+                "flag_utility_shift_reset": 0.0,
+                "flag_w1_shift_reset": 1.0,
+                "flag_hidden_rms": 1.0,
                 "step_size": 0.04512338013332415,
                 "weight_decay": 0.0004368518845358173,
                 "norm_decay": 0.9405970575467439,
@@ -7079,20 +7005,17 @@ def _build_registry() -> dict[str, ScreeningSpec]:
         (
             "rls_head_l0999",
             {"rls_lambda": 0.999},
-            "forgetting 0.999 (the diagnostic winner, +0.011 over the "
-            "champion at 2 tasks)",
+            "forgetting 0.999 (the diagnostic winner, +0.011 over the champion at 2 tasks)",
         ),
         (
             "rls_head_l0995",
             {"rls_lambda": 0.995},
-            "forgetting 0.995 (fast staleness discount; best diagnostic "
-            "task-1)",
+            "forgetting 0.995 (fast staleness discount; best diagnostic task-1)",
         ),
         (
             "rls_head_l1",
             {"rls_lambda": 1.0},
-            "no forgetting (growing-window exact least squares; the "
-            "staleness control)",
+            "no forgetting (growing-window exact least squares; the staleness control)",
         ),
         (
             "rls_head_l0999_preset005",
@@ -7162,28 +7085,23 @@ def _build_registry() -> dict[str, ScreeningSpec]:
         # best: a fast-converging head makes its residual reliable early).
         (
             "rls_head_l0999_preset005_r01",
-            {"rls_lambda": 0.999, "rls_reset_frac": 0.05,
-             "rls_ridge_init": 0.1},
-            "forgetting 0.999 + P reset 0.05 + ridge 0.1 (diag2 ridge-star "
-            "winner)",
+            {"rls_lambda": 0.999, "rls_reset_frac": 0.05, "rls_ridge_init": 0.1},
+            "forgetting 0.999 + P reset 0.05 + ridge 0.1 (diag2 ridge-star winner)",
         ),
         (
             "rls_head_l0999_preset005_r003",
-            {"rls_lambda": 0.999, "rls_reset_frac": 0.05,
-             "rls_ridge_init": 0.03},
+            {"rls_lambda": 0.999, "rls_reset_frac": 0.05, "rls_ridge_init": 0.03},
             "forgetting 0.999 + P reset 0.05 + ridge 0.03",
         ),
         (
             "rls_head_l0999_preset005_r001",
-            {"rls_lambda": 0.999, "rls_reset_frac": 0.05,
-             "rls_ridge_init": 0.01},
+            {"rls_lambda": 0.999, "rls_reset_frac": 0.05, "rls_ridge_init": 0.01},
             "forgetting 0.999 + P reset 0.05 + ridge 0.01 (smallest probed "
             "ridge; frontier still rising at 2 tasks)",
         ),
         (
             "rls_head_resid_preset005_r01",
-            {"rls_lambda": 0.999, "rls_reset_frac": 0.05,
-             "rls_ridge_init": 0.1, "head_resid": 1.0},
+            {"rls_lambda": 0.999, "rls_reset_frac": 0.05, "rls_ridge_init": 0.1, "head_resid": 1.0},
             "residual-driven body at ridge 0.1 + P reset (family-best "
             "2-task diagnostic 0.8648; tests whether the small-ridge head "
             "stabilizes the body-chases-head feedback loop that collapsed "
@@ -7191,8 +7109,12 @@ def _build_registry() -> dict[str, ScreeningSpec]:
         ),
         (
             "rls_head_resid_preset005_r001",
-            {"rls_lambda": 0.999, "rls_reset_frac": 0.05,
-             "rls_ridge_init": 0.01, "head_resid": 1.0},
+            {
+                "rls_lambda": 0.999,
+                "rls_reset_frac": 0.05,
+                "rls_ridge_init": 0.01,
+                "head_resid": 1.0,
+            },
             "residual-driven body at ridge 0.01 + P reset (ridge direction "
             "probe on the residual loop)",
         ),
@@ -7406,9 +7328,7 @@ def _build_registry() -> dict[str, ScreeningSpec]:
             name="wclip_ema_norm",
             base_learner="upgd_w",
             mechanism="weight_clipping",
-            hyperparameters={
-                **comparison_base, "weight_decay": 0.0, "clip_kappa": 2.0
-            },
+            hyperparameters={**comparison_base, "weight_decay": 0.0, "clip_kappa": 2.0},
             factory=_make_wclip_ema_norm_learner,
             frozen_probe_input=_ema_frozen_probe_input,
             description=(
@@ -7538,8 +7458,7 @@ def _build_registry() -> dict[str, ScreeningSpec]:
                 },
                 factory=_make_l2er_learner,
                 description=(
-                    arm_description
-                    + " Exact lop-jax entropy-rank estimator and update ordering; "
+                    arm_description + " Exact lop-jax entropy-rank estimator and update ordering; "
                     "adapted architecture/stream differences are protocol-bound."
                 ),
             )
@@ -7592,15 +7511,17 @@ def _build_registry() -> dict[str, ScreeningSpec]:
         ),
     )
     for name, hyperparameters, description in intentional_arms:
-        specs.append(ScreeningSpec(
-            name=name,
-            base_learner="upgd_w",
-            mechanism="intentional_updates",
-            hyperparameters=hyperparameters,
-            factory=_make_intentional_updates_learner,
-            frozen_probe_input=_ema_frozen_probe_input,
-            description=description,
-        ))
+        specs.append(
+            ScreeningSpec(
+                name=name,
+                base_learner="upgd_w",
+                mechanism="intentional_updates",
+                hyperparameters=hyperparameters,
+                factory=_make_intentional_updates_learner,
+                frozen_probe_input=_ema_frozen_probe_input,
+                description=description,
+            )
+        )
     return {spec.name: spec for spec in specs}
 
 
@@ -7627,12 +7548,10 @@ def _validated_screening_noise_mode(
     if type(noise_mode) is not str:
         raise ValueError(f"{prefix}noise_mode must be 'step' or 'pool'")
     if noise_mode not in ("step", "pool"):
-        raise ValueError(
-            f"{prefix}noise_mode must be 'step' or 'pool', got {noise_mode!r}"
-        )
+        raise ValueError(f"{prefix}noise_mode must be 'step' or 'pool', got '{noise_mode}'")
     if noise_mode == "pool" and spec.noise_update is None:
         raise ValueError(
-            f"{prefix}noise_mode='pool' is unsupported for {spec.name!r}: the arm "
+            f"{prefix}noise_mode='pool' is unsupported for '{spec.name}': the arm "
             "declares no noise-consuming update"
         )
     return noise_mode
@@ -7660,16 +7579,13 @@ def _validated_screening_noise_pool_steps(
     if noise_mode == "step":
         if noise_pool_steps is not _MISSING_NOISE_POOL_STEPS and noise_pool_steps is not None:
             raise ValueError(
-                f"{prefix}noise_pool_steps must be null or absent when "
-                "noise_mode='step'"
+                f"{prefix}noise_pool_steps must be null or absent when noise_mode='step'"
             )
         return None
     if noise_pool_steps is _MISSING_NOISE_POOL_STEPS:
         if allow_unrecorded_pool:
             return None
-        raise ValueError(
-            f"{prefix}noise_pool_steps must be recorded when noise_mode='pool'"
-        )
+        raise ValueError(f"{prefix}noise_pool_steps must be recorded when noise_mode='pool'")
     if type(noise_pool_steps) is not int or noise_pool_steps < 2:
         raise ValueError(
             f"{prefix}noise_pool_steps must be recorded as a built-in integer >= 2 "
@@ -7864,33 +7780,21 @@ def _screening_source_provenance(repo_root: Path | None = None) -> dict[str, obj
         )
 
     index_flags = _tracked_index_flags(root)
-    if any(
-        not entry.startswith(b"H ")
-        for entry in index_flags.split(b"\0")
-        if entry
-    ):
+    if any(not entry.startswith(b"H ") for entry in index_flags.split(b"\0") if entry):
         raise RuntimeError(
             "screening source worktree is not clean: tracked index flags can hide changes"
         )
 
     commit = _git_capture(root, "rev-parse", "--verify", "HEAD").decode("ascii").strip()
     tree = _git_capture(root, "rev-parse", "--verify", "HEAD^{tree}").decode("ascii").strip()
-    object_format = _git_capture(root, "rev-parse", "--show-object-format").decode(
-        "ascii"
-    ).strip()
+    object_format = _git_capture(root, "rev-parse", "--show-object-format").decode("ascii").strip()
     if object_format != "sha1" or not _is_lower_hex(commit, 40) or not _is_lower_hex(tree, 40):
         raise RuntimeError("screening source provenance requires canonical SHA-1 Git identities")
 
     tracked_raw = _git_capture(root, "ls-files", "-z", "--", *_SOURCE_SCOPE)
     head_tree_raw = _git_capture(root, "ls-tree", "-r", "-z", "HEAD", "--", *_SOURCE_SCOPE)
     try:
-        tracked = tuple(
-            sorted(
-                Path(os.fsdecode(raw))
-                for raw in tracked_raw.split(b"\0")
-                if raw
-            )
-        )
+        tracked = tuple(sorted(Path(os.fsdecode(raw)) for raw in tracked_raw.split(b"\0") if raw))
     except UnicodeError as exc:
         raise RuntimeError("screening source provenance requires UTF-8 source paths") from exc
     head_blobs = _head_source_blobs(head_tree_raw)
@@ -7956,9 +7860,7 @@ def _screening_source_provenance(repo_root: Path | None = None) -> dict[str, obj
         _git_capture(root, "rev-parse", "--show-object-format").decode("ascii").strip(),
     )
     final_inventory = _git_capture(root, "ls-files", "-z", "--", *_SOURCE_SCOPE)
-    final_head_tree = _git_capture(
-        root, "ls-tree", "-r", "-z", "HEAD", "--", *_SOURCE_SCOPE
-    )
+    final_head_tree = _git_capture(root, "ls-tree", "-r", "-z", "HEAD", "--", *_SOURCE_SCOPE)
     if final_identity != (commit, tree, object_format):
         raise RuntimeError("screening source identity changed while provenance was captured")
     if final_inventory != tracked_raw or final_head_tree != head_tree_raw:
@@ -8031,21 +7933,15 @@ def _screening_runtime_environment() -> dict[str, object]:
                 "jax_numpy_dtype_promotion": str(jax.config.jax_numpy_dtype_promotion),
                 "jax_numpy_rank_promotion": str(jax.config.jax_numpy_rank_promotion),
                 "jax_random_seed_offset": int(jax.config.jax_random_seed_offset),
-                "jax_threefry_partitionable": bool(
-                    jax.config.jax_threefry_partitionable
-                ),
+                "jax_threefry_partitionable": bool(jax.config.jax_threefry_partitionable),
                 "jax_default_prng_impl": str(jax.config.jax_default_prng_impl),
             },
         },
-        "process_environment": {
-            name: os.environ.get(name) for name in _RUNTIME_ENVIRONMENT_KEYS
-        },
+        "process_environment": {name: os.environ.get(name) for name in _RUNTIME_ENVIRONMENT_KEYS},
     }
 
 
-def _materialized_dataset_provenance(
-    data_x: object, data_y: object
-) -> dict[str, object]:
+def _materialized_dataset_provenance(data_x: object, data_y: object) -> dict[str, object]:
     """Hash the exact effective float32 features and int32 labels consumed by JAX."""
     raw_x = np.asarray(jax.device_get(data_x))
     raw_y = np.asarray(jax.device_get(data_y))
@@ -8083,9 +7979,7 @@ def _materialized_dataset_provenance(
     }
 
 
-def _screening_dataset_provenance(
-    data_x: object, data_y: object
-) -> dict[str, object]:
+def _screening_dataset_provenance(data_x: object, data_y: object) -> dict[str, object]:
     """Bind and validate the frozen OpenML MNIST training materialization."""
     provenance = _materialized_dataset_provenance(data_x, data_y)
     x = np.asarray(jax.device_get(data_x), dtype=np.float32)
@@ -8135,8 +8029,7 @@ def _validated_recurring_phase_lengths(
 ) -> tuple[int, int, int]:
     lengths = tuple(phase_lengths)
     if len(lengths) != 3 or any(
-        not isinstance(length, int) or isinstance(length, bool) or length <= 0
-        for length in lengths
+        not isinstance(length, int) or isinstance(length, bool) or length <= 0 for length in lengths
     ):
         raise ValueError("phase_lengths must contain exactly three positive integers")
     resolved = (int(lengths[0]), int(lengths[1]), int(lengths[2]))
@@ -8165,11 +8058,7 @@ def build_recurring_ipmnist_online_indices(
     without executing a learner.
     """
     resolved_seed = _validated_recurring_seed(seed)
-    if (
-        not isinstance(n_examples, int)
-        or isinstance(n_examples, bool)
-        or n_examples <= 0
-    ):
+    if not isinstance(n_examples, int) or isinstance(n_examples, bool) or n_examples <= 0:
         raise ValueError("n_examples must be a positive integer")
     lengths = _validated_recurring_phase_lengths(phase_lengths)
     indices = _validated_sentinel_indices(sentinel_indices, n_examples=n_examples)
@@ -8244,12 +8133,8 @@ def ipmnist_sentinel_set_sha256(
         input_dim=None,
         n_classes=None,
     )
-    resolved_permutation = _validated_permutation(
-        permutation, input_dim=int(resolved_x.shape[1])
-    )
-    indices = _validated_sentinel_indices(
-        sentinel_indices, n_examples=int(resolved_x.shape[0])
-    )
+    resolved_permutation = _validated_permutation(permutation, input_dim=int(resolved_x.shape[1]))
+    indices = _validated_sentinel_indices(sentinel_indices, n_examples=int(resolved_x.shape[0]))
     raw_examples = resolved_x[indices]
     return _array_bundle_sha256(
         "alberta.ipmnist-screening.ordered-sentinel-set.v1",
@@ -8263,9 +8148,7 @@ def ipmnist_sentinel_set_sha256(
     )
 
 
-def _declared_learner_state_sha256(
-    params: dict[str, Array], state: Any, learner_key: Array
-) -> str:
+def _declared_learner_state_sha256(params: dict[str, Array], state: Any, learner_key: Array) -> str:
     """Hash parameters, optimizer/mechanism state, and the next learner RNG key."""
     bundle = {
         "learner_key": jr.key_data(learner_key),
@@ -8408,9 +8291,7 @@ def run_recurring_ipmnist_retention_development(
     if np.array_equal(resolved_permutations[0], resolved_permutations[1]):
         raise ValueError("the B permutation must be distinct from A")
 
-    indices = _validated_sentinel_indices(
-        sentinel_indices, n_examples=int(resolved_x.shape[0])
-    )
+    indices = _validated_sentinel_indices(sentinel_indices, n_examples=int(resolved_x.shape[0]))
     online_indices = build_recurring_ipmnist_online_indices(
         seed=resolved_seed,
         n_examples=int(resolved_x.shape[0]),
@@ -8511,9 +8392,7 @@ def run_recurring_ipmnist_retention_development(
             x = data_x_array[example][permutation]
             y = data_y_array[example]
             next_key, step_key = jr.split(next_key)
-            new_params, new_state, metrics = step_fn(
-                step_params, step_state, x, y, step_key
-            )
+            new_params, new_state, metrics = step_fn(step_params, step_state, x, y, step_key)
             accuracy, _, plasticity = metrics
             return (new_params, new_state, next_key), (accuracy, plasticity)
 
@@ -8557,20 +8436,15 @@ def run_recurring_ipmnist_retention_development(
         for requirement in requirements:
             state_hash_before = _declared_learner_state_sha256(params, state, key_noise)
             permutation = permutation_by_id[requirement.permutation_id]
-            sentinel_inputs = jnp.asarray(
-                resolved_x[indices][:, permutation], dtype=jnp.float32
-            )
-            model_inputs = spec.frozen_probe_input(
-                state, sentinel_inputs, spec.hyperparameters
-            )
+            sentinel_inputs = jnp.asarray(resolved_x[indices][:, permutation], dtype=jnp.float32)
+            model_inputs = spec.frozen_probe_input(state, sentinel_inputs, spec.hyperparameters)
             if model_inputs.shape != sentinel_inputs.shape:
                 raise ValueError("frozen_probe_input must preserve sentinel input shape")
             logits = np.asarray(jax.device_get(mlp_logits(params, model_inputs)))
             if not np.all(np.isfinite(logits)):
                 raise ValueError("a frozen sentinel probe produced non-finite logits")
             correctness = tuple(
-                bool(value)
-                for value in np.asarray(np.argmax(logits, axis=-1) == sentinel_labels)
+                bool(value) for value in np.asarray(np.argmax(logits, axis=-1) == sentinel_labels)
             )
             state_hash_after = _declared_learner_state_sha256(params, state, key_noise)
             snapshots.append(
@@ -9041,9 +8915,7 @@ def validate_intentional_updates_development_record(
             config=config,
             per_task_accuracy=np.asarray(metrics["per_task_accuracy"], dtype=np.float64),
             per_task_loss=np.asarray(metrics["per_task_loss"], dtype=np.float64),
-            per_task_plasticity=np.asarray(
-                metrics["per_task_plasticity"], dtype=np.float64
-            ),
+            per_task_plasticity=np.asarray(metrics["per_task_plasticity"], dtype=np.float64),
             wall_clock_seconds=resources["timing_telemetry_seconds"],
         )
     except (KeyError, TypeError, ValueError) as error:
@@ -9053,9 +8925,7 @@ def validate_intentional_updates_development_record(
     # guarantees the record remains finite/serializable.
     try:
         actual_json = json.dumps(payload, allow_nan=False, sort_keys=True, separators=(",", ":"))
-        expected_json = json.dumps(
-            expected, allow_nan=False, sort_keys=True, separators=(",", ":")
-        )
+        expected_json = json.dumps(expected, allow_nan=False, sort_keys=True, separators=(",", ":"))
     except (TypeError, ValueError) as error:
         raise ValueError("Intentional Updates record must be finite strict JSON") from error
     if actual_json != expected_json:
@@ -9091,9 +8961,7 @@ def run_screening_config(
     ``noise_pool_steps`` and never merge with exact shards nor pass proxy
     validation.
     """
-    if progress_every is not None and (
-        type(progress_every) is not int or progress_every <= 0
-    ):
+    if progress_every is not None and (type(progress_every) is not int or progress_every <= 0):
         raise ValueError("progress_every must be a positive integer or None")
     resolved_seed = require_jax_seed(seed, name="seed")
     noise_mode = _validated_screening_noise_mode(noise_mode, spec)
@@ -9157,11 +9025,7 @@ def run_screening_config(
 
     shapes = _sorted_param_shapes(config)
     n_flat = int(sum(np.prod(shape) for shape in shapes.values()))
-    pool_len = (
-        effective_noise_pool_steps * n_flat
-        if effective_noise_pool_steps is not None
-        else 0
-    )
+    pool_len = effective_noise_pool_steps * n_flat if effective_noise_pool_steps is not None else 0
     pool_noise_std = float(spec.hyperparameters.get("noise_std", 0.0))
     noise_update = spec.noise_update
     hp = spec.hyperparameters
@@ -9191,9 +9055,7 @@ def run_screening_config(
             noise = _split_flat_noise(flat_noise, shapes)
             assert noise_update is not None
             new_params, new_state = noise_update(step_params, step_state, grads, noise, hp)
-            return (new_params, new_state, key), _step_metrics(
-                new_params, x, y, loss, logits
-            )
+            return (new_params, new_state, key), _step_metrics(new_params, x, y, loss, logits)
 
         (params, state, key), (accuracies, losses, plasticities) = jax.lax.scan(
             one_step, (params, state, key), examples
@@ -9292,6 +9154,14 @@ def _require_exact_keys(
     return cast(Mapping[str, Any], value)
 
 
+def _require_exact_str(name: object, value: object) -> str:
+    if type(name) is not str:
+        raise ValueError("name must be an exact string")
+    if type(value) is not str:
+        raise ValueError(f"{name} must be an exact string")
+    return value
+
+
 def _required_nonempty_string(value: object, *, context: str) -> str:
     if type(value) is not str or not value:
         raise ValueError(f"{context} must be a non-empty string")
@@ -9307,9 +9177,7 @@ def _is_finite_json_number(value: object) -> bool:
         return False
 
 
-def _require_screening_curve_domain(
-    values: np.ndarray, field: str, *, context: str
-) -> None:
+def _require_screening_curve_domain(values: np.ndarray, field: str, *, context: str) -> None:
     if field in {"per_task_accuracy", "per_task_plasticity"}:
         if np.any(values < 0.0) or np.any(values > 1.0):
             raise ValueError(f"{context}: {field} values must be in [0, 1]")
@@ -9327,9 +9195,7 @@ def _validated_nonpromoting_policy(value: object, *, context: str) -> dict[str, 
         type(policy[name]) is not type(expected) or policy[name] != expected
         for name, expected in NONPROMOTING_POLICY.items()
     ):
-        raise ValueError(
-            f"{context}: evidence_policy must be the frozen nonpromoting policy"
-        )
+        raise ValueError(f"{context}: evidence_policy must be the frozen nonpromoting policy")
     return dict(policy)
 
 
@@ -9440,12 +9306,10 @@ def _validated_dataset_provenance(value: object, *, context: str) -> dict[str, A
             )
         if binding["dtype"] != expected_dtypes[name]:
             raise ValueError(
-                f"{context} dataset provenance {name} dtype must be {expected_dtypes[name]!r}"
+                f"{context} dataset provenance {name} dtype must be '{expected_dtypes[name]}'"
             )
         if not _is_lower_hex(binding["sha256"], 64):
-            raise ValueError(
-                f"{context} dataset provenance {name} must record a lowercase SHA-256"
-            )
+            raise ValueError(f"{context} dataset provenance {name} must record a lowercase SHA-256")
         arrays[name] = binding
     if arrays["x"]["shape"][0] != arrays["y"]["shape"][0]:
         raise ValueError(f"{context} dataset provenance x/y row counts must match")
@@ -9521,13 +9385,9 @@ def _validated_runtime_environment(value: object, *, context: str) -> dict[str, 
     for field, item in python.items():
         _required_nonempty_string(item, context=f"{context} runtime environment python.{field}")
     for field, item in platform_binding.items():
-        _required_nonempty_string(
-            item, context=f"{context} runtime environment platform.{field}"
-        )
+        _required_nonempty_string(item, context=f"{context} runtime environment platform.{field}")
     for field, item in packages.items():
-        _required_nonempty_string(
-            item, context=f"{context} runtime environment packages.{field}"
-        )
+        _required_nonempty_string(item, context=f"{context} runtime environment packages.{field}")
     _required_nonempty_string(
         jax_binding["backend"], context=f"{context} runtime environment jax.backend"
     )
@@ -9550,8 +9410,7 @@ def _validated_runtime_environment(value: object, *, context: str) -> dict[str, 
             or process_index < 0
         ):
             raise ValueError(
-                f"{context} runtime environment JAX device IDs must be "
-                "non-negative integers"
+                f"{context} runtime environment JAX device IDs must be non-negative integers"
             )
         device_platform = _required_nonempty_string(
             binding["platform"],
@@ -9559,9 +9418,7 @@ def _validated_runtime_environment(value: object, *, context: str) -> dict[str, 
         )
         identity = (device_platform, process_index, device_id)
         if identity in device_identities:
-            raise ValueError(
-                f"{context} runtime environment JAX device identities must be unique"
-            )
+            raise ValueError(f"{context} runtime environment JAX device identities must be unique")
         device_identities.add(identity)
         _required_nonempty_string(
             binding["device_kind"],
@@ -9577,8 +9434,7 @@ def _validated_runtime_environment(value: object, *, context: str) -> dict[str, 
     precision = jax_config["jax_default_matmul_precision"]
     if precision is not None and (type(precision) is not str or not precision):
         raise ValueError(
-            f"{context} runtime environment jax_default_matmul_precision must be a "
-            "string or null"
+            f"{context} runtime environment jax_default_matmul_precision must be a string or null"
         )
     for field in (
         "jax_numpy_dtype_promotion",
@@ -9589,16 +9445,9 @@ def _validated_runtime_environment(value: object, *, context: str) -> dict[str, 
             jax_config[field], context=f"{context} runtime environment {field}"
         )
     if type(jax_config["jax_random_seed_offset"]) is not int:
-        raise ValueError(
-            f"{context} runtime environment jax_random_seed_offset must be an integer"
-        )
-    if any(
-        value is not None and type(value) is not str
-        for value in process_environment.values()
-    ):
-        raise ValueError(
-            f"{context} runtime environment process values must be strings or null"
-        )
+        raise ValueError(f"{context} runtime environment jax_random_seed_offset must be an integer")
+    if any(value is not None and type(value) is not str for value in process_environment.values()):
+        raise ValueError(f"{context} runtime environment process values must be strings or null")
     return dict(environment)
 
 
@@ -9615,16 +9464,12 @@ def shard_payload(
         raise ValueError("new shard base_learner must be a non-empty string")
     spec = screening_spec(result.config_name)
     if result.base_learner != spec.base_learner:
-        raise ValueError(
-            f"new shard base_learner must match registered arm {spec.base_learner!r}"
-        )
+        raise ValueError(f"new shard base_learner must match registered arm '{spec.base_learner}'")
     hyperparameters = _validated_registered_hyperparameters(
         result.hyperparameters, spec, context="new shard"
     )
     noise_mode = _validated_screening_noise_mode(result.noise_mode, spec)
-    noise_pool_steps = _validated_screening_noise_pool_steps(
-        noise_mode, result.noise_pool_steps
-    )
+    noise_pool_steps = _validated_screening_noise_pool_steps(noise_mode, result.noise_pool_steps)
     source_binding = _validated_source_provenance(source_provenance, context="new shard")
     dataset_binding = _validated_dataset_provenance(dataset_provenance, context="new shard")
     runtime_binding = _validated_runtime_environment(environment, context="new shard")
@@ -9646,9 +9491,7 @@ def shard_payload(
             )
         _require_screening_curve_domain(values, field, context="new shard")
         curves[field] = values
-    wall_clock_seconds = _validated_wall_clock_seconds(
-        result.wall_clock_seconds, "new shard"
-    )
+    wall_clock_seconds = _validated_wall_clock_seconds(result.wall_clock_seconds, "new shard")
     payload: dict[str, Any] = {
         "schema": SHARD_SCHEMA,
         "evidence_policy": dict(NONPROMOTING_POLICY),
@@ -9661,9 +9504,7 @@ def shard_payload(
         "config": result.config.to_config(),
         "per_task_accuracy": [round(float(v), 8) for v in curves["per_task_accuracy"]],
         "per_task_loss": [round(float(v), 8) for v in curves["per_task_loss"]],
-        "per_task_plasticity": [
-            round(float(v), 8) for v in curves["per_task_plasticity"]
-        ],
+        "per_task_plasticity": [round(float(v), 8) for v in curves["per_task_plasticity"]],
         "wall_clock_seconds": round(wall_clock_seconds, 2),
         "created_unix": time.time(),
         "source_provenance": source_binding,
@@ -9682,9 +9523,7 @@ def load_shard(path: Path) -> dict[str, Any]:
     payload = load_strict_json_object(path)
     schema = payload.get("schema")
     if schema not in {LEGACY_SHARD_SCHEMA, SHARD_SCHEMA}:
-        raise ValueError(
-            f"{path}: not a supported {LEGACY_SHARD_SCHEMA} or {SHARD_SCHEMA} shard"
-        )
+        raise ValueError(f"{path}: not a supported {LEGACY_SHARD_SCHEMA} or {SHARD_SCHEMA} shard")
     is_v2 = schema == SHARD_SCHEMA
     if is_v2:
         _require_exact_keys(payload, _V2_SHARD_FIELDS, context=str(path))
@@ -9697,9 +9536,7 @@ def load_shard(path: Path) -> dict[str, Any]:
         try:
             created_value = float(created_unix)
         except (OverflowError, ValueError) as exc:
-            raise ValueError(
-                f"{path}: created_unix must be a finite, non-negative number"
-            ) from exc
+            raise ValueError(f"{path}: created_unix must be a finite, non-negative number") from exc
         if not math.isfinite(created_value) or created_value < 0.0:
             raise ValueError(f"{path}: created_unix must be a finite, non-negative number")
         payload["created_unix"] = created_value
@@ -9714,9 +9551,7 @@ def load_shard(path: Path) -> dict[str, Any]:
         )
     config = IPMNISTConfig(**payload["config"])
     if is_v2:
-        _validate_dataset_config_binding(
-            payload["dataset_provenance"], config, context=str(path)
-        )
+        _validate_dataset_config_binding(payload["dataset_provenance"], config, context=str(path))
     for fieldname in ("per_task_accuracy", "per_task_loss", "per_task_plasticity"):
         # Curve typing and metric-domain checks apply to every schema: the
         # legacy v1 shards are the campaign's live format, and a numeric
@@ -9750,9 +9585,7 @@ def load_shard(path: Path) -> dict[str, Any]:
         payload.get("base_learner"), context=f"{path}: base_learner"
     )
     if is_v2 and base_learner != spec.base_learner:
-        raise ValueError(
-            f"{path}: base_learner must match registered arm {spec.base_learner!r}"
-        )
+        raise ValueError(f"{path}: base_learner must match registered arm '{spec.base_learner}'")
     if is_v2:
         payload["hyperparameters"] = _validated_registered_hyperparameters(
             payload.get("hyperparameters"), spec, context=str(path)
@@ -9799,13 +9632,8 @@ def _artifact_file_binding(path: Path, *, context: str) -> dict[str, object]:
     }
 
 
-def _artifact_file_bindings(
-    paths: Sequence[Path], *, context: str
-) -> list[dict[str, object]]:
-    return [
-        _artifact_file_binding(Path(path), context=context)
-        for path in paths
-    ]
+def _artifact_file_bindings(paths: Sequence[Path], *, context: str) -> list[dict[str, object]]:
+    return [_artifact_file_binding(Path(path), context=context) for path in paths]
 
 
 def _require_artifact_bindings_unchanged(
@@ -9827,9 +9655,7 @@ def _require_artifact_bindings_unchanged(
         raise RuntimeError(f"{context} changed while the derived receipt was built")
 
 
-def _require_embedded_artifact_manifest_unchanged(
-    manifest: object, *, context: str
-) -> None:
+def _require_embedded_artifact_manifest_unchanged(manifest: object, *, context: str) -> None:
     if not isinstance(manifest, list) or not manifest:
         raise RuntimeError(f"{context} is missing an input artifact manifest")
     paths: list[Path] = []
@@ -9901,24 +9727,22 @@ def _validate_screening_arm_contract(
     seeds = sorted(per_seed)
     reference_base_learner = per_seed[seeds[0]]["base_learner"]
     mismatched_base_learners = [
-        seed
-        for seed in seeds
-        if per_seed[seed]["base_learner"] != reference_base_learner
+        seed for seed in seeds if per_seed[seed]["base_learner"] != reference_base_learner
     ]
     if mismatched_base_learners:
+        host_config_name = _require_exact_str("config_name", config_name)
         raise ValueError(
-            f"config {config_name!r} has inconsistent base_learner across seeds: "
-            f"seed {seeds[0]} used {reference_base_learner!r}, seed(s) "
+            f"config '{host_config_name}' has inconsistent base_learner across seeds: "
+            f"seed {seeds[0]} used '{reference_base_learner}', seed(s) "
             f"{mismatched_base_learners} used different values"
         )
     reference_hp = per_seed[seeds[0]]["hyperparameters"]
-    mismatched_hp = [
-        seed for seed in seeds if per_seed[seed]["hyperparameters"] != reference_hp
-    ]
+    mismatched_hp = [seed for seed in seeds if per_seed[seed]["hyperparameters"] != reference_hp]
     if mismatched_hp:
+        host_config_name = _require_exact_str("config_name", config_name)
         raise ValueError(
-            f"config {config_name!r} has inconsistent hyperparameters across seeds: "
-            f"seed {seeds[0]} used {reference_hp!r}, seed(s) {mismatched_hp} used "
+            f"config '{host_config_name}' has inconsistent hyperparameters across seeds: "
+            f"seed {seeds[0]} used {reference_hp}, seed(s) {mismatched_hp} used "
             "different values; refusing to merge runs of different mechanisms "
             "under one config_name"
         )
@@ -9936,12 +9760,7 @@ def _late_window_slope(per_task_accuracy: np.ndarray, window: int) -> float:
 
 
 def _validated_proxy_atol(value: object) -> float:
-    if (
-        type(value) is not float
-        or not math.isfinite(value)
-        or value < 0.0
-        or value > 1e-6
-    ):
+    if type(value) is not float or not math.isfinite(value) or value < 0.0 or value > 1e-6:
         raise ValueError("proxy validation atol must be a finite float in [0, 1e-6]")
     return value
 
@@ -9958,9 +9777,7 @@ def merge_shards(
     same paired runs; an incomplete worker batch is rejected before ranking.
     """
     normalized_paths = [Path(path) for path in paths]
-    input_bindings = _artifact_file_bindings(
-        normalized_paths, context="screening shard input"
-    )
+    input_bindings = _artifact_file_bindings(normalized_paths, context="screening shard input")
     shards = [load_shard(path) for path in normalized_paths]
     if not shards:
         raise ValueError("no shards given")
@@ -9969,9 +9786,7 @@ def merge_shards(
         raise ValueError("shards span multiple shard schemas; merge v1 and v2 separately")
     shard_schema = shard_schemas.pop()
     source_provenance = (
-        _screening_batch_binding(
-            shards, field="source_provenance", label="source provenance"
-        )
+        _screening_batch_binding(shards, field="source_provenance", label="source provenance")
         if shard_schema == SHARD_SCHEMA
         else None
     )
@@ -10018,28 +9833,27 @@ def merge_shards(
             )
         per_seed[shard["seed"]] = shard
 
-    if control_name not in by_config:
+    host_control_name = _require_exact_str("control_name", control_name)
+    if host_control_name not in by_config:
         raise ValueError(
-            f"control {control_name!r} is not among the merged shards "
+            f"control '{host_control_name}' is not among the merged shards "
             f"(present: {sorted(by_config)}); a summary without its control "
             "would silently carry no paired_vs_control blocks"
         )
     for name, per_seed in sorted(by_config.items()):
         _validate_screening_arm_contract(name, per_seed)
-    control = by_config[control_name]
+    control = by_config[host_control_name]
     control_seeds = sorted(control)
     for name, per_seed in sorted(by_config.items()):
         seeds = sorted(per_seed)
-        if name != control_name and not any(seed in control for seed in seeds):
+        if name != host_control_name and not any(seed in control for seed in seeds):
+            host_name = _require_exact_str("name", name)
             raise ValueError(
-                f"config {name!r} shares no seeds with control {control_name!r} "
+                f"config '{host_name}' shares no seeds with control '{host_control_name}' "
                 f"(seeds {seeds} vs {control_seeds}); refusing to rank an "
                 "unpaired entry in the summary"
             )
-    seed_sets = {
-        name: tuple(sorted(per_seed))
-        for name, per_seed in sorted(by_config.items())
-    }
+    seed_sets = {name: tuple(sorted(per_seed)) for name, per_seed in sorted(by_config.items())}
     if len(set(seed_sets.values())) != 1:
         raise ValueError(
             f"seed sets differ across configs: {seed_sets}; "
@@ -10051,7 +9865,7 @@ def merge_shards(
         seeds = sorted(per_seed)
         wall_clock_total = _finite_wall_clock_total(
             [per_seed[s]["wall_clock_seconds"] for s in seeds],
-            context=f"config {name!r}",
+            context=f"config '{name}'",
         )
         acc = np.stack(
             [np.asarray(per_seed[s]["per_task_accuracy"], dtype=np.float64) for s in seeds]
@@ -10066,20 +9880,13 @@ def merge_shards(
             "n_seeds": len(seeds),
             "average_online_accuracy_mean": float(per_seed_avg.mean()),
             "average_online_accuracy_stderr": (
-                float(per_seed_avg.std(ddof=1) / math.sqrt(len(seeds)))
-                if len(seeds) > 1
-                else 0.0
+                float(per_seed_avg.std(ddof=1) / math.sqrt(len(seeds))) if len(seeds) > 1 else 0.0
             ),
             "per_seed_average_online_accuracy": [round(float(v), 6) for v in per_seed_avg],
             "late_window_slope_mean": float(slopes.mean()),
             "per_seed_late_window_slope": [round(float(v), 8) for v in slopes],
             "average_plasticity_mean": float(
-                np.mean(
-                    [
-                        np.mean(per_seed[s]["per_task_plasticity"])
-                        for s in seeds
-                    ]
-                )
+                np.mean([np.mean(per_seed[s]["per_task_plasticity"]) for s in seeds])
             ),
             "wall_clock_seconds_total": round(wall_clock_total, 2),
         }
@@ -10104,9 +9911,7 @@ def merge_shards(
                 "per_seed_diff": [round(float(v), 6) for v in diff],
                 "mean_diff": float(diff.mean()),
                 "stderr_diff": (
-                    float(diff.std(ddof=1) / math.sqrt(len(common)))
-                    if len(common) > 1
-                    else 0.0
+                    float(diff.std(ddof=1) / math.sqrt(len(common))) if len(common) > 1 else 0.0
                 ),
                 "all_seeds_improve": bool(np.all(diff > 0.0)),
                 "beats_control": bool(diff.mean() > 0.0),
@@ -10116,9 +9921,7 @@ def merge_shards(
                 # seeds that all improve before setting the compute-spending
                 # flag.
                 "confirmation_candidate": bool(
-                    len(common) >= 2
-                    and np.all(diff > 0.0)
-                    and diff.mean() > CONFIRMATION_THRESHOLD
+                    len(common) >= 2 and np.all(diff > 0.0) and diff.mean() > CONFIRMATION_THRESHOLD
                 ),
             }
         entries.append(entry)
@@ -10189,14 +9992,11 @@ def validate_proxy(
     shard_schemas = {shard["schema"] for shard in shards}
     if len(shard_schemas) != 1:
         raise ValueError(
-            "proxy-validation shards span multiple shard schemas; validate v1 and v2 "
-            "separately"
+            "proxy-validation shards span multiple shard schemas; validate v1 and v2 separately"
         )
     shard_schema = shard_schemas.pop()
     source_provenance = (
-        _screening_batch_binding(
-            shards, field="source_provenance", label="source provenance"
-        )
+        _screening_batch_binding(shards, field="source_provenance", label="source provenance")
         if shard_schema == SHARD_SCHEMA
         else None
     )
@@ -10221,21 +10021,20 @@ def validate_proxy(
         if shard.get("noise_mode", "step") != "step":
             raise ValueError(
                 f"{path}: proxy validation requires noise_mode='step' shards "
-                f"(got {shard.get('noise_mode')!r})"
+                f"(got '{shard.get('noise_mode')}')"
             )
         learner = learner_by_control.get(shard["config_name"])
         if learner is None:
             raise ValueError(f"{path}: proxy validation accepts only control shards")
         if shard["base_learner"] != learner:
             raise ValueError(
-                f"{path}: control {shard['config_name']!r} must record "
-                f"base_learner={learner!r}"
+                f"{path}: control '{shard['config_name']}' must record base_learner='{learner}'"
             )
         expected_hp = SCREENING_REGISTRY[shard["config_name"]].hyperparameters
         if shard["hyperparameters"] != expected_hp:
             raise ValueError(
-                f"{path}: control {shard['config_name']!r} must record its frozen "
-                f"hyperparameters {expected_hp!r}"
+                f"{path}: control '{shard['config_name']}' must record its frozen "
+                f"hyperparameters {expected_hp}"
             )
         per_seed = by_control.setdefault(shard["config_name"], {})
         if shard["seed"] in per_seed:
@@ -10250,8 +10049,7 @@ def validate_proxy(
     for config_name, per_seed in by_control.items():
         _validate_screening_arm_contract(config_name, per_seed)
     control_seed_sets = {
-        config_name: tuple(sorted(per_seed))
-        for config_name, per_seed in by_control.items()
+        config_name: tuple(sorted(per_seed)) for config_name, per_seed in by_control.items()
     }
     if len(set(control_seed_sets.values())) != 1:
         raise ValueError(
@@ -10290,13 +10088,11 @@ def validate_proxy(
         )
         if reference["learner"] != learner:
             raise ValueError(
-                f"{partial_path}: reference learner {reference['learner']!r} does not "
-                f"match expected learner {learner!r}"
+                f"{partial_path}: reference learner '{reference['learner']}' does not "
+                f"match expected learner '{learner}'"
             )
         if reference["seeds"] != [seed]:
-            raise ValueError(
-                f"{partial_path}: reference seeds must equal the shard seed [{seed}]"
-            )
+            raise ValueError(f"{partial_path}: reference seeds must equal the shard seed [{seed}]")
         expected_reference_hp = {
             "upgd_w": UPGD_W_PROTOCOL_HYPERPARAMETERS,
             "adamw": ADAMW_PROTOCOL_HYPERPARAMETERS,
@@ -10311,12 +10107,9 @@ def validate_proxy(
         reference_shape = {
             key: value for key, value in reference_config.items() if key != "n_tasks"
         }
-        proxy_shape = {
-            key: value for key, value in proxy_config.items() if key != "n_tasks"
-        }
-        if (
-            reference_shape != proxy_shape
-            or int(reference_config["n_tasks"]) < int(proxy_config["n_tasks"])
+        proxy_shape = {key: value for key, value in proxy_config.items() if key != "n_tasks"}
+        if reference_shape != proxy_shape or int(reference_config["n_tasks"]) < int(
+            proxy_config["n_tasks"]
         ):
             raise ValueError(
                 f"{partial_path}: reference config is incompatible with the proxy prefix"
@@ -10346,9 +10139,7 @@ def validate_proxy(
         else None
     )
     report: dict[str, Any] = {
-        "schema": (
-            VALIDATION_SCHEMA if shard_schema == SHARD_SCHEMA else LEGACY_VALIDATION_SCHEMA
-        ),
+        "schema": (VALIDATION_SCHEMA if shard_schema == SHARD_SCHEMA else LEGACY_VALIDATION_SCHEMA),
         "created_unix": time.time(),
         "atol": atol,
         "environment": environment,
@@ -10422,9 +10213,9 @@ def _atomic_write_json(path: Path, payload: dict[str, Any]) -> None:
     keeps a duplicate launch from silently replacing another worker's shard.
     """
 
-    encoded = (
-        json.dumps(payload, allow_nan=False, indent=1, sort_keys=True) + "\n"
-    ).encode("utf-8")
+    encoded = (json.dumps(payload, allow_nan=False, indent=1, sort_keys=True) + "\n").encode(
+        "utf-8"
+    )
     atomic_write_new(Path(path), encoded)
 
 
@@ -10451,9 +10242,7 @@ def _require_v2_derivation_context(
         raise RuntimeError("v2 derivation did not capture a source/runtime context")
     source_provenance, runtime_environment = bindings
     if payload.get("source_provenance") != source_provenance:
-        raise RuntimeError(
-            "v2 derivation source does not match the source recorded by its shards"
-        )
+        raise RuntimeError("v2 derivation source does not match the source recorded by its shards")
     if payload.get("environment") != runtime_environment:
         raise RuntimeError(
             "v2 derivation runtime does not match the runtime recorded by its shards"
@@ -10486,9 +10275,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     run_p.add_argument("--out", type=Path, required=True)
     run_p.add_argument("--progress-every", type=int, default=10)
     run_p.add_argument(
-        "--noise-mode", choices=("step", "pool"), default="step",
+        "--noise-mode",
+        choices=("step", "pool"),
+        default="step",
         help="'pool' = screening-only pool-noise approximation "
-             "(lean-UPGD-family arms only; never mergeable with exact shards)",
+        "(lean-UPGD-family arms only; never mergeable with exact shards)",
     )
     run_p.add_argument(
         "--noise-pool-steps",
@@ -10505,8 +10296,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     val_p = sub.add_parser("validate-proxy", help="validate control shards vs full partials")
     val_p.add_argument("--shards", type=Path, nargs="+", required=True)
-    val_p.add_argument("--partials-dir", type=Path,
-                       default=Path("outputs/upgd_ipmnist/partials"))
+    val_p.add_argument("--partials-dir", type=Path, default=Path("outputs/upgd_ipmnist/partials"))
     val_p.add_argument("--atol", type=float, default=1e-6)
     val_p.add_argument("--output", type=Path, required=True)
 
@@ -10514,20 +10304,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s", force=True
     )
-    run_seed = (
-        require_jax_seed(args.seed, name="seed")
-        if args.command == "run"
-        else None
-    )
+    run_seed = require_jax_seed(args.seed, name="seed") if args.command == "run" else None
 
     # Refuse an already-published destination before loading data or processing
     # shards.  This is intentionally only a preflight: a claim file or advisory
     # lock could strand the output after a crashed worker.  The exclusive
     # publication in ``_atomic_write_json`` remains authoritative when two
     # workers pass this check concurrently.
-    output_path = _preflight_new_output(
-        args.out if args.command == "run" else args.output
-    )
+    output_path = _preflight_new_output(args.out if args.command == "run" else args.output)
     derivation_bindings = (
         _screening_derivation_bindings(args.shards)
         if args.command in {"merge", "validate-proxy"}
@@ -10546,8 +10330,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         data_x, data_y = load_mnist_train(data_home)
         dataset_provenance = _screening_dataset_provenance(data_x, data_y)
         logger.info(
-            "running %s seed=%d for %d tasks x %d steps "
-            "(noise_mode=%s, noise_pool_steps=%s)",
+            "running %s seed=%d for %d tasks x %d steps (noise_mode=%s, noise_pool_steps=%s)",
             spec.name,
             seed,
             config.n_tasks,
@@ -10556,7 +10339,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             args.noise_pool_steps if args.noise_mode == "pool" else None,
         )
         result = run_screening_config(
-            data_x, data_y, spec, seed, config,
+            data_x,
+            data_y,
+            spec,
+            seed,
+            config,
             progress_every=args.progress_every,
             noise_mode=args.noise_mode,
             noise_pool_steps=args.noise_pool_steps,
