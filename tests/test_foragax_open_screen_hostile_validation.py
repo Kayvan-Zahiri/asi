@@ -14,6 +14,8 @@ from alberta_framework.benchmarks.foragax_open_screen import (
     load_frozen_protocol,
 )
 
+_ROOT = Path(__file__).resolve().parent.parent
+
 
 def test_frozen_configuration_rejects_invalid_inputs() -> None:
     with pytest.raises(ScreenError, match="path must be a non-empty string"):
@@ -34,7 +36,7 @@ def test_frozen_configuration_rejects_invalid_inputs() -> None:
 
 
 def test_protocol_snapshot_rejects_invalid_inputs() -> None:
-    protocol = load_frozen_protocol(Path("outputs/forager/fov_baseline_screening_cpu_v3"))
+    protocol = load_frozen_protocol(_ROOT / "outputs/forager/fov_baseline_screening_cpu_v3")
     with pytest.raises(ScreenError, match="protocol must be a FrozenProtocol"):
         ProtocolSnapshot(
             protocol=None,  # type: ignore[arg-type]
