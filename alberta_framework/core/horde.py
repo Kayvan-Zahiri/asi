@@ -42,6 +42,7 @@ from alberta_framework.core.normalizers import (
     EMANormalizerState,
     Normalizer,
     WelfordNormalizerState,
+    _saturating_int32_counter_increment,
 )
 from alberta_framework.core.optimizers import Bounder
 from alberta_framework.core.types import HordeSpec, TraceMode
@@ -91,6 +92,7 @@ def _canonical_horde_host_scalars(
         _require_float32("leaky_relu_slope", leaky_relu_slope, lower=0.0),
         _require_exact_bool("use_layer_norm", use_layer_norm),
     )
+
 
 # =============================================================================
 # Types
@@ -284,8 +286,7 @@ class HordeLearner:
         # learner's exact-nonzero guard sees the value that will actually
         # be used (0.0 trace decay), not an unrepresentable exact product.
         per_head_gl = tuple(
-            float(np.float32(d.gamma) * np.float32(d.lamda))
-            for d in horde_spec.demons
+            float(np.float32(d.gamma) * np.float32(d.lamda)) for d in horde_spec.demons
         )
 
         self._learner = MultiHeadMLPLearner(
@@ -363,22 +364,16 @@ class HordeLearner:
         state_schema = config.pop("state_schema", MULTI_HEAD_MLP_STATE_SCHEMA)
         host_state_schema = _require_exact_str("state_schema", state_schema)
         if host_state_schema != MULTI_HEAD_MLP_STATE_SCHEMA:
-            raise ValueError(
-                f"unsupported Horde state schema: '{MULTI_HEAD_MLP_STATE_SCHEMA}'"
-            )
+            raise ValueError(f"unsupported Horde state schema: '{MULTI_HEAD_MLP_STATE_SCHEMA}'")
 
         horde_spec = HordeSpec.from_config(config.pop("horde_spec"))
         optimizer = optimizer_from_config(config.pop("optimizer"))
         bounder_cfg = config.pop("bounder", None)
         bounder = bounder_from_config(bounder_cfg) if bounder_cfg is not None else None
         normalizer_cfg = config.pop("normalizer", None)
-        normalizer = (
-            normalizer_from_config(normalizer_cfg) if normalizer_cfg is not None else None
-        )
+        normalizer = normalizer_from_config(normalizer_cfg) if normalizer_cfg is not None else None
         head_opt_cfg = config.pop("head_optimizer", None)
-        head_optimizer = (
-            optimizer_from_config(head_opt_cfg) if head_opt_cfg is not None else None
-        )
+        head_optimizer = optimizer_from_config(head_opt_cfg) if head_opt_cfg is not None else None
 
         trace_mode_str = config.pop("trace_mode", None)
         trace_mode = (
@@ -451,9 +446,7 @@ class HordeLearner:
         cumulants = jnp.asarray(cumulants)
         expected_shape = (self.n_demons,)
         if cumulants.shape != expected_shape:
-            raise ValueError(
-                f"cumulants must have shape {expected_shape}, got {cumulants.shape}"
-            )
+            raise ValueError(f"cumulants must have shape {expected_shape}, got {cumulants.shape}")
 
         # 1. Compute V(s') for bootstrapping
         next_preds = self._learner.predict(state, next_observation)
@@ -488,9 +481,7 @@ class HordeLearner:
                 ),
                 jnp.zeros_like(result.predictions),
             ),
-            td_errors=_report_head_values(
-                result.errors, requested, head_updates_applied
-            ),
+            td_errors=_report_head_values(result.errors, requested, head_updates_applied),
             td_targets=_report_head_values(targets, requested, head_updates_applied),
             per_demon_metrics=_report_head_values(
                 result.per_head_metrics, requested, head_updates_applied
@@ -536,13 +527,9 @@ class HordeLearner:
         discounts = jnp.asarray(discounts, dtype=jnp.float32)
         expected_shape = (self.n_demons,)
         if cumulants.shape != expected_shape:
-            raise ValueError(
-                f"cumulants must have shape {expected_shape}, got {cumulants.shape}"
-            )
+            raise ValueError(f"cumulants must have shape {expected_shape}, got {cumulants.shape}")
         if discounts.shape != expected_shape:
-            raise ValueError(
-                f"discounts must have shape {expected_shape}, got {discounts.shape}"
-            )
+            raise ValueError(f"discounts must have shape {expected_shape}, got {discounts.shape}")
 
         next_preds = self._learner.predict(state, next_observation)
         bootstrap = jnp.where(discounts == 0.0, 0.0, discounts * next_preds)
@@ -579,9 +566,7 @@ class HordeLearner:
                 ),
                 jnp.zeros_like(result.predictions),
             ),
-            td_errors=_report_head_values(
-                result.errors, requested, head_updates_applied
-            ),
+            td_errors=_report_head_values(result.errors, requested, head_updates_applied),
             td_targets=_report_head_values(targets, requested, head_updates_applied),
             per_demon_metrics=_report_head_values(
                 result.per_head_metrics, requested, head_updates_applied
@@ -725,19 +710,11 @@ class MixedHorde:
             "type": "MixedHorde",
             "horde_spec": self._horde_spec.to_config(),
             "hidden_sizes": list(self._hidden_sizes),
-            "optimizer": (
-                self._optimizer.to_config() if self._optimizer is not None else None
-            ),
-            "bounder": (
-                self._bounder.to_config() if self._bounder is not None else None
-            ),
-            "normalizer": (
-                self._normalizer.to_config() if self._normalizer is not None else None
-            ),
+            "optimizer": (self._optimizer.to_config() if self._optimizer is not None else None),
+            "bounder": (self._bounder.to_config() if self._bounder is not None else None),
+            "normalizer": (self._normalizer.to_config() if self._normalizer is not None else None),
             "head_optimizer": (
-                self._head_optimizer.to_config()
-                if self._head_optimizer is not None
-                else None
+                self._head_optimizer.to_config() if self._head_optimizer is not None else None
             ),
             "step_size": self._step_size,
             "sparsity": self._sparsity,
@@ -763,13 +740,9 @@ class MixedHorde:
         bounder_cfg = config.pop("bounder", None)
         bounder = bounder_from_config(bounder_cfg) if bounder_cfg is not None else None
         normalizer_cfg = config.pop("normalizer", None)
-        normalizer = (
-            normalizer_from_config(normalizer_cfg) if normalizer_cfg is not None else None
-        )
+        normalizer = normalizer_from_config(normalizer_cfg) if normalizer_cfg is not None else None
         head_opt_cfg = config.pop("head_optimizer", None)
-        head_optimizer = (
-            optimizer_from_config(head_opt_cfg) if head_opt_cfg is not None else None
-        )
+        head_optimizer = optimizer_from_config(head_opt_cfg) if head_opt_cfg is not None else None
         trace_mode_str = config.pop("trace_mode", None)
         trace_mode = (
             TraceMode(trace_mode_str) if trace_mode_str is not None else TraceMode.ACCUMULATING
@@ -815,16 +788,14 @@ class MixedHorde:
         if self._shared_horde is not None:
             shared_state = cast(MultiHeadMLPState, state.shared_state)
             shared_preds = self._shared_horde.predict(shared_state, observation)
-            preds = preds.at[jnp.asarray(self._shared_indices, dtype=jnp.int32)].set(
-                shared_preds
-            )
+            preds = preds.at[jnp.asarray(self._shared_indices, dtype=jnp.int32)].set(shared_preds)
         if self._independent_horde is not None:
             independent_preds = self._independent_horde.predict(
                 state.independent_state, observation
             )
-            preds = preds.at[
-                jnp.asarray(self._independent_indices, dtype=jnp.int32)
-            ].set(independent_preds)
+            preds = preds.at[jnp.asarray(self._independent_indices, dtype=jnp.int32)].set(
+                independent_preds
+            )
         return preds
 
     def update(
@@ -857,9 +828,7 @@ class MixedHorde:
             predictions = predictions.at[idx].set(shared_result.predictions)
             td_errors = td_errors.at[idx].set(shared_result.td_errors)
             td_targets = td_targets.at[idx].set(shared_result.td_targets)
-            per_demon_metrics = per_demon_metrics.at[idx].set(
-                shared_result.per_demon_metrics
-            )
+            per_demon_metrics = per_demon_metrics.at[idx].set(shared_result.per_demon_metrics)
             head_updates_applied = head_updates_applied.at[idx].set(
                 shared_result.head_updates_applied
             )
@@ -878,9 +847,7 @@ class MixedHorde:
             predictions = predictions.at[idx].set(independent_result.predictions)
             td_errors = td_errors.at[idx].set(independent_result.td_errors)
             td_targets = td_targets.at[idx].set(independent_result.td_targets)
-            per_demon_metrics = per_demon_metrics.at[idx].set(
-                independent_result.per_demon_metrics
-            )
+            per_demon_metrics = per_demon_metrics.at[idx].set(independent_result.per_demon_metrics)
             head_updates_applied = head_updates_applied.at[idx].set(
                 independent_result.head_updates_applied
             )
@@ -889,7 +856,7 @@ class MixedHorde:
         proposed_state = MixedHordeState(
             shared_state=new_shared_state,
             independent_state=new_independent_state,
-            step_count=state.step_count + 1,
+            step_count=_saturating_int32_counter_increment(state.step_count),
             birth_timestamp=state.birth_timestamp,
             uptime_s=state.uptime_s,
         )
@@ -957,11 +924,14 @@ def run_horde_learning_loop(
         )
 
     t0 = time.time()
-    final_state, (
-        per_demon_metrics,
-        td_errors,
-        head_updates_applied,
-        updates_applied,
+    (
+        final_state,
+        (
+            per_demon_metrics,
+            td_errors,
+            head_updates_applied,
+            updates_applied,
+        ),
     ) = jax.lax.scan(step_fn, state, (observations, cumulants, next_observations))
     elapsed = time.time() - t0
     final_state = final_state.replace(uptime_s=final_state.uptime_s + elapsed)  # type: ignore[attr-defined]
@@ -998,11 +968,14 @@ def run_mixed_horde_learning_loop(
         )
 
     t0 = time.time()
-    final_state, (
-        per_demon_metrics,
-        td_errors,
-        head_updates_applied,
-        updates_applied,
+    (
+        final_state,
+        (
+            per_demon_metrics,
+            td_errors,
+            head_updates_applied,
+            updates_applied,
+        ),
     ) = jax.lax.scan(step_fn, state, (observations, cumulants, next_observations))
     elapsed = time.time() - t0
     final_state = final_state.replace(  # type: ignore[attr-defined]

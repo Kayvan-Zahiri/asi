@@ -13,6 +13,8 @@ configs run without trunk-trace assertion errors, and that
 ``to_config`` / ``from_config`` round-trip preserves all settings.
 """
 
+import dataclasses
+
 import chex
 import jax
 import jax.numpy as jnp
@@ -71,9 +73,7 @@ def _random_walk_arrays(
     k1, k2 = jr.split(key)
     observations = jr.normal(k1, (num_steps, feature_dim))
     cumulants = jr.normal(k2, (num_steps, n_demons))
-    next_observations = jnp.concatenate(
-        [observations[1:], observations[:1]], axis=0
-    )
+    next_observations = jnp.concatenate([observations[1:], observations[:1]], axis=0)
     return observations, cumulants, next_observations
 
 
@@ -95,9 +95,7 @@ class TestRouting:
         assert horde.independent_horde is None
 
     def test_all_independent_when_gamma_lamda_positive(self) -> None:
-        demons = [
-            _temporal_demon(f"d{i}", i, gamma=0.9, lamda=0.5) for i in range(3)
-        ]
+        demons = [_temporal_demon(f"d{i}", i, gamma=0.9, lamda=0.5) for i in range(3)]
         spec = create_horde_spec(demons)
         horde = MixedHorde(horde_spec=spec, hidden_sizes=(8,), sparsity=0.0)
         assert horde.shared_indices == ()
@@ -190,9 +188,7 @@ class TestAllSharedEqualsHordeLearner:
         chex.assert_trees_all_close(
             m_result.per_demon_metrics, s_result.per_demon_metrics, rtol=1e-5
         )
-        chex.assert_trees_all_close(
-            m_result.td_errors, s_result.td_errors, rtol=1e-5
-        )
+        chex.assert_trees_all_close(m_result.td_errors, s_result.td_errors, rtol=1e-5)
 
 
 # =============================================================================
@@ -204,9 +200,7 @@ class TestAllIndependentEqualsIndependentDemonHorde:
     """All-independent MixedHorde matches IndependentDemonHorde exactly."""
 
     def test_predictions_match(self) -> None:
-        demons = [
-            _temporal_demon(f"d{i}", i, gamma=0.9, lamda=0.5) for i in range(2)
-        ]
+        demons = [_temporal_demon(f"d{i}", i, gamma=0.9, lamda=0.5) for i in range(2)]
         spec = create_horde_spec(demons)
 
         common_kwargs = {
@@ -233,10 +227,7 @@ class TestAllIndependentEqualsIndependentDemonHorde:
         n_demons = 2
         feature_dim = 5
         num_steps = 200
-        demons = [
-            _temporal_demon(f"d{i}", i, gamma=0.9, lamda=0.5)
-            for i in range(n_demons)
-        ]
+        demons = [_temporal_demon(f"d{i}", i, gamma=0.9, lamda=0.5) for i in range(n_demons)]
         spec = create_horde_spec(demons)
 
         common_kwargs = {
@@ -270,17 +261,13 @@ class TestAllIndependentEqualsIndependentDemonHorde:
         chex.assert_trees_all_close(
             m_result.per_demon_metrics, i_result.per_demon_metrics, rtol=1e-5
         )
-        chex.assert_trees_all_close(
-            m_result.td_errors, i_result.td_errors, rtol=1e-5
-        )
+        chex.assert_trees_all_close(m_result.td_errors, i_result.td_errors, rtol=1e-5)
 
     def test_rejected_update_has_neutral_trunk_metric_and_recovers_under_jit(
         self,
     ) -> None:
         """An all-independent refusal must not report a successful bound."""
-        spec = create_horde_spec(
-            [_temporal_demon("temporal", 0, gamma=0.9, lamda=0.5)]
-        )
+        spec = create_horde_spec([_temporal_demon("temporal", 0, gamma=0.9, lamda=0.5)])
         horde = MixedHorde(
             horde_spec=spec,
             hidden_sizes=(),
@@ -424,12 +411,8 @@ class TestOriginalDemonOrder:
         chex.assert_trees_all_close(result.td_targets[0], cumulants[0])
         chex.assert_trees_all_close(result.td_targets[2], cumulants[2])
         # temporal demons: target == cumulant + gamma * V(s')
-        chex.assert_trees_all_close(
-            result.td_targets[1], cumulants[1] + 0.9 * v_next[1], atol=1e-5
-        )
-        chex.assert_trees_all_close(
-            result.td_targets[3], cumulants[3] + 0.5 * v_next[3], atol=1e-5
-        )
+        chex.assert_trees_all_close(result.td_targets[1], cumulants[1] + 0.9 * v_next[1], atol=1e-5)
+        chex.assert_trees_all_close(result.td_targets[3], cumulants[3] + 0.5 * v_next[3], atol=1e-5)
 
 
 # =============================================================================
@@ -492,9 +475,7 @@ class TestConfigRoundtrip:
         assert restored.shared_horde is not None
 
     def test_config_roundtrip_all_independent(self) -> None:
-        demons = [
-            _temporal_demon(f"d{i}", i, gamma=0.9, lamda=0.5) for i in range(2)
-        ]
+        demons = [_temporal_demon(f"d{i}", i, gamma=0.9, lamda=0.5) for i in range(2)]
         spec = create_horde_spec(demons)
         original = MixedHorde(
             horde_spec=spec,
@@ -547,9 +528,7 @@ class TestRunMixedHordeLearningLoop:
             horde, state, observations, cumulants, next_observations
         )
         assert isinstance(result, MixedHordeLearningResult)
-        chex.assert_shape(
-            result.per_demon_metrics, (num_steps, n_demons, 3)
-        )
+        chex.assert_shape(result.per_demon_metrics, (num_steps, n_demons, 3))
         chex.assert_shape(result.td_errors, (num_steps, n_demons))
 
 
@@ -588,3 +567,43 @@ class TestStep3RoutingDispatch:
         cfg = Step3HordeConfig(routing="mixed")
         restored = Step3HordeConfig.from_dict(cfg.to_dict())
         assert restored.routing == "mixed"
+
+
+class TestMixedHordeLifetimeClock:
+    """Saturating lifetime clock keeps MixedHordeState.step_count non-negative."""
+
+    def test_mixed_horde_step_count_saturates_at_int32_max(self) -> None:
+        spec = create_horde_spec([_gamma0_demon("imm", 0)])
+        horde = MixedHorde(
+            horde_spec=spec,
+            hidden_sizes=(),
+            step_size=0.05,
+            sparsity=0.0,
+        )
+        state = horde.init(2, jr.key(23))
+        near_max = dataclasses.replace(state, step_count=jnp.array(2147483647, dtype=jnp.int32))
+        res = horde.update(
+            near_max,
+            jnp.ones(2, dtype=jnp.float32),
+            jnp.array([1.0], dtype=jnp.float32),
+            jnp.zeros(2, dtype=jnp.float32),
+        )
+        assert int(res.state.step_count) == 2147483647
+        assert int(res.state.step_count) >= 0
+
+    def test_mixed_horde_step_count_increments_below_max(self) -> None:
+        spec = create_horde_spec([_gamma0_demon("imm", 0)])
+        horde = MixedHorde(
+            horde_spec=spec,
+            hidden_sizes=(),
+            step_size=0.05,
+            sparsity=0.0,
+        )
+        state = horde.init(2, jr.key(23))
+        res = horde.update(
+            state,
+            jnp.ones(2, dtype=jnp.float32),
+            jnp.array([1.0], dtype=jnp.float32),
+            jnp.zeros(2, dtype=jnp.float32),
+        )
+        assert int(res.state.step_count) == 1
