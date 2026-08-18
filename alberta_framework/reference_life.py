@@ -256,10 +256,7 @@ class ReferenceEnvironmentManifest:
             raise ValueError("observation_spec must be a SpaceSpec")
         if not isinstance(self.action_spec, SpaceSpec):
             raise ValueError("action_spec must be a SpaceSpec")
-        if (
-            type(self.max_executions) is not int
-            or self.max_executions <= 0
-        ):
+        if type(self.max_executions) is not int or self.max_executions <= 0:
             raise ValueError("max_executions must be a positive integer")
         config = self.config
         if _canonical_json(config) != self._config_json:
@@ -1109,9 +1106,7 @@ class _ImmutableRiverSwimMDP(RiverSwimMDP):
             transition_shape
         )
         reward_bytes = np.ascontiguousarray(self._rewards_np, dtype="<f4").tobytes()
-        immutable_rewards = np.frombuffer(reward_bytes, dtype="<f4").reshape(
-            (config.n_states, 2)
-        )
+        immutable_rewards = np.frombuffer(reward_bytes, dtype="<f4").reshape((config.n_states, 2))
         object.__setattr__(self, "_transitions_np", immutable_transitions)
         object.__setattr__(self, "_rewards_np", immutable_rewards)
         object.__setattr__(
@@ -1157,21 +1152,13 @@ class RiverSwimReferenceEnvironment:
         if not isinstance(config, RiverSwimConfig):
             raise ValueError("RiverSwim config has the wrong type")
         n_states = config.n_states
-        if (
-            type(n_states) is not int
-            or n_states < 2
-            or n_states > RIVERSWIM_REFERENCE_MAX_STATES
-        ):
+        if type(n_states) is not int or n_states < 2 or n_states > RIVERSWIM_REFERENCE_MAX_STATES:
             raise ValueError(
                 "RiverSwim n_states must be an integer in "
                 f"[2, {RIVERSWIM_REFERENCE_MAX_STATES}] before exact 2**n oracle enumeration"
             )
         initial_state = config.initial_state
-        if (
-            type(initial_state) is not int
-            or initial_state < 0
-            or initial_state >= n_states
-        ):
+        if type(initial_state) is not int or initial_state < 0 or initial_state >= n_states:
             raise ValueError("RiverSwim initial_state is outside the configured chain")
 
         def canonical_float32(value: Any, *, name: str) -> float:
@@ -1199,9 +1186,7 @@ class RiverSwimReferenceEnvironment:
             or observation_spec.shape != (n_states,)
             or observation_spec.dtype != "float32"
         ):
-            raise ValueError(
-                f"RiverSwim requires a float32 box observation of shape ({n_states},)"
-            )
+            raise ValueError(f"RiverSwim requires a float32 box observation of shape ({n_states},)")
         if (
             action_spec.kind != "discrete"
             or action_spec.shape != ()
@@ -1453,11 +1438,7 @@ class ReferenceLifeConfig:
         if self.schema != REFERENCE_LIFE_CONFIG_SCHEMA:
             raise ValueError("unsupported reference-life config schema")
         _require_id(self.lifecycle_id, name="lifecycle_id")
-        if (
-            type(self.seed) is not int
-            or self.seed < 0
-            or self.seed > int(np.iinfo(np.uint32).max)
-        ):
+        if type(self.seed) is not int or self.seed < 0 or self.seed > int(np.iinfo(np.uint32).max):
             raise ValueError("seed must be a uint32 integer")
         if (
             type(self.max_accepted_events) is not int
@@ -1485,7 +1466,7 @@ class ReferenceLifeConfig:
         }
         for key, value in expected.items():
             if payload.get(key) != value:
-                raise ValueError(f"life configuration field {key!r} is not bound")
+                raise ValueError(f"life configuration field '{key}' is not bound")
         if payload.get("agent", {}).get("manifest_id") != self.agent_manifest_id:
             raise ValueError("agent manifest identity is not bound")
         if payload.get("environment", {}).get("manifest_id") != self.environment_manifest_id:
@@ -1559,10 +1540,7 @@ class LifeHalt:
             raise ValueError("recovery_mode must be a RecoveryMode")
         if type(self.reason) is not str or not self.reason.strip():
             raise ValueError("halt reason must be nonempty")
-        if (
-            type(self.recovery_attempts) is not int
-            or self.recovery_attempts < 0
-        ):
+        if type(self.recovery_attempts) is not int or self.recovery_attempts < 0:
             raise ValueError("recovery_attempts must be nonnegative")
 
 
@@ -1574,9 +1552,7 @@ class PendingOutcome:
 
     def __post_init__(self) -> None:
         _require_regime_id(self.regime_id, name="pending outcome regime_id")
-        oracle_reward = _require_finite_real(
-            "pending outcome oracle reward", self.oracle_reward
-        )
+        oracle_reward = _require_finite_real("pending outcome oracle reward", self.oracle_reward)
         object.__setattr__(self, "oracle_reward", oracle_reward)
         if type(self.transaction) is not Transaction:
             raise ValueError("pending outcome requires a Transaction")
@@ -1867,9 +1843,8 @@ class ReferenceLifeRunner:
         if environment_config.get("metrics_mode") != metrics_adapter.config.mode:
             raise ValueError("metrics and environment modes differ")
         agent_environment_kind = agent_config.get("environment_kind")
-        if (
-            agent_environment_kind is not None
-            and agent_environment_kind != environment_config.get("environment_kind")
+        if agent_environment_kind is not None and agent_environment_kind != environment_config.get(
+            "environment_kind"
         ):
             raise ValueError("agent and environment kinds differ")
         bound_environment = agent_config.get("environment_config")
@@ -3376,9 +3351,7 @@ def build_prototype_riverswim_life(
         else dispatch_config
     )
     effective_metrics = (
-        ReferenceLifeMetricsConfig(mode="stationary")
-        if metrics_config is None
-        else metrics_config
+        ReferenceLifeMetricsConfig(mode="stationary") if metrics_config is None else metrics_config
     )
     if effective_metrics.mode != "stationary":
         raise ValueError("RiverSwim life requires stationary metrics")
