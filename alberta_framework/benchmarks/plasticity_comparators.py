@@ -60,7 +60,7 @@ class ComparatorProtocol:
             or any(type(value) is not str for value in self.matched_axes)
             or self.matched_axes != required_axes
         ):
-            raise ValueError(f"matched_axes must equal {required_axes!r}")
+            raise ValueError(f"matched_axes must equal '{required_axes}'")
         for field in ("persistent_bytes", "environment_or_data_steps", "model_queries"):
             _exact_int32(field, getattr(self, field))
         try:
@@ -75,19 +75,21 @@ class ComparatorProtocol:
             raise ValueError("comparator protocols are permanently nonpromoting")
 
 
-PAPER_REVISIONS: Final[Mapping[str, str]] = MappingProxyType({
-    "l2_er": "arXiv:2509.22335v3",
-    "adamo": "arXiv:2606.09762v1",
-    "intentional_updates": "arXiv:2604.19033v1",
-    "growing_elastic": "arXiv:2608.01475v1",
-    "utility_pull": "ASI protocol extension; no paper claimed",
-    "nap": "arXiv:2407.01800v1",
-    "c_chain": "arXiv:2506.00592v1",
-    "smooth_leaky": "arXiv:2509.22562v4",
-    "aid": "arXiv:2502.01342v2",
-    "deep_fourier": "arXiv:2410.20634v1",
-    "noise_curvature": "arXiv:2509.19698v3",
-})
+PAPER_REVISIONS: Final[Mapping[str, str]] = MappingProxyType(
+    {
+        "l2_er": "arXiv:2509.22335v3",
+        "adamo": "arXiv:2606.09762v1",
+        "intentional_updates": "arXiv:2604.19033v1",
+        "growing_elastic": "arXiv:2608.01475v1",
+        "utility_pull": "ASI protocol extension; no paper claimed",
+        "nap": "arXiv:2407.01800v1",
+        "c_chain": "arXiv:2506.00592v1",
+        "smooth_leaky": "arXiv:2509.22562v4",
+        "aid": "arXiv:2502.01342v2",
+        "deep_fourier": "arXiv:2410.20634v1",
+        "noise_curvature": "arXiv:2509.19698v3",
+    }
+)
 
 
 def protocol(
@@ -288,12 +290,9 @@ def l2_er_objective(
     if loss.ndim != 0:
         raise ValueError("task_loss must be scalar")
     checked_parameters = tuple(
-        _floating_array(f"parameters[{index}]", value)
-        for index, value in enumerate(parameters)
+        _floating_array(f"parameters[{index}]", value) for index, value in enumerate(parameters)
     )
-    l2 = sum(
-        (jnp.sum(jnp.square(value)) for value in checked_parameters), jnp.asarray(0.0)
-    )
+    l2 = sum((jnp.sum(jnp.square(value)) for value in checked_parameters), jnp.asarray(0.0))
     ranks = jnp.stack(tuple(effective_rank(value) for value in feature_batches))
     candidate = loss + l2_strength * l2 - rank_strength * jnp.mean(ranks)
     return _finite_result(candidate, loss, name="L2-ER objective")
@@ -333,12 +332,8 @@ def isometry_penalty(weights: Array) -> Array:
         weights.dtype.itemsize,
     )
     gram = weights.T @ weights if rows >= columns else weights @ weights.T
-    candidate = jnp.sum(
-        jnp.square(gram - jnp.eye(min(rows, columns), dtype=weights.dtype))
-    )
-    return _finite_result(
-        candidate, jnp.asarray(0.0, dtype=weights.dtype), name="isometry penalty"
-    )
+    candidate = jnp.sum(jnp.square(gram - jnp.eye(min(rows, columns), dtype=weights.dtype)))
+    return _finite_result(candidate, jnp.asarray(0.0, dtype=weights.dtype), name="isometry penalty")
 
 
 def adamo_update(
@@ -436,12 +431,8 @@ def intentional_trace_step_size(
         raise ValueError("trace/scale must match and discounted_gradient_energy must be scalar")
     _finite_scalar("intended_fraction", intended_fraction, minimum=np.nextafter(0.0, 1.0))
     _finite_scalar("epsilon", epsilon, minimum=np.nextafter(0.0, 1.0))
-    denominator = energy * jnp.vdot(
-        trace, diagonal_scale * trace
-    ).real
-    candidate = jnp.asarray(intended_fraction) / jnp.sqrt(
-        jnp.maximum(denominator, epsilon)
-    )
+    denominator = energy * jnp.vdot(trace, diagonal_scale * trace).real
+    candidate = jnp.asarray(intended_fraction) / jnp.sqrt(jnp.maximum(denominator, epsilon))
     return _finite_result(
         candidate,
         jnp.asarray(0.0, dtype=trace.dtype),
@@ -576,9 +567,7 @@ def smooth_leaky(value: Array, *, alpha: float, power: float, curvature: float) 
     _probability("alpha", alpha)
     _finite_scalar("power", power, minimum=np.nextafter(0.0, 1.0))
     _finite_scalar("curvature", curvature)
-    candidate = alpha * value + (1.0 - alpha) * value * jax_sigmoid(
-        curvature * value / power
-    )
+    candidate = alpha * value + (1.0 - alpha) * value * jax_sigmoid(curvature * value / power)
     return _finite_result(candidate, jnp.zeros_like(value), name="Smooth-Leaky activation")
 
 
@@ -607,9 +596,7 @@ def interval_dropout(
     value = _floating_array("value", value)
     key = _threefry_key("key", key)
     if not training:
-        candidate = jnp.where(
-            value >= 0, probability * value, (1.0 - probability) * value
-        )
+        candidate = jnp.where(value >= 0, probability * value, (1.0 - probability) * value)
         return _finite_result(candidate, jnp.zeros_like(value), name="AID activation")
     use_relu = jr.bernoulli(key, probability, value.shape)
     candidate = jnp.where(use_relu, jnp.maximum(value, 0), jnp.minimum(value, 0))
@@ -625,9 +612,7 @@ def deep_fourier_features(value: Array, *, enabled: bool = True) -> Array:
         raise ValueError("Deep Fourier features require a non-scalar input")
     if enabled:
         _checked_product("Deep Fourier output bytes", value.size, 2, value.dtype.itemsize)
-    candidate = (
-        jnp.concatenate((jnp.sin(value), jnp.cos(value)), axis=-1) if enabled else value
-    )
+    candidate = jnp.concatenate((jnp.sin(value), jnp.cos(value)), axis=-1) if enabled else value
     return _finite_result(candidate, jnp.zeros_like(candidate), name="Deep Fourier features")
 
 
@@ -643,9 +628,7 @@ def noise_curvature_critical_step_size(
     """Paper Eq. 2 joint gradient-noise/curvature-volatility safe bound."""
     batch_size = _exact_int32("batch_size", batch_size, minimum=1)
     gradient_mean = _finite_scalar("squared_gradient_mean", squared_gradient_mean)
-    sampling_variance = _finite_scalar(
-        "per_sample_gradient_variance", per_sample_gradient_variance
-    )
+    sampling_variance = _finite_scalar("per_sample_gradient_variance", per_sample_gradient_variance)
     curvature_variance = _finite_scalar(
         "normalized_curvature_variance", normalized_curvature_variance
     )
