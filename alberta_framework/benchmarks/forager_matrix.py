@@ -166,18 +166,14 @@ SOURCE_SNAPSHOT_FILENAME = "source-snapshot.tar"
 SOURCE_INVENTORY_MEMBER = "SOURCE_INVENTORY.json"
 SOURCE_TREE_HASH_SCHEME = "canonical-source-inventory-v1"
 SOURCE_ARCHIVE_FORMAT = "ustar-v1"
-SNAPSHOT_SOURCE_EXECUTION_MODE: Literal[
-    "content_verified_snapshot_subprocess_unsealed"
-] = (
+SNAPSHOT_SOURCE_EXECUTION_MODE: Literal["content_verified_snapshot_subprocess_unsealed"] = (
     "content_verified_snapshot_subprocess_unsealed"
 )
 # Alias of the snapshot mode.  Despite the name, snapshot isolation is not
 # evidence of an immutable filesystem or runtime.
 IMMUTABLE_SOURCE_EXECUTION_MODE = SNAPSHOT_SOURCE_EXECUTION_MODE
 LIVE_SOURCE_EXECUTION_MODE: Literal["live_tree_unsealed"] = "live_tree_unsealed"
-SOURCE_EXECUTION_MODES = frozenset(
-    {SNAPSHOT_SOURCE_EXECUTION_MODE, LIVE_SOURCE_EXECUTION_MODE}
-)
+SOURCE_EXECUTION_MODES = frozenset({SNAPSHOT_SOURCE_EXECUTION_MODE, LIVE_SOURCE_EXECUTION_MODE})
 # The unqualified name denotes the development (live-tree) mode.
 SOURCE_EXECUTION_MODE = LIVE_SOURCE_EXECUTION_MODE
 
@@ -276,9 +272,7 @@ _FROZEN_CAUSAL_MAP_MATRIX_RNG_CONTRACT = MappingProxyType(
     }
 )
 _RTU_ADAPTIVE_OBGD_FIELDS = frozenset({"adaptive_obgd", "beta2", "epsilon"})
-TRUSTED_EXECUTION_ENVELOPE_SCHEMA = (
-    "alberta.forager_matrix_trusted_execution_envelope.v1"
-)
+TRUSTED_EXECUTION_ENVELOPE_SCHEMA = "alberta.forager_matrix_trusted_execution_envelope.v1"
 TRUSTED_EXECUTION_ENVELOPE_ADAPTER_FIELD = "trusted_execution_envelope"
 _INTERNAL_TEMP = re.compile(
     r"^\.(?P<target>[A-Za-z0-9][A-Za-z0-9._-]*)\."
@@ -302,9 +296,7 @@ ForagerVariantKind = Literal[
     "alberta_causal_map",
     "alberta_rtu_rtrl",
 ]
-ForagerVariantConfig = (
-    AlbertaForagerConfig | CausalMapForagerConfig | RTURTRLForagerConfig
-)
+ForagerVariantConfig = AlbertaForagerConfig | CausalMapForagerConfig | RTURTRLForagerConfig
 SelectionDirection = Literal["maximize", "minimize"]
 SelectionStatistic = Literal["mean", "conservative_ci_endpoint"]
 SourceExecutionMode = Literal[
@@ -360,15 +352,9 @@ class ForagerTuningRule:
             or not 0.0 < float(self.confidence) < 1.0
         ):
             raise ForagerMatrixManifestError("confidence must be a finite float in (0.0, 1.0)")
-        if (
-            type(self.bootstrap_resamples) is not int
-            or self.bootstrap_resamples < 1
-        ):
+        if type(self.bootstrap_resamples) is not int or self.bootstrap_resamples < 1:
             raise ForagerMatrixManifestError("bootstrap_resamples must be an integer >= 1")
-        if (
-            type(self.bootstrap_seed) is not int
-            or not 0 <= self.bootstrap_seed <= 2**31 - 1
-        ):
+        if type(self.bootstrap_seed) is not int or not 0 <= self.bootstrap_seed <= 2**31 - 1:
             raise ForagerMatrixManifestError("bootstrap_seed must be an integer in [0, 2**31 - 1]")
         if type(self.tie_break) is not str or self.tie_break != "variant_id_ascending":
             raise ForagerMatrixManifestError("tie_break must be 'variant_id_ascending'")
@@ -484,9 +470,7 @@ class ForagerMatrixManifest:
             self.tuning_selection is not None
             and type(self.tuning_selection) is not ForagerTuningSelection
         ):
-            raise TypeError(
-                "tuning_selection must be a ForagerTuningSelection or None"
-            )
+            raise TypeError("tuning_selection must be a ForagerTuningSelection or None")
 
     def to_dict(self) -> dict[str, Any]:
         """Return the normalized scientific configuration.
@@ -545,8 +529,7 @@ class _BatchPlan:
     @property
     def reward_sidecar_paths(self) -> tuple[str, ...]:
         return tuple(
-            f"reward-traces/{self.variant_id}/batch-{self.batch_index:05d}/"
-            f"seed-{seed}.npz"
+            f"reward-traces/{self.variant_id}/batch-{self.batch_index:05d}/seed-{seed}.npz"
             for seed in self.seeds
         )
 
@@ -592,9 +575,7 @@ class _NpzMetricTraceSink:
             self._final_path,
         ):
             if candidate.exists() or candidate.is_symlink():
-                raise ForagerMatrixStateError(
-                    "metric trace exchange path already exists"
-                )
+                raise ForagerMatrixStateError("metric trace exchange path already exists")
         self._rewards: np.memmap | None = None
         self._regrets: np.memmap | None = None
         try:
@@ -696,9 +677,7 @@ class _NpzMetricTraceSink:
         if self._finalized:
             raise ForagerMatrixStateError("metric trace sink was finalized twice")
         if self._offset != self._steps:
-            raise ForagerMatrixStateError(
-                "raw metric trace does not cover the declared horizon"
-            )
+            raise ForagerMatrixStateError("raw metric trace does not cover the declared horizon")
         try:
             self._close_memmap(self._rewards)
             self._rewards = None
@@ -814,21 +793,23 @@ def _reject_duplicate_object_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any
     result: dict[str, Any] = {}
     for key, value in pairs:
         if key in result:
-            raise ForagerMatrixManifestError(f"duplicate JSON object key {key!r}")
+            host_key = _require_exact_str("key", key)
+            if host_key in result:
+                raise ForagerMatrixManifestError(f"duplicate JSON object key '{host_key}'")
+            result[host_key] = value
         result[key] = value
     return result
 
 
 def _reject_nonfinite_json(token: str) -> Any:
-    raise ForagerMatrixManifestError(f"non-finite JSON number {token!r} is not allowed")
+    host_token = _require_exact_str("token", token)
+    raise ForagerMatrixManifestError(f"non-finite JSON number '{host_token}' is not allowed")
 
 
 def _parse_finite_json_float(token: str) -> float:
     parsed = float(token)
     if not math.isfinite(parsed):
-        raise ForagerMatrixManifestError(
-            f"non-finite JSON number {token!r} is not allowed"
-        )
+        raise ForagerMatrixManifestError(f"non-finite JSON number '{token}' is not allowed")
     return parsed
 
 
@@ -840,13 +821,9 @@ def _validate_json_complexity(value: Any, *, description: str) -> None:
         item, depth = pending.pop()
         nodes += 1
         if nodes > _MAX_JSON_NODES:
-            raise ForagerMatrixManifestError(
-                f"{description} exceeds the JSON node limit"
-            )
+            raise ForagerMatrixManifestError(f"{description} exceeds the JSON node limit")
         if depth > _MAX_JSON_NESTING:
-            raise ForagerMatrixManifestError(
-                f"{description} exceeds the JSON nesting limit"
-            )
+            raise ForagerMatrixManifestError(f"{description} exceeds the JSON nesting limit")
         if isinstance(item, Mapping):
             pending.extend((child, depth + 1) for child in item.values())
         elif isinstance(item, list):
@@ -893,6 +870,14 @@ def _require_exact_keys(
         raise ForagerMatrixManifestError(f"{path} is missing required keys: {', '.join(missing)}")
 
 
+def _require_exact_str(name: object, value: object) -> str:
+    if type(name) is not str:
+        raise ValueError("name must be an exact string")
+    if type(value) is not str:
+        raise ValueError(f"{name} must be an exact string")
+    return value
+
+
 def _require_string(value: Any, path: str) -> str:
     if type(value) is not str:
         raise ForagerMatrixManifestError(f"{path} must be an exact string")
@@ -921,9 +906,7 @@ def _require_seed_list(value: Any, path: str) -> tuple[int, ...]:
     if not value:
         raise ForagerMatrixManifestError(f"{path} must not be empty")
     if len(value) > _MAX_SEED_COUNT:
-        raise ForagerMatrixManifestError(
-            f"{path} must contain at most {_MAX_SEED_COUNT} seeds"
-        )
+        raise ForagerMatrixManifestError(f"{path} must contain at most {_MAX_SEED_COUNT} seeds")
     result: list[int] = []
     for index, seed in enumerate(value):
         if type(seed) is not int:
@@ -1058,8 +1041,7 @@ def _safe_source_member_path(value: Any, path: str) -> str:
         or "\x00" in text
         or candidate.is_absolute()
         or any(
-            part in ("", ".", "..") or component.fullmatch(part) is None
-            for part in candidate.parts
+            part in ("", ".", "..") or component.fullmatch(part) is None for part in candidate.parts
         )
     ):
         raise ForagerMatrixStateError(f"{path} is not a safe source member path")
@@ -1105,9 +1087,7 @@ def _parse_tuning_rule(value: Any) -> ForagerTuningRule:
     confidence_value = payload["confidence"]
     try:
         normalized_confidence = (
-            float(confidence_value)
-            if type(confidence_value) in (int, float)
-            else math.nan
+            float(confidence_value) if type(confidence_value) in (int, float) else math.nan
         )
     except (OverflowError, ValueError):
         normalized_confidence = math.nan
@@ -1169,12 +1149,8 @@ def _rtu_persistent_product_elements(
     parameters_per_network = 2 * input_product + 2 * output_product
     eligibility_per_network = parameters_per_network
     sensitivities_per_network = 4 * input_product
-    taylor_per_network = (
-        sensitivities_per_network if config.rtrl_taylor_correction else 0
-    )
-    second_moment_per_network = (
-        parameters_per_network if config.adaptive_obgd else 0
-    )
+    taylor_per_network = sensitivities_per_network if config.rtrl_taylor_correction else 0
+    second_moment_per_network = parameters_per_network if config.adaptive_obgd else 0
     actor_and_critic = 2
     return actor_and_critic * (
         parameters_per_network
@@ -1208,7 +1184,7 @@ def _parse_variant(
     ):
         allowed_kinds.add(RTU_RTRL_VARIANT_KIND)
     if kind_value not in allowed_kinds:
-        raise ForagerMatrixManifestError(f"{path}.kind is unknown: {kind_value!r}")
+        raise ForagerMatrixManifestError(f"{path}.kind is unknown: '{kind_value}'")
     selection_group = _validate_variant_id(
         _require_string(payload["selection_group"], f"{path}.selection_group"),
         f"{path}.selection_group",
@@ -1243,13 +1219,8 @@ def _parse_variant(
     else:
         rtu_payload = _require_object(payload["config"], f"{path}.config")
         core_value = rtu_payload.get("core")
-        if (
-            schema_version == FORAGER_MATRIX_SCHEMA_VERSION_2_3
-            and isinstance(core_value, Mapping)
-        ):
-            adaptive_fields = sorted(
-                core_value.keys() & _RTU_ADAPTIVE_OBGD_FIELDS
-            )
+        if schema_version == FORAGER_MATRIX_SCHEMA_VERSION_2_3 and isinstance(core_value, Mapping):
+            adaptive_fields = sorted(core_value.keys() & _RTU_ADAPTIVE_OBGD_FIELDS)
             if adaptive_fields:
                 raise ForagerMatrixManifestError(
                     f"{path}.config.core fields {', '.join(adaptive_fields)} "
@@ -1340,14 +1311,12 @@ def parse_forager_matrix_manifest(
     )
     if schema_version in {"1.0", "2.0", "2.1"}:
         raise ForagerMatrixManifestError(
-            f"manifest schema {schema_version!r} is unsupported: migrate to "
+            f"manifest schema '{schema_version}' is unsupported: migrate to "
             f"{FORAGER_MATRIX_SCHEMA_VERSION} with explicit source execution, "
             "disjoint stage seed sets, and tuning-selection provenance"
         )
     if schema_version not in FORAGER_MATRIX_SCHEMA_VERSIONS:
-        raise ForagerMatrixManifestError(
-            "manifest.schema_version must be '2.2', '2.3', or '2.4'"
-        )
+        raise ForagerMatrixManifestError("manifest.schema_version must be '2.2', '2.3', or '2.4'")
     _require_exact_keys(
         payload,
         path="manifest",
@@ -1372,7 +1341,7 @@ def parse_forager_matrix_manifest(
 
     preset_value = _require_string(payload["preset"], "manifest.preset")
     if preset_value not in ("relearning", "field_of_view", "unending"):
-        raise ForagerMatrixManifestError(f"unknown Forager preset {preset_value!r}")
+        raise ForagerMatrixManifestError(f"unknown Forager preset '{preset_value}'")
     preset = cast(ForagerPreset, preset_value)
 
     stage_value = _require_string(payload["stage"], "manifest.stage")
@@ -1382,9 +1351,7 @@ def parse_forager_matrix_manifest(
 
     steps = _require_positive_int(payload["steps"], "manifest.steps")
     if steps > _MAX_MATRIX_STEPS:
-        raise ForagerMatrixManifestError(
-            f"manifest.steps must not exceed {_MAX_MATRIX_STEPS}"
-        )
+        raise ForagerMatrixManifestError(f"manifest.steps must not exceed {_MAX_MATRIX_STEPS}")
     seeds = _require_seed_list(payload["seeds"], "manifest.seeds")
     jax_chunk_size = _require_positive_int(
         payload["jax_chunk_size"],
@@ -1392,8 +1359,7 @@ def parse_forager_matrix_manifest(
     )
     if jax_chunk_size > steps or jax_chunk_size > _MAX_JAX_CHUNK_SIZE:
         raise ForagerMatrixManifestError(
-            "manifest.jax_chunk_size must not exceed manifest.steps or "
-            f"{_MAX_JAX_CHUNK_SIZE}"
+            f"manifest.jax_chunk_size must not exceed manifest.steps or {_MAX_JAX_CHUNK_SIZE}"
         )
     seed_batch_size = _require_positive_int(
         payload["seed_batch_size"],
@@ -1415,7 +1381,7 @@ def parse_forager_matrix_manifest(
     if source_execution_mode_value not in SOURCE_EXECUTION_MODES:
         raise ForagerMatrixManifestError(
             "manifest.source_execution_mode must be "
-            f"{SNAPSHOT_SOURCE_EXECUTION_MODE!r} or {LIVE_SOURCE_EXECUTION_MODE!r}"
+            f"'{SNAPSHOT_SOURCE_EXECUTION_MODE}' or '{LIVE_SOURCE_EXECUTION_MODE}'"
         )
     source_execution_mode = cast(SourceExecutionMode, source_execution_mode_value)
     metric_evidence_mode_value = _require_string(
@@ -1427,8 +1393,7 @@ def parse_forager_matrix_manifest(
         "scalar_summary_unsealed",
     ):
         raise ForagerMatrixManifestError(
-            "manifest.metric_evidence_mode must be 'raw_reward_npz_v2' "
-            "or 'scalar_summary_unsealed'"
+            "manifest.metric_evidence_mode must be 'raw_reward_npz_v2' or 'scalar_summary_unsealed'"
         )
     metric_evidence_mode = cast(MetricEvidenceMode, metric_evidence_mode_value)
 
@@ -1505,8 +1470,7 @@ def parse_forager_matrix_manifest(
         )
     if (
         metric_evidence_mode == "raw_reward_npz_v2"
-        and seed_batch_size * steps * _RAW_TRACE_DTYPE.itemsize * 2
-        > _MAX_RAW_BATCH_ARRAY_BYTES
+        and seed_batch_size * steps * _RAW_TRACE_DTYPE.itemsize * 2 > _MAX_RAW_BATCH_ARRAY_BYTES
     ):
         raise ForagerMatrixManifestError(
             "manifest raw metric batch arrays exceed the bounded sidecar limit"
@@ -1530,8 +1494,7 @@ def parse_forager_matrix_manifest(
             )
             if (
                 len(variant.config.actor_hidden_sizes) > _MAX_HIDDEN_LAYER_COUNT
-                or len(variant.config.critic_hidden_sizes)
-                > _MAX_HIDDEN_LAYER_COUNT
+                or len(variant.config.critic_hidden_sizes) > _MAX_HIDDEN_LAYER_COUNT
             ):
                 raise ForagerMatrixManifestError(
                     f"manifest.variants.{variant_id}.config may contain at most "
@@ -1542,25 +1505,16 @@ def parse_forager_matrix_manifest(
                     f"manifest.variants.{variant_id}.config hidden widths must not "
                     f"exceed {_MAX_HIDDEN_WIDTH}"
                 )
-            if (
-                variant.config.recurrent_hidden_size
-                > _MAX_RECURRENT_HIDDEN_SIZE
-            ):
+            if variant.config.recurrent_hidden_size > _MAX_RECURRENT_HIDDEN_SIZE:
                 raise ForagerMatrixManifestError(
                     f"manifest.variants.{variant_id}.config recurrent_hidden_size "
                     f"must not exceed {_MAX_RECURRENT_HIDDEN_SIZE}"
                 )
-            if (
-                sum(widths) + variant.config.recurrent_hidden_size
-                > _MAX_TOTAL_HIDDEN_UNITS
-            ):
+            if sum(widths) + variant.config.recurrent_hidden_size > _MAX_TOTAL_HIDDEN_UNITS:
                 raise ForagerMatrixManifestError(
                     f"manifest.variants.{variant_id}.config has too many hidden units"
                 )
-            if (
-                len(variant.config.features.reward_trace_decays)
-                > _MAX_REWARD_TRACE_COUNT
-            ):
+            if len(variant.config.features.reward_trace_decays) > _MAX_REWARD_TRACE_COUNT:
                 raise ForagerMatrixManifestError(
                     f"manifest.variants.{variant_id}.config.features may contain "
                     f"at most {_MAX_REWARD_TRACE_COUNT} reward trace decays"
@@ -1580,9 +1534,7 @@ def parse_forager_matrix_manifest(
                         variant.config.critic_hidden_sizes[1:],
                     )
                 )
-                + 3
-                * variant.config.recurrent_hidden_size
-                * variant.config.recurrent_hidden_size
+                + 3 * variant.config.recurrent_hidden_size * variant.config.recurrent_hidden_size
             )
             if parameter_products > _MAX_NETWORK_PARAMETER_PRODUCTS:
                 raise ForagerMatrixManifestError(
@@ -1601,10 +1553,7 @@ def parse_forager_matrix_manifest(
                 raise ForagerMatrixManifestError(
                     f"manifest.variants.{variant_id}.config.core has too many hidden units"
                 )
-            if (
-                len(variant.config.features.reward_trace_decays)
-                > _MAX_REWARD_TRACE_COUNT
-            ):
+            if len(variant.config.features.reward_trace_decays) > _MAX_REWARD_TRACE_COUNT:
                 raise ForagerMatrixManifestError(
                     f"manifest.variants.{variant_id}.config.features may contain "
                     f"at most {_MAX_REWARD_TRACE_COUNT} reward trace decays"
@@ -1612,8 +1561,8 @@ def parse_forager_matrix_manifest(
             # Bound the exact dominant persistent product-shaped leaves in the
             # largest compiled seed batch, including the optional Taylor bank.
             maximum_batch_lanes = min(seed_batch_size, len(seeds))
-            persistent_product_elements = (
-                maximum_batch_lanes * _rtu_persistent_product_elements(core)
+            persistent_product_elements = maximum_batch_lanes * _rtu_persistent_product_elements(
+                core
             )
             if persistent_product_elements > _MAX_NETWORK_PARAMETER_PRODUCTS:
                 raise ForagerMatrixManifestError(
@@ -1621,10 +1570,7 @@ def parse_forager_matrix_manifest(
                     "RTU persistent product-element limit"
                 )
         elif isinstance(variant.config, CausalMapForagerConfig) and (
-            any(
-                dimension > _MAX_CAUSAL_WORLD_DIMENSION
-                for dimension in variant.config.world_shape
-            )
+            any(dimension > _MAX_CAUSAL_WORLD_DIMENSION for dimension in variant.config.world_shape)
             or math.prod(variant.config.world_shape) > _MAX_CAUSAL_WORLD_CELLS
         ):
             raise ForagerMatrixManifestError(
@@ -1783,9 +1729,7 @@ def validate_verifier_issued_tuning_envelope(
     envelope's intended role in the evidence chain and what it must bind.
     """
     if not isinstance(expected_runtime_identity, EnvironmentRuntimeIdentity):
-        raise TypeError(
-            "expected_runtime_identity must be an EnvironmentRuntimeIdentity"
-        )
+        raise TypeError("expected_runtime_identity must be an EnvironmentRuntimeIdentity")
     envelope = _require_object(value, "trusted execution envelope")
     _validate_json_complexity(envelope, description="trusted execution envelope")
     if set(envelope) != {
@@ -1795,9 +1739,7 @@ def validate_verifier_issued_tuning_envelope(
         "signature",
         "signed_evidence",
     }:
-        raise ForagerMatrixManifestError(
-            "trusted execution envelope fields are invalid"
-        )
+        raise ForagerMatrixManifestError("trusted execution envelope fields are invalid")
     issuer = _require_string(envelope["issuer"], "trusted execution envelope.issuer")
     key_id = _require_string(envelope["key_id"], "trusted execution envelope.key_id")
     signature = _require_string(
@@ -1811,9 +1753,7 @@ def validate_verifier_issued_tuning_envelope(
         or authority_id.fullmatch(key_id) is None
         or len(signature) > 16_384
     ):
-        raise ForagerMatrixManifestError(
-            "trusted execution envelope authority identity is invalid"
-        )
+        raise ForagerMatrixManifestError("trusted execution envelope authority identity is invalid")
     evidence = _require_object(
         envelope["signed_evidence"],
         "trusted execution envelope.signed_evidence",
@@ -1833,9 +1773,7 @@ def validate_verifier_issued_tuning_envelope(
         "environment_rng_schedule_sha256",
     }
     if set(evidence) != evidence_keys:
-        raise ForagerMatrixManifestError(
-            "trusted execution envelope evidence fields are invalid"
-        )
+        raise ForagerMatrixManifestError("trusted execution envelope evidence fields are invalid")
 
     expected_digests = {
         "tuning_report_file_sha256": expected_tuning_report_file_sha256,
@@ -1853,13 +1791,10 @@ def validate_verifier_issued_tuning_envelope(
             or _SHA256.fullmatch(actual) is None
             or not hmac.compare_digest(actual, expected)
         ):
-            raise ForagerMatrixManifestError(
-                f"trusted execution envelope {name} does not match"
-            )
+            raise ForagerMatrixManifestError(f"trusted execution envelope {name} does not match")
     if (
         evidence["executor_kind"] != "oci"
-        or evidence["source_mount_mode"]
-        != "read_only_content_addressed_mount"
+        or evidence["source_mount_mode"] != "read_only_content_addressed_mount"
     ):
         raise ForagerMatrixManifestError(
             "trusted execution envelope does not describe the required OCI executor"
@@ -2027,9 +1962,7 @@ class _BoundDirectory:
                 or (child.st_dev, child.st_ino) != expected
                 or (named.st_dev, named.st_ino) != expected
             ):
-                raise ForagerMatrixStateError(
-                    "output path ancestor was replaced while locked"
-                )
+                raise ForagerMatrixStateError("output path ancestor was replaced while locked")
         if self.lock_identity is not None:
             try:
                 named_lock = os.stat(
@@ -2045,14 +1978,12 @@ class _BoundDirectory:
                 not stat.S_ISREG(named_lock.st_mode)
                 or (named_lock.st_dev, named_lock.st_ino) != self.lock_identity
             ):
-                raise ForagerMatrixStateError(
-                    "output lock was replaced while held"
-                )
+                raise ForagerMatrixStateError("output lock was replaced while held")
 
     def close(self) -> None:
-        descriptors = {
-            binding.parent_descriptor for binding in self.bindings
-        } | {binding.child_descriptor for binding in self.bindings}
+        descriptors = {binding.parent_descriptor for binding in self.bindings} | {
+            binding.child_descriptor for binding in self.bindings
+        }
         if not descriptors:
             descriptors.add(self.root_descriptor)
         for descriptor in sorted(descriptors, reverse=True):
@@ -2101,9 +2032,7 @@ def _open_bound_directory(path: Path, *, create: bool) -> _BoundDirectory:
             descriptors.append(child_descriptor)
             opened = os.fstat(child_descriptor)
             if not stat.S_ISDIR(opened.st_mode):
-                raise ForagerMatrixStateError(
-                    "output path contains a non-directory component"
-                )
+                raise ForagerMatrixStateError("output path contains a non-directory component")
             bindings.append(
                 _BoundPathComponent(
                     parent_descriptor=current_descriptor,
@@ -2145,7 +2074,7 @@ def _safe_artifact_parts(relative_path: str) -> tuple[str, ...]:
         or "\\" in relative_path
         or any(part in ("", ".", "..") for part in candidate.parts)
     ):
-        raise ForagerMatrixStateError(f"unsafe artifact path {relative_path!r}")
+        raise ForagerMatrixStateError(f"unsafe artifact path '{relative_path}'")
     return candidate.parts
 
 
@@ -2237,9 +2166,7 @@ def _read_regular_at(
                 f"{description} is not a private, owned, singly linked regular file"
             )
         if maximum_bytes is not None and before.st_size > maximum_bytes:
-            raise ForagerMatrixStateError(
-                f"{description} exceeds {maximum_bytes} bytes"
-            )
+            raise ForagerMatrixStateError(f"{description} exceeds {maximum_bytes} bytes")
         chunks: list[bytes] = []
         byte_count = 0
         while True:
@@ -2248,9 +2175,7 @@ def _read_regular_at(
                 break
             byte_count += len(chunk)
             if maximum_bytes is not None and byte_count > maximum_bytes:
-                raise ForagerMatrixStateError(
-                    f"{description} exceeds {maximum_bytes} bytes"
-                )
+                raise ForagerMatrixStateError(f"{description} exceeds {maximum_bytes} bytes")
             chunks.append(chunk)
         after = os.fstat(descriptor)
         stable = ("st_dev", "st_ino", "st_size", "st_mtime_ns", "st_ctime_ns")
@@ -2326,9 +2251,7 @@ def _atomic_create_bound_bytes(
         descriptor: int | None = None
         try:
             for attempt in range(100):
-                candidate = (
-                    f".{target}.{os.getpid()}.{time.time_ns()}.{attempt}.tmp"
-                )
+                candidate = f".{target}.{os.getpid()}.{time.time_ns()}.{attempt}.tmp"
                 try:
                     descriptor = os.open(
                         candidate,
@@ -2349,9 +2272,7 @@ def _atomic_create_bound_bytes(
                 while view:
                     written = os.write(descriptor, view)
                     if written <= 0:  # pragma: no cover
-                        raise ForagerMatrixStateError(
-                            f"short write while creating {relative_path}"
-                        )
+                        raise ForagerMatrixStateError(f"short write while creating {relative_path}")
                     view = view[written:]
                 os.fsync(descriptor)
             finally:
@@ -2387,9 +2308,7 @@ def _open_bound_regular_descriptor(
 ) -> Iterator[int]:
     parts = _safe_artifact_parts(relative_path)
     with _open_beneath(root, parts[:-1], create=False) as parent_descriptor:
-        flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(
-            os, "O_NOFOLLOW", 0
-        )
+        flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
         try:
             named = os.stat(
                 parts[-1],
@@ -2454,9 +2373,7 @@ def _publish_or_match_bound_file(
             )
         return
 
-    source_flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(
-        os, "O_NOFOLLOW", 0
-    )
+    source_flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
     source_descriptor = os.open(source, source_flags)
     try:
         source_before = os.fstat(source_descriptor)
@@ -2484,9 +2401,7 @@ def _publish_or_match_bound_file(
             destination_descriptor: int | None = None
             try:
                 for attempt in range(100):
-                    candidate = (
-                        f".{target}.{os.getpid()}.{time.time_ns()}.{attempt}.tmp"
-                    )
+                    candidate = f".{target}.{os.getpid()}.{time.time_ns()}.{attempt}.tmp"
                     try:
                         destination_descriptor = os.open(
                             candidate,
@@ -2519,10 +2434,7 @@ def _publish_or_match_bound_file(
                                 f"short write while creating {relative_path}"
                             )
                         view = view[written:]
-                if (
-                    digest.hexdigest() != expected_sha256
-                    or byte_size != expected_size
-                ):
+                if digest.hexdigest() != expected_sha256 or byte_size != expected_size:
                     raise ForagerMatrixStateError(
                         "metric trace exchange file changed before publication"
                     )
@@ -2553,13 +2465,8 @@ def _publish_or_match_bound_file(
                         os.unlink(temporary_name, dir_fd=parent_descriptor)
         source_after = os.fstat(source_descriptor)
         stable = ("st_dev", "st_ino", "st_size", "st_mtime_ns", "st_ctime_ns")
-        if any(
-            getattr(source_before, key) != getattr(source_after, key)
-            for key in stable
-        ):
-            raise ForagerMatrixStateError(
-                "metric trace exchange file changed during publication"
-            )
+        if any(getattr(source_before, key) != getattr(source_after, key) for key in stable):
+            raise ForagerMatrixStateError("metric trace exchange file changed during publication")
     finally:
         os.close(source_descriptor)
     root.assert_bound()
@@ -2608,9 +2515,7 @@ def _read_regular_file_bytes(
         ):
             raise ForagerMatrixStateError(f"regular file changed before read: {path}")
         if maximum_bytes is not None and before.st_size > maximum_bytes:
-            raise ForagerMatrixStateError(
-                f"regular file exceeds {maximum_bytes} bytes: {path}"
-            )
+            raise ForagerMatrixStateError(f"regular file exceeds {maximum_bytes} bytes: {path}")
         chunks: list[bytes] = []
         byte_count = 0
         while True:
@@ -2619,9 +2524,7 @@ def _read_regular_file_bytes(
                 break
             byte_count += len(chunk)
             if maximum_bytes is not None and byte_count > maximum_bytes:
-                raise ForagerMatrixStateError(
-                    f"regular file exceeds {maximum_bytes} bytes: {path}"
-                )
+                raise ForagerMatrixStateError(f"regular file exceeds {maximum_bytes} bytes: {path}")
             chunks.append(chunk)
         after = os.fstat(descriptor)
         stable_fields = ("st_dev", "st_ino", "st_size", "st_mtime_ns", "st_ctime_ns")
@@ -2755,9 +2658,7 @@ def _build_source_snapshot() -> _SourceSnapshot:
             archive.addfile(info, stream)
     archive_bytes = archive_buffer.getvalue()
     if len(archive_bytes) > _MAX_SOURCE_ARCHIVE_BYTES:
-        raise ForagerMatrixStateError(
-            f"source snapshot exceeds {_MAX_SOURCE_ARCHIVE_BYTES} bytes"
-        )
+        raise ForagerMatrixStateError(f"source snapshot exceeds {_MAX_SOURCE_ARCHIVE_BYTES} bytes")
     return _SourceSnapshot(
         archive_bytes=archive_bytes,
         archive_sha256=hashlib.sha256(archive_bytes).hexdigest(),
@@ -2842,9 +2743,7 @@ def _validate_source_snapshot_bytes(
         if type(size) is not int or size < 0:
             raise ForagerMatrixStateError(f"{description} inventory size is invalid")
         if size > _MAX_SOURCE_FILE_BYTES:
-            raise ForagerMatrixStateError(
-                f"{description} inventory file exceeds the size limit"
-            )
+            raise ForagerMatrixStateError(f"{description} inventory file exceeds the size limit")
         if type(digest) is not str or _SHA256.fullmatch(digest) is None:
             raise ForagerMatrixStateError(f"{description} inventory digest is invalid")
         expected_names.append(path)
@@ -2873,9 +2772,7 @@ def _validate_source_snapshot_bytes(
                 )
             inventory_handle = archive.extractfile(members[0])
             if inventory_handle is None or inventory_handle.read() != inventory_bytes:
-                raise ForagerMatrixStateError(
-                    f"{description} embedded inventory differs"
-                )
+                raise ForagerMatrixStateError(f"{description} embedded inventory differs")
             for member, (path, size, digest) in zip(
                 members[1:],
                 normalized_files,
@@ -3059,9 +2956,7 @@ def _matrix_rng_contract(
     schema_version: str = FORAGER_MATRIX_SCHEMA_VERSION,
 ) -> dict[str, Any]:
     rng_contract = forager_rng_contract()
-    rng_contract["agent_isolation"]["causal_map"] = dict(
-        _FROZEN_CAUSAL_MAP_MATRIX_RNG_CONTRACT
-    )
+    rng_contract["agent_isolation"]["causal_map"] = dict(_FROZEN_CAUSAL_MAP_MATRIX_RNG_CONTRACT)
     if schema_version in (
         FORAGER_MATRIX_SCHEMA_VERSION_2_3,
         FORAGER_MATRIX_SCHEMA_VERSION_2_4,
@@ -3077,7 +2972,7 @@ def _matrix_rng_contract(
             )
         )
     elif schema_version != FORAGER_MATRIX_SCHEMA_VERSION:
-        raise ForagerMatrixError(f"unsupported matrix schema {schema_version!r}")
+        raise ForagerMatrixError(f"unsupported matrix schema '{schema_version}'")
     return rng_contract
 
 
@@ -3224,7 +3119,7 @@ def _preflight_manifest(
     """Validate every kind/config/benchmark combination before persistent work."""
     if manifest.schema_version not in FORAGER_MATRIX_SCHEMA_VERSIONS:
         raise ForagerMatrixManifestError(
-            f"unsupported programmatic matrix schema {manifest.schema_version!r}"
+            f"unsupported programmatic matrix schema '{manifest.schema_version}'"
         )
     for variant_id, variant in manifest.variants.items():
         try:
@@ -3236,30 +3131,24 @@ def _preflight_manifest(
                     FORAGER_MATRIX_SCHEMA_VERSION_2_3,
                     FORAGER_MATRIX_SCHEMA_VERSION_2_4,
                 ):
-                    raise ValueError(
-                        "alberta_rtu_rtrl requires matrix schema '2.3' or '2.4'"
-                    )
+                    raise ValueError("alberta_rtu_rtrl requires matrix schema '2.3' or '2.4'")
                 if not isinstance(variant.config, RTURTRLForagerConfig):
                     raise TypeError("kind/config mismatch")
                 core = variant.config.core
                 if manifest.schema_version == FORAGER_MATRIX_SCHEMA_VERSION_2_3 and (
-                    core.adaptive_obgd
-                    or core.beta2 != 0.999
-                    or core.epsilon != 1e-8
+                    core.adaptive_obgd or core.beta2 != 0.999 or core.epsilon != 1e-8
                 ):
-                    raise ValueError(
-                        "adaptive ObGD configuration requires matrix schema '2.4'"
-                    )
+                    raise ValueError("adaptive ObGD configuration requires matrix schema '2.4'")
             elif variant.kind == CAUSAL_MAP_VARIANT_KIND:
                 if not isinstance(variant.config, CausalMapForagerConfig):
                     raise TypeError("kind/config mismatch")
                 _validate_causal_benchmark_contract(variant.config, benchmark)
             else:  # pragma: no cover - parser guard
-                raise ValueError(f"unknown kind {variant.kind!r}")
+                raise ValueError(f"unknown kind '{variant.kind}'")
         except (TypeError, ValueError) as exc:
             raise ForagerMatrixManifestError(
                 f"manifest.variants.{variant_id} is incompatible with the "
-                f"{manifest.preset!r} benchmark: {exc}"
+                f"'{manifest.preset}' benchmark: {exc}"
             ) from exc
 
 
@@ -3366,9 +3255,7 @@ def _verify_extracted_source_snapshot(
         or root_metadata.st_uid != os.geteuid()
         or stat.S_IMODE(root_metadata.st_mode) != 0o555
     ):
-        raise ForagerMatrixStateError(
-            "snapshot extraction root must be owned and read-only"
-        )
+        raise ForagerMatrixStateError("snapshot extraction root must be owned and read-only")
 
     actual_files: set[str] = set()
     actual_directories: set[str] = set()
@@ -3388,7 +3275,7 @@ def _verify_extracted_source_snapshot(
                 or stat.S_IMODE(metadata.st_mode) != 0o555
             ):
                 raise ForagerMatrixStateError(
-                    f"snapshot extraction directory {relative!r} is not canonical"
+                    f"snapshot extraction directory '{relative}' is not canonical"
                 )
             actual_directories.add(relative)
         for name in sorted(file_names):
@@ -3402,21 +3289,19 @@ def _verify_extracted_source_snapshot(
                 or stat.S_IMODE(metadata.st_mode) != 0o444
             ):
                 raise ForagerMatrixStateError(
-                    f"snapshot extraction file {relative!r} is not canonical"
+                    f"snapshot extraction file '{relative}' is not canonical"
                 )
             expected = expected_files.get(relative)
             if expected is None:
                 raise ForagerMatrixStateError(
-                    f"snapshot extraction contains unexpected file {relative!r}"
+                    f"snapshot extraction contains unexpected file '{relative}'"
                 )
             data = _read_regular_file_bytes(
                 child,
                 maximum_bytes=_MAX_SOURCE_FILE_BYTES,
             )
             if (len(data), hashlib.sha256(data).hexdigest()) != expected:
-                raise ForagerMatrixStateError(
-                    f"snapshot extraction file {relative!r} changed"
-                )
+                raise ForagerMatrixStateError(f"snapshot extraction file '{relative}' changed")
             actual_files.add(relative)
     if actual_files != set(expected_files) or actual_directories != expected_directories:
         raise ForagerMatrixStateError(
@@ -3436,7 +3321,7 @@ def _assert_framework_modules_from_repo_root() -> None:
             Path(module_file).resolve(strict=True).relative_to(expected)
         except (OSError, ValueError) as exc:
             raise ForagerMatrixStateError(
-                f"immutable worker imported {name!r} outside its source snapshot"
+                f"immutable worker imported '{name}' outside its source snapshot"
             ) from exc
 
 
@@ -3579,9 +3464,7 @@ def _run_immutable_batch_worker(
     worker_environment = _snapshot_worker_environment_contract()
     for name in cast(list[str], worker_environment["removed"]):
         environment.pop(name, None)
-    environment.update(
-        cast(dict[str, str], worker_environment["overrides"])
-    )
+    environment.update(cast(dict[str, str], worker_environment["overrides"]))
     with tempfile.TemporaryFile() as stdout_file:
         with tempfile.TemporaryFile() as stderr_file:
             completed = subprocess.run(
@@ -3686,9 +3569,7 @@ def _validate_exchange_inventory(
             or metadata.st_size < 1
             or metadata.st_size > maximum_size
         ):
-            raise ForagerMatrixStateError(
-                f"metric exchange entry {entry.name!r} is unsafe"
-            )
+            raise ForagerMatrixStateError(f"metric exchange entry '{entry.name}' is unsafe")
 
 
 def _resolve_tuning_report_path(manifest: ForagerMatrixManifest) -> Path:
@@ -3761,7 +3642,7 @@ def _validate_report_variants_for_selection(
         )
         if set(entry) != expected_entry_keys:
             raise ForagerMatrixManifestError(
-                f"referenced variant {variant_id!r} has unknown or missing fields"
+                f"referenced variant '{variant_id}' has unknown or missing fields"
             )
         if (
             entry["kind"] != variant.kind
@@ -3772,7 +3653,7 @@ def _validate_report_variants_for_selection(
             or entry["seeds"] != list(manifest.seeds)
         ):
             raise ForagerMatrixManifestError(
-                f"referenced variant {variant_id!r} does not match matrix_config"
+                f"referenced variant '{variant_id}' does not match matrix_config"
             )
         summary = _require_object(
             entry["summary"],
@@ -3780,7 +3661,7 @@ def _validate_report_variants_for_selection(
         )
         if set(summary) != expected_summary_keys:
             raise ForagerMatrixManifestError(
-                f"referenced variant {variant_id!r} summary is malformed"
+                f"referenced variant '{variant_id}' summary is malformed"
             )
         rule = manifest.selection_rule
         if (
@@ -3793,7 +3674,7 @@ def _validate_report_variants_for_selection(
             or summary["bootstrap_seed"] != rule.bootstrap_seed
         ):
             raise ForagerMatrixManifestError(
-                f"referenced variant {variant_id!r} summary is not bound to its rule"
+                f"referenced variant '{variant_id}' summary is not bound to its rule"
             )
         for name in ("mean", "ci_low", "ci_high"):
             try:
@@ -3807,7 +3688,7 @@ def _validate_report_variants_for_selection(
         ci_high = float(summary["ci_high"])
         if ci_low > ci_high:
             raise ForagerMatrixManifestError(
-                f"referenced variant {variant_id!r} has an invalid confidence interval"
+                f"referenced variant '{variant_id}' has an invalid confidence interval"
             )
         validated[variant_id] = entry
     return MappingProxyType(validated)
@@ -3828,9 +3709,7 @@ def _validate_tuning_artifact_chain(
     root = _open_bound_directory(report_path.parent, create=False)
     try:
         if report_path.name != FINAL_REPORT_FILENAME:
-            raise ForagerMatrixStateError(
-                f"tuning report must be named {FINAL_REPORT_FILENAME!r}"
-            )
+            raise ForagerMatrixStateError(f"tuning report must be named '{FINAL_REPORT_FILENAME}'")
         plan = _batch_plan(tuning_manifest)
         _validate_output_inventory(
             root,
@@ -3844,9 +3723,7 @@ def _validate_tuning_artifact_chain(
             description="referenced tuning report",
         )
         if bound_report != report:
-            raise ForagerMatrixStateError(
-                "referenced tuning report changed during validation"
-            )
+            raise ForagerMatrixStateError("referenced tuning report changed during validation")
         execution = _load_bound_artifact(
             root,
             EXECUTION_MANIFEST_FILENAME,
@@ -3997,9 +3874,7 @@ def _validate_tuning_reference(
             f"referenced tuning report matrix_config is invalid: {exc}"
         ) from exc
     if tuning_manifest.schema_version != manifest.schema_version:
-        raise ForagerMatrixManifestError(
-            "referenced tuning report uses a different matrix schema"
-        )
+        raise ForagerMatrixManifestError("referenced tuning report uses a different matrix schema")
     if matrix_config.get("stage") != "tuning":
         raise ForagerMatrixManifestError("referenced report is not a tuning-stage report")
     if matrix_config.get("preset") != manifest.preset:
@@ -4017,13 +3892,11 @@ def _validate_tuning_reference(
             "evaluation selection rule does not match the referenced tuning report"
         )
     try:
-        tuning_variants, tuning_execution, recomputed_protocol = (
-            _validate_tuning_artifact_chain(
-                report_path=report_path,
-                report=report,
-                tuning_manifest=tuning_manifest,
-                evaluation_context=evaluation_context,
-            )
+        tuning_variants, tuning_execution, recomputed_protocol = _validate_tuning_artifact_chain(
+            report_path=report_path,
+            report=report,
+            tuning_manifest=tuning_manifest,
+            evaluation_context=evaluation_context,
         )
     except ForagerMatrixStateError as exc:
         raise ForagerMatrixManifestError(
@@ -4051,9 +3924,7 @@ def _validate_tuning_reference(
     )
     selected_details: dict[str, Any] = {}
     expected_groups = set(groups)
-    evaluation_groups = {
-        variant.selection_group for variant in manifest.variants.values()
-    }
+    evaluation_groups = {variant.selection_group for variant in manifest.variants.values()}
     if evaluation_groups != expected_groups:
         raise ForagerMatrixManifestError(
             "evaluation variants must cover every tuning selection group exactly"
@@ -4062,16 +3933,12 @@ def _validate_tuning_reference(
         raise ForagerMatrixManifestError(
             "evaluation must contain exactly one selected winner per selection group"
         )
-    if len(set(selection.selected_variants.values())) != len(
-        selection.selected_variants
-    ):
-        raise ForagerMatrixManifestError(
-            "evaluation tuning selections must be one-to-one"
-        )
+    if len(set(selection.selected_variants.values())) != len(selection.selected_variants):
+        raise ForagerMatrixManifestError("evaluation tuning selections must be one-to-one")
     for evaluation_id, tuning_id in selection.selected_variants.items():
         if tuning_id not in tuning_variants:
             raise ForagerMatrixManifestError(
-                f"selected tuning variant {tuning_id!r} is absent from the tuning report"
+                f"selected tuning variant '{tuning_id}' is absent from the tuning report"
             )
         tuning_entry = _require_object(
             tuning_variants[tuning_id],
@@ -4084,23 +3951,23 @@ def _validate_tuning_reference(
         )
         if group_entry.get("selected_variant_id") != tuning_id:
             raise ForagerMatrixManifestError(
-                f"selected tuning variant {tuning_id!r} is not the declared "
-                f"top-ranked winner of group {evaluation_variant.selection_group!r}"
+                f"selected tuning variant '{tuning_id}' is not the declared "
+                f"top-ranked winner of group '{evaluation_variant.selection_group}'"
             )
         if tuning_entry.get("selection_group") != evaluation_variant.selection_group:
             raise ForagerMatrixManifestError(
-                f"evaluation variant {evaluation_id!r} uses a different selection group"
+                f"evaluation variant '{evaluation_id}' uses a different selection group"
             )
         if tuning_entry.get("kind") != evaluation_variant.kind:
             raise ForagerMatrixManifestError(
-                f"evaluation variant {evaluation_id!r} changes the selected agent kind"
+                f"evaluation variant '{evaluation_id}' changes the selected agent kind"
             )
         tuning_hash = tuning_entry.get("config_sha256")
         evaluation_hash = evaluation_variant.config_sha256
         if tuning_hash != evaluation_hash:
             raise ForagerMatrixManifestError(
-                f"evaluation variant {evaluation_id!r} does not match selected "
-                f"tuning variant {tuning_id!r}"
+                f"evaluation variant '{evaluation_id}' does not match selected "
+                f"tuning variant '{tuning_id}'"
             )
         selected_details[evaluation_id] = {
             "tuning_variant_id": tuning_id,
@@ -4127,12 +3994,13 @@ def _validate_tuning_reference(
     raise ForagerMatrixManifestError(
         f"schema {manifest.schema_version} host/snapshot tuning evidence cannot authorize an "
         "evaluation. A future OCI evaluation adapter must supply the "
-        f"{TRUSTED_EXECUTION_ENVELOPE_ADAPTER_FIELD!r} through "
+        f"'{TRUSTED_EXECUTION_ENVELOPE_ADAPTER_FIELD}' through "
         "validate_verifier_issued_tuning_envelope(), with an external verifier "
         "binding the tuning report, raw evidence, source digest, runtime profile "
         "identity, and environment RNG schedule. Bare manifest declarations are "
         "never trusted."
     )
+
 
 def _protocol_conformance(
     manifest: ForagerMatrixManifest,
@@ -4157,14 +4025,10 @@ def _protocol_conformance(
         )
     horizon_conformant = manifest.steps == expected_steps
     seed_set_conformant = manifest.seeds == expected_seeds
-    declared_disjoint = not bool(
-        set(manifest.tuning_seeds) & set(manifest.evaluation_seeds)
-    )
+    declared_disjoint = not bool(set(manifest.tuning_seeds) & set(manifest.evaluation_seeds))
     metric_conformant = manifest.selection_rule.metric == protocol.primary_metric
     direction_conformant = manifest.selection_rule.direction == "maximize"
-    statistic_conformant = (
-        manifest.selection_rule.statistic == _PAPER_SELECTION_STATISTIC
-    )
+    statistic_conformant = manifest.selection_rule.statistic == _PAPER_SELECTION_STATISTIC
     confidence_conformant = math.isclose(
         manifest.selection_rule.confidence,
         protocol.confidence,
@@ -4172,27 +4036,16 @@ def _protocol_conformance(
         abs_tol=0.0,
     )
     bootstrap_resamples_conformant = (
-        manifest.selection_rule.bootstrap_resamples
-        == _PAPER_BOOTSTRAP_RESAMPLES
+        manifest.selection_rule.bootstrap_resamples == _PAPER_BOOTSTRAP_RESAMPLES
     )
-    bootstrap_seed_conformant = (
-        manifest.selection_rule.bootstrap_seed == _PAPER_BOOTSTRAP_SEED
-    )
-    tie_break_conformant = (
-        manifest.selection_rule.tie_break == _PAPER_TIE_BREAK
-    )
+    bootstrap_seed_conformant = manifest.selection_rule.bootstrap_seed == _PAPER_BOOTSTRAP_SEED
+    tie_break_conformant = manifest.selection_rule.tie_break == _PAPER_TIE_BREAK
     strict_mode_conformant = manifest.mode == "strict"
-    snapshot_source_isolated = (
-        manifest.source_execution_mode == SNAPSHOT_SOURCE_EXECUTION_MODE
-    )
+    snapshot_source_isolated = manifest.source_execution_mode == SNAPSHOT_SOURCE_EXECUTION_MODE
     immutable_source_execution = False
     runtime_immutable = False
-    metric_evidence_conformant = (
-        manifest.metric_evidence_mode == "raw_reward_npz_v2"
-    )
-    rng_schedule_sha256 = _json_sha256(
-        _matrix_rng_contract(manifest.schema_version)
-    )
+    metric_evidence_conformant = manifest.metric_evidence_mode == "raw_reward_npz_v2"
+    rng_schedule_sha256 = _json_sha256(_matrix_rng_contract(manifest.schema_version))
     expected_rng_schedule_sha256 = (
         _EXPECTED_MATRIX_RNG_CONTRACT_SHA256_2_4
         if manifest.schema_version == FORAGER_MATRIX_SCHEMA_VERSION_2_4
@@ -4203,8 +4056,7 @@ def _protocol_conformance(
     environment_schedule_sha256 = environment_rng_schedule_sha256()
     rng_schedule_conformant = (
         rng_schedule_sha256 == expected_rng_schedule_sha256
-        and environment_schedule_sha256
-        == _EXPECTED_ENVIRONMENT_RNG_SCHEDULE_SHA256
+        and environment_schedule_sha256 == _EXPECTED_ENVIRONMENT_RNG_SCHEDULE_SHA256
     )
     continual_foragax_version = _distribution_version("continual-foragax")
     matched_foragax_runtime_conformant = continual_foragax_version == "0.55.0"
@@ -4282,9 +4134,7 @@ def _protocol_conformance(
         "rng_schedule_sha256": rng_schedule_sha256,
         "expected_rng_schedule_sha256": expected_rng_schedule_sha256,
         "environment_rng_schedule_sha256": environment_schedule_sha256,
-        "expected_environment_rng_schedule_sha256": (
-            _EXPECTED_ENVIRONMENT_RNG_SCHEDULE_SHA256
-        ),
+        "expected_environment_rng_schedule_sha256": (_EXPECTED_ENVIRONMENT_RNG_SCHEDULE_SHA256),
         "rng_schedule_conformant": rng_schedule_conformant,
         "continual_foragax_version": continual_foragax_version,
         "expected_matched_continual_foragax_version": "0.55.0",
@@ -4456,13 +4306,9 @@ def _validate_utc_timestamp(value: Any, path: str) -> datetime:
 
 def _validate_execution_manifest_structure(payload: Mapping[str, Any]) -> None:
     """Validate all self-contained execution-manifest identities and provenance."""
-    if payload.get("matrix_config_sha256") != _json_sha256(
-        payload.get("matrix_config")
-    ):
+    if payload.get("matrix_config_sha256") != _json_sha256(payload.get("matrix_config")):
         raise ForagerMatrixStateError("execution manifest matrix_config digest mismatch")
-    if payload.get("benchmark_config_sha256") != _json_sha256(
-        payload.get("benchmark_config")
-    ):
+    if payload.get("benchmark_config_sha256") != _json_sha256(payload.get("benchmark_config")):
         raise ForagerMatrixStateError("execution manifest benchmark_config digest mismatch")
     identity = _require_object(
         payload.get("execution_identity"),
@@ -4559,9 +4405,7 @@ def _validate_execution_manifest_structure(payload: Mapping[str, Any]) -> None:
         or runtime.get("runtime_profile_id") is not None
         or runtime.get("environment_runtime_profile_sha256") is not None
     ):
-        raise ForagerMatrixStateError(
-            "execution runtime immutability provenance mismatch"
-        )
+        raise ForagerMatrixStateError("execution runtime immutability provenance mismatch")
     if (
         _json_sha256(environment) != identity["environment_sha256"]
         or _json_sha256(packages) != identity["package_sha256"]
@@ -4580,13 +4424,11 @@ def _validate_execution_manifest_structure(payload: Mapping[str, Any]) -> None:
     if type(git["dirty"]) is not bool or not isinstance(git["status"], list):
         raise ForagerMatrixStateError("execution git provenance values are invalid")
     if git["commit"] is not None and (
-        type(git["commit"]) is not str
-        or _GIT_OBJECT.fullmatch(git["commit"]) is None
+        type(git["commit"]) is not str or _GIT_OBJECT.fullmatch(git["commit"]) is None
     ):
         raise ForagerMatrixStateError("execution git commit is invalid")
     if git["diff_sha256"] is not None and (
-        type(git["diff_sha256"]) is not str
-        or _SHA256.fullmatch(git["diff_sha256"]) is None
+        type(git["diff_sha256"]) is not str or _SHA256.fullmatch(git["diff_sha256"]) is None
     ):
         raise ForagerMatrixStateError("execution git diff_sha256 is invalid")
     if (
@@ -4665,10 +4507,7 @@ def _validate_trace_descriptor(
     ):
         raise ForagerMatrixStateError(f"{path} identity is invalid")
     if exchange:
-        if (
-            PurePosixPath(location).name != location
-            or location != f"seed-{expected_seed}.npz"
-        ):
+        if PurePosixPath(location).name != location or location != f"seed-{expected_seed}.npz":
             raise ForagerMatrixStateError(f"{path} exchange filename is invalid")
     else:
         _safe_artifact_parts(location)
@@ -4690,9 +4529,7 @@ def _validate_trace_descriptor(
             array,
             expected_array,
         ):
-            raise ForagerMatrixStateError(
-                f"{path}.arrays.{array_name} is invalid"
-            )
+            raise ForagerMatrixStateError(f"{path}.arrays.{array_name} is invalid")
     return descriptor
 
 
@@ -4728,21 +4565,10 @@ def _prepare_metric_evidence(
         try:
             source_metadata = source.stat(follow_symlinks=False)
         except OSError as exc:
-            raise ForagerMatrixStateError(
-                "raw metric trace exchange file is missing"
-            ) from exc
-        if (
-            not stat.S_ISREG(source_metadata.st_mode)
-            or source_metadata.st_size != trace["size"]
-        ):
-            raise ForagerMatrixStateError(
-                "raw metric trace exchange file identity is invalid"
-            )
-        sidecar = {
-            key: value
-            for key, value in trace.items()
-            if key != "exchange_file"
-        }
+            raise ForagerMatrixStateError("raw metric trace exchange file is missing") from exc
+        if not stat.S_ISREG(source_metadata.st_mode) or source_metadata.st_size != trace["size"]:
+            raise ForagerMatrixStateError("raw metric trace exchange file identity is invalid")
+        sidecar = {key: value for key, value in trace.items() if key != "exchange_file"}
         sidecar["path"] = output_path
         normalized_sidecar = _validate_trace_descriptor(
             sidecar,
@@ -4798,13 +4624,7 @@ def _canonical_npy_header(expected_steps: int) -> bytes:
 def _zlib_compress_bound(byte_count: int) -> int:
     # zlib's documented compressBound formula, with a small conservative
     # allowance because the archive uses a raw-DEFLATE stream.
-    return (
-        byte_count
-        + (byte_count >> 12)
-        + (byte_count >> 14)
-        + (byte_count >> 25)
-        + 64
-    )
+    return byte_count + (byte_count >> 12) + (byte_count >> 14) + (byte_count >> 25) + 64
 
 
 def _maximum_canonical_trace_size(expected_steps: int) -> int:
@@ -4849,9 +4669,7 @@ def _validate_canonical_zip_layout(
     if byte_size < _ZIP_END_RECORD.size:
         raise ForagerMatrixStateError("raw metric sidecar is too short")
     end_offset = byte_size - _ZIP_END_RECORD.size
-    end = _ZIP_END_RECORD.unpack(
-        _pread_exact(descriptor, _ZIP_END_RECORD.size, end_offset)
-    )
+    end = _ZIP_END_RECORD.unpack(_pread_exact(descriptor, _ZIP_END_RECORD.size, end_offset))
     (
         signature,
         disk_number,
@@ -5006,9 +4824,7 @@ def _validate_canonical_zip_layout(
             )
         central_cursor = name_offset + name_size
     if central_cursor != end_offset or central_cursor - central_offset != central_size:
-        raise ForagerMatrixStateError(
-            "raw metric sidecar central directory is non-canonical"
-        )
+        raise ForagerMatrixStateError("raw metric sidecar central directory is non-canonical")
     return MappingProxyType(data_locations)
 
 
@@ -5027,11 +4843,15 @@ def _validate_canonical_deflate_stream(
         nonlocal compared
         if not encoded:
             return
-        if compared + len(encoded) > compressed_size or _pread_exact(
-            descriptor,
-            len(encoded),
-            compressed_offset + compared,
-        ) != encoded:
+        if (
+            compared + len(encoded) > compressed_size
+            or _pread_exact(
+                descriptor,
+                len(encoded),
+                compressed_offset + compared,
+            )
+            != encoded
+        ):
             raise ForagerMatrixStateError(
                 f"raw metric member {info.filename} uses a non-canonical DEFLATE stream"
             )
@@ -5086,9 +4906,7 @@ def _recompute_trace_metrics(
                 expected_steps=expected_steps,
             )
             decay = float(run.metric_contract["ewm_decay"])
-            final_window = int(
-                run.metric_contract["final_window_steps_effective"]
-            )
+            final_window = int(run.metric_contract["final_window_steps_effective"])
             expected_curve_steps = set(run.curve_steps)
             curve_index = 0
             reward_window: deque[float] = deque()
@@ -5100,9 +4918,7 @@ def _recompute_trace_metrics(
             final_adjusted = math.nan
             fov_ema = 0.0
             fov_sample_count = (expected_steps - 1) // FORAGER_FOV_EMA_SUBSAMPLE + 1
-            fov_tail_start = int(
-                (1.0 - FORAGER_FOV_TAIL_FRACTION) * fov_sample_count
-            )
+            fov_tail_start = int((1.0 - FORAGER_FOV_TAIL_FRACTION) * fov_sample_count)
             fov_sample_index = 0
             fov_tail_total = 0.0
             fov_tail_count = 0
@@ -5130,12 +4946,8 @@ def _recompute_trace_metrics(
                     raise ForagerMatrixStateError(
                         "raw metric trace contains non-finite or malformed values"
                     )
-                total_reward += float(
-                    np.sum(rewards.astype(np.float64), dtype=np.float64)
-                )
-                regret_total += float(
-                    np.sum(regrets.astype(np.float64), dtype=np.float64)
-                )
+                total_reward += float(np.sum(rewards.astype(np.float64), dtype=np.float64))
+                regret_total += float(np.sum(regrets.astype(np.float64), dtype=np.float64))
                 for local_index in range(active):
                     step_index = completed + local_index
                     step_number = step_index + 1
@@ -5143,13 +4955,10 @@ def _recompute_trace_metrics(
                     regret = float(regrets[local_index])
                     adjusted_numerator = reward + decay * adjusted_numerator
                     adjusted_denominator = 1.0 + decay * adjusted_denominator
-                    final_adjusted = (
-                        adjusted_numerator / adjusted_denominator
-                    )
+                    final_adjusted = adjusted_numerator / adjusted_denominator
                     adjusted_total += final_adjusted
                     fov_ema = (
-                        FORAGER_FOV_EMA_DECAY * fov_ema
-                        + (1.0 - FORAGER_FOV_EMA_DECAY) * reward
+                        FORAGER_FOV_EMA_DECAY * fov_ema + (1.0 - FORAGER_FOV_EMA_DECAY) * reward
                     )
                     if step_index % FORAGER_FOV_EMA_SUBSAMPLE == 0:
                         if fov_sample_index >= fov_tail_start:
@@ -5180,13 +4989,9 @@ def _recompute_trace_metrics(
                     final_regret = regret
                 completed += active
             if rewards_handle.read(1) or regrets_handle.read(1):
-                raise ForagerMatrixStateError(
-                    "raw metric NPY member contains trailing array bytes"
-                )
+                raise ForagerMatrixStateError("raw metric NPY member contains trailing array bytes")
     if curve_index != len(run.curve_steps) or fov_tail_count < 1:
-        raise ForagerMatrixStateError(
-            "raw metric trace does not cover the result metric schedule"
-        )
+        raise ForagerMatrixStateError("raw metric trace does not cover the result metric schedule")
     expected_values = {
         "total_reward": total_reward,
         "mean_reward": total_reward / expected_steps,
@@ -5200,9 +5005,7 @@ def _recompute_trace_metrics(
     for field_name, expected in expected_values.items():
         actual = float(getattr(run, field_name))
         if not math.isfinite(actual) or not _metric_close(actual, expected):
-            raise ForagerMatrixStateError(
-                f"raw metric trace does not reproduce run.{field_name}"
-            )
+            raise ForagerMatrixStateError(f"raw metric trace does not reproduce run.{field_name}")
 
 
 def _validate_published_trace(
@@ -5221,14 +5024,10 @@ def _validate_published_trace(
     ) as descriptor:
         metadata = os.fstat(descriptor)
         if metadata.st_size != sidecar["size"]:
-            raise ForagerMatrixStateError(
-                f"raw metric sidecar {relative_path} size mismatch"
-            )
+            raise ForagerMatrixStateError(f"raw metric sidecar {relative_path} size mismatch")
         digest, byte_size = _descriptor_sha256(descriptor)
         if digest != sidecar["sha256"] or byte_size != sidecar["size"]:
-            raise ForagerMatrixStateError(
-                f"raw metric sidecar {relative_path} digest mismatch"
-            )
+            raise ForagerMatrixStateError(f"raw metric sidecar {relative_path} digest mismatch")
         os.lseek(descriptor, 0, os.SEEK_SET)
         duplicated = os.dup(descriptor)
         try:
@@ -5243,9 +5042,7 @@ def _validate_published_trace(
                             expected_steps=expected_steps,
                         )
                         for member in archive.infolist():
-                            compressed_offset, compressed_size = locations[
-                                member.filename
-                            ]
+                            compressed_offset, compressed_size = locations[member.filename]
                             _validate_canonical_deflate_stream(
                                 descriptor,
                                 archive,
@@ -5291,13 +5088,11 @@ def _validate_raw_metric_evidence(
     if (
         evidence["schema_version"] != _METRIC_EVIDENCE_SCHEMA
         or evidence["mode"] != "raw_reward_npz_v2"
-        or evidence["capture_point"]
-        != "post_jax_evaluator_outputs_no_agent_feedback"
+        or evidence["capture_point"] != "post_jax_evaluator_outputs_no_agent_feedback"
         or evidence["all_reported_evaluator_metrics_recomputable"] is not True
         or evidence["runtime_immutable"] is not False
         or evidence["sealed_eligible"] is not False
-        or evidence["unsealed_reasons"]
-        != _raw_evidence_unsealed_reasons(manifest)
+        or evidence["unsealed_reasons"] != _raw_evidence_unsealed_reasons(manifest)
     ):
         raise ForagerMatrixStateError("raw metric evidence contract is invalid")
     sidecars = evidence["raw_metric_sidecars"]
@@ -5445,8 +5240,7 @@ def _run_from_payload(
 
     curve_steps_raw = payload["curve_steps"]
     if not isinstance(curve_steps_raw, list) or any(
-        type(item) is not int or item < 1 or item > steps
-        for item in curve_steps_raw
+        type(item) is not int or item < 1 or item > steps for item in curve_steps_raw
     ):
         raise ForagerMatrixStateError(f"{path}.curve_steps is invalid")
     curve_ewm_raw = payload["curve_ewm_reward"]
@@ -5500,10 +5294,7 @@ def _run_from_payload(
     if not _canonical_equal(metadata_config, expected_config):
         raise ForagerMatrixStateError(f"{path} Alberta configuration hash mismatch")
     metadata_seed = agent_metadata.get("seed")
-    if (
-        type(metadata_seed) is not int
-        or metadata_seed != seed
-    ):
+    if type(metadata_seed) is not int or metadata_seed != seed:
         raise ForagerMatrixStateError(f"{path} agent and environment seeds differ")
     if (
         agent_metadata.get("name") != expected_agent
@@ -5520,14 +5311,11 @@ def _run_from_payload(
             path=f"{path}.agent_metadata",
         )
     if (
-        agent_metadata.get("environment_rng_schedule")
-        != FORAGER_ENVIRONMENT_RNG_SCHEDULE
+        agent_metadata.get("environment_rng_schedule") != FORAGER_ENVIRONMENT_RNG_SCHEDULE
         or agent_metadata.get("environment_rng_schedule_sha256")
         != _EXPECTED_ENVIRONMENT_RNG_SCHEDULE_SHA256
     ):
-        raise ForagerMatrixStateError(
-            f"{path} environment RNG schedule identity does not match"
-        )
+        raise ForagerMatrixStateError(f"{path} environment RNG schedule identity does not match")
     if (
         agent_metadata.get("runtime_profile_id") is not None
         or agent_metadata.get("environment_runtime_profile_sha256") is not None
@@ -5561,9 +5349,7 @@ def _run_from_payload(
     if runner_kind not in allowed_runner_kinds:
         raise ForagerMatrixStateError(f"{path} runner kind does not match its variant")
     if expected_kind == CAUSAL_MAP_VARIANT_KIND:
-        expected_runner_kind = (
-            "jax_scan" if len(expected_batch_seeds) == 1 else "jax_batched_scan"
-        )
+        expected_runner_kind = "jax_scan" if len(expected_batch_seeds) == 1 else "jax_batched_scan"
         if runner_kind != expected_runner_kind:
             raise ForagerMatrixStateError(f"{path} causal runner kind is inconsistent")
     runner_numbers = {
@@ -5593,19 +5379,16 @@ def _run_from_payload(
     execution_duration_value = runner_numbers["execution_duration_s"]
     expected_per_seed_fps = steps / max(execution_duration_value, 1e-12)
     expected_aggregate_fps = len(expected_batch_seeds) * expected_per_seed_fps
-    if (
-        not math.isclose(
-            runner_numbers["per_seed_effective_frames_per_second"],
-            expected_per_seed_fps,
-            rel_tol=1e-9,
-            abs_tol=1e-9,
-        )
-        or not math.isclose(
-            runner_numbers["aggregate_transitions_per_second"],
-            expected_aggregate_fps,
-            rel_tol=1e-9,
-            abs_tol=1e-9,
-        )
+    if not math.isclose(
+        runner_numbers["per_seed_effective_frames_per_second"],
+        expected_per_seed_fps,
+        rel_tol=1e-9,
+        abs_tol=1e-9,
+    ) or not math.isclose(
+        runner_numbers["aggregate_transitions_per_second"],
+        expected_aggregate_fps,
+        rel_tol=1e-9,
+        abs_tol=1e-9,
     ):
         raise ForagerMatrixStateError(
             f"{path} runner throughput is inconsistent with steps and duration"
@@ -5729,9 +5512,7 @@ def _batch_payload(
         normalized_evidence = dict(metric_evidence)
     else:
         if metric_evidence is not None:
-            raise ForagerMatrixError(
-                "scalar_summary_unsealed may not claim raw metric evidence"
-            )
+            raise ForagerMatrixError("scalar_summary_unsealed may not claim raw metric evidence")
         normalized_evidence = {
             "schema_version": _METRIC_EVIDENCE_SCHEMA,
             "mode": "scalar_summary_unsealed",
@@ -5935,9 +5716,7 @@ def _summary_payload(
         # Batch arity changes the lowering label, not the scientific method.
         runner["kind"] = "jax_seed_matrix_scan"
         metadata["runner"] = runner
-        normalized_runs.append(
-            dataclasses.replace(run, agent_metadata=metadata)
-        )
+        normalized_runs.append(dataclasses.replace(run, agent_metadata=metadata))
     summary = summarize_forager_runs(
         normalized_runs,
         metric=cast(Any, rule.metric),
@@ -6085,34 +5864,25 @@ def _report_payload(
         batch_payloads=batch_payloads,
         runs_by_variant=runs_by_variant,
     )
-    raw_evidence_complete = (
-        manifest.metric_evidence_mode == "raw_reward_npz_v2"
-        and all(
-            _require_object(
-                payload["metric_evidence"],
-                "batch metric evidence",
-            ).get("all_reported_evaluator_metrics_recomputable")
-            is True
-            for payload in batch_payloads.values()
-        )
+    raw_evidence_complete = manifest.metric_evidence_mode == "raw_reward_npz_v2" and all(
+        _require_object(
+            payload["metric_evidence"],
+            "batch metric evidence",
+        ).get("all_reported_evaluator_metrics_recomputable")
+        is True
+        for payload in batch_payloads.values()
     )
     source_immutable = False
     runtime_immutable = False
     eligibility_reasons: list[str] = []
     if manifest.source_execution_mode == SNAPSHOT_SOURCE_EXECUTION_MODE:
-        eligibility_reasons.append(
-            "snapshot_source_isolation_not_externally_immutable"
-        )
+        eligibility_reasons.append("snapshot_source_isolation_not_externally_immutable")
     else:
         eligibility_reasons.append("source_executed_from_live_tree")
     if not runtime_immutable:
-        eligibility_reasons.append(
-            "host_runtime_inventory_is_advisory"
-        )
+        eligibility_reasons.append("host_runtime_inventory_is_advisory")
     if not raw_evidence_complete:
-        eligibility_reasons.append(
-            "all_reported_evaluator_metrics_not_recomputed_from_raw_trace"
-        )
+        eligibility_reasons.append("all_reported_evaluator_metrics_not_recomputed_from_raw_trace")
     evidence_eligibility = {
         "schema_version": "alberta.forager_evidence_eligibility.v1",
         "source_immutable": source_immutable,
@@ -6120,9 +5890,7 @@ def _report_payload(
         "runtime_immutable": runtime_immutable,
         "metric_evidence_mode": manifest.metric_evidence_mode,
         "raw_metric_evidence_complete": raw_evidence_complete,
-        "sealed_eligible": (
-            source_immutable and runtime_immutable and raw_evidence_complete
-        ),
+        "sealed_eligible": (source_immutable and runtime_immutable and raw_evidence_complete),
         "unsealed_reasons": eligibility_reasons,
     }
     return _hashed_payload(
@@ -6187,9 +5955,7 @@ def _validate_report(
         "final report started_at_utc",
     )
     if completed_at < started_at:
-        raise ForagerMatrixStateError(
-            "final report completion predates matrix start"
-        )
+        raise ForagerMatrixStateError("final report completion predates matrix start")
     batch_created_times = [
         _validate_utc_timestamp(
             batch_payloads[item.relative_path]["created_at_utc"],
@@ -6221,10 +5987,7 @@ def _allowed_output_entries(
             {
                 "reward-traces",
                 *(f"reward-traces/{item.variant_id}" for item in plan),
-                *(
-                    f"reward-traces/{item.variant_id}/batch-{item.batch_index:05d}"
-                    for item in plan
-                ),
+                *(f"reward-traces/{item.variant_id}/batch-{item.batch_index:05d}" for item in plan),
             }
         )
     return files, directories
@@ -6293,9 +6056,7 @@ def _recover_internal_temporaries(
                 or metadata.st_mode & 0o077
                 or metadata.st_nlink not in {1, 2}
             ):
-                raise ForagerMatrixStateError(
-                    f"unsafe internal temporary artifact {name!r}"
-                )
+                raise ForagerMatrixStateError(f"unsafe internal temporary artifact '{name}'")
             try:
                 target_metadata = os.stat(
                     target,
@@ -6305,7 +6066,7 @@ def _recover_internal_temporaries(
             except FileNotFoundError:
                 if metadata.st_nlink != 1:
                     raise ForagerMatrixStateError(
-                        f"orphaned temporary artifact {name!r} has extra links"
+                        f"orphaned temporary artifact '{name}' has extra links"
                     )
             else:
                 if (
@@ -6315,7 +6076,7 @@ def _recover_internal_temporaries(
                     != (target_metadata.st_dev, target_metadata.st_ino)
                 ):
                     raise ForagerMatrixStateError(
-                        f"temporary artifact {name!r} is not linked to its target"
+                        f"temporary artifact '{name}' is not linked to its target"
                     )
             os.unlink(name, dir_fd=descriptor)
             changed = True
@@ -6363,9 +6124,7 @@ def _validate_output_inventory(
                 )
         elif stat.S_ISREG(metadata.st_mode):
             if relative not in allowed_files:
-                raise ForagerMatrixStateError(
-                    f"output state contains unexpected file {relative}"
-                )
+                raise ForagerMatrixStateError(f"output state contains unexpected file {relative}")
             if (
                 metadata.st_uid != os.geteuid()
                 or metadata.st_nlink != 1
@@ -6375,19 +6134,20 @@ def _validate_output_inventory(
                     f"output artifact {relative} must be private, owned, and singly linked"
                 )
         else:
-            raise ForagerMatrixStateError(
-                f"output state contains special entry {relative}"
-            )
+            raise ForagerMatrixStateError(f"output state contains special entry {relative}")
 
     committed_entries = [
         name
         for name in os.listdir(output_root.root_descriptor)
         if name not in {LOCK_FILENAME, SOURCE_SNAPSHOT_FILENAME}
     ]
-    if not _bound_entry_exists(
-        output_root,
-        EXECUTION_MANIFEST_FILENAME,
-    ) and committed_entries:
+    if (
+        not _bound_entry_exists(
+            output_root,
+            EXECUTION_MANIFEST_FILENAME,
+        )
+        and committed_entries
+    ):
         raise ForagerMatrixStateError(
             "non-empty output state has no valid execution manifest; refusing to overwrite it"
         )
@@ -6434,9 +6194,7 @@ def _output_lock(output_dir: Path) -> Iterator[_BoundDirectory]:
             not stat.S_ISREG(named_lock.st_mode)
             or (named_lock.st_dev, named_lock.st_ino) != lock_identity
         ):
-            raise ForagerMatrixStateError(
-                "output lock was replaced while acquiring it"
-            )
+            raise ForagerMatrixStateError("output lock was replaced while acquiring it")
         if (
             lock_metadata.st_uid != os.geteuid()
             or lock_metadata.st_nlink != 1
@@ -6507,9 +6265,7 @@ def _execute_new_batch(
     execution_identity: Mapping[str, Any],
 ) -> tuple[Mapping[str, Any], tuple[ForagerRunResult, ...]]:
     variant = manifest.variants[item.variant_id]
-    with tempfile.TemporaryDirectory(
-        prefix="alberta-forager-trace-exchange-"
-    ) as exchange_text:
+    with tempfile.TemporaryDirectory(prefix="alberta-forager-trace-exchange-") as exchange_text:
         exchange_root = Path(exchange_text)
         trace_factory = (
             _NpzMetricTraceSinkFactory(exchange_root)
@@ -6521,9 +6277,7 @@ def _execute_new_batch(
         try:
             if manifest.source_execution_mode == IMMUTABLE_SOURCE_EXECUTION_MODE:
                 if extracted_root is None:  # pragma: no cover - mode invariant
-                    raise ForagerMatrixError(
-                        "immutable source root is unavailable"
-                    )
+                    raise ForagerMatrixError("immutable source root is unavailable")
                 returned_payloads = _run_immutable_batch_worker(
                     manifest=manifest,
                     item=item,
@@ -6531,14 +6285,10 @@ def _execute_new_batch(
                     extracted_root=extracted_root,
                     exchange_root=exchange_root,
                 )
-                returned: Sequence[
-                    ForagerRunResult | Mapping[str, Any]
-                ] = returned_payloads
+                returned: Sequence[ForagerRunResult | Mapping[str, Any]] = returned_payloads
             elif variant.kind == "alberta_horde_ac":
                 if not isinstance(variant.config, AlbertaForagerConfig):
-                    raise ForagerMatrixError(
-                        f"variant {item.variant_id!r} kind/config mismatch"
-                    )
+                    raise ForagerMatrixError(f"variant '{item.variant_id}' kind/config mismatch")
                 returned = run_alberta_forager_seeds(
                     variant.config,
                     benchmark,
@@ -6548,9 +6298,7 @@ def _execute_new_batch(
                 )
             elif variant.kind == CAUSAL_MAP_VARIANT_KIND:
                 if not isinstance(variant.config, CausalMapForagerConfig):
-                    raise ForagerMatrixError(
-                        f"variant {item.variant_id!r} kind/config mismatch"
-                    )
+                    raise ForagerMatrixError(f"variant '{item.variant_id}' kind/config mismatch")
                 returned = run_causal_map_forager_seeds(
                     variant.config,
                     benchmark,
@@ -6560,9 +6308,7 @@ def _execute_new_batch(
                 )
             elif variant.kind == RTU_RTRL_VARIANT_KIND:
                 if not isinstance(variant.config, RTURTRLForagerConfig):
-                    raise ForagerMatrixError(
-                        f"variant {item.variant_id!r} kind/config mismatch"
-                    )
+                    raise ForagerMatrixError(f"variant '{item.variant_id}' kind/config mismatch")
                 returned = run_rtu_rtrl_forager_seeds(
                     variant.config,
                     benchmark,
@@ -6572,8 +6318,7 @@ def _execute_new_batch(
                 )
             else:  # pragma: no cover - parser guard
                 raise ForagerMatrixError(
-                    f"variant {item.variant_id!r} has unknown kind "
-                    f"{variant.kind!r}"
+                    f"variant '{item.variant_id}' has unknown kind '{variant.kind}'"
                 )
         except BaseException:
             if trace_factory is not None:
@@ -6582,8 +6327,7 @@ def _execute_new_batch(
         wall_time_s = time.perf_counter() - started
         if len(returned) != len(item.seeds):
             raise ForagerMatrixError(
-                f"runner returned {len(returned)} results for "
-                f"{len(item.seeds)} seeds"
+                f"runner returned {len(returned)} results for {len(item.seeds)} seeds"
             )
         _validate_exchange_inventory(
             exchange_root,
@@ -6606,11 +6350,7 @@ def _execute_new_batch(
         )
         checked_runs = tuple(
             _run_from_payload(
-                (
-                    dict(run)
-                    if isinstance(run, Mapping)
-                    else _run_to_payload(run)
-                ),
+                (dict(run) if isinstance(run, Mapping) else _run_to_payload(run)),
                 path=f"new batch {item.relative_path}.runs[{index}]",
                 expected_seed=seed,
                 expected_steps=manifest.steps,
@@ -6622,19 +6362,15 @@ def _execute_new_batch(
                 expected_mode=manifest.mode,
                 expected_batch_seeds=item.seeds,
             )
-            for index, (run, seed) in enumerate(
-                zip(returned, item.seeds, strict=True)
-            )
+            for index, (run, seed) in enumerate(zip(returned, item.seeds, strict=True))
         )
         metric_evidence: Mapping[str, Any] | None = None
         if manifest.metric_evidence_mode == "raw_reward_npz_v2":
-            checked_runs, metric_evidence, publications = (
-                _prepare_metric_evidence(
-                    manifest=manifest,
-                    item=item,
-                    runs=checked_runs,
-                    exchange_root=exchange_root,
-                )
+            checked_runs, metric_evidence, publications = _prepare_metric_evidence(
+                manifest=manifest,
+                item=item,
+                runs=checked_runs,
+                exchange_root=exchange_root,
             )
             for source, sidecar in publications:
                 _publish_or_match_bound_file(
@@ -6680,19 +6416,14 @@ def run_forager_matrix(
     if type(manifest) in (str, type(Path())):
         loaded = load_forager_matrix_manifest(cast(str | Path, manifest))
     elif type(manifest) is ForagerMatrixManifest:
-        if (
-            manifest.source_path is not None
-            and type(manifest.source_path) is not type(Path())
-        ):
+        if manifest.source_path is not None and type(manifest.source_path) is not type(Path()):
             raise ForagerMatrixManifestError(
                 "programmatic manifest source_path must be a pathlib.Path"
             )
         try:
             programmatic_payload = manifest.to_dict()
         except (AttributeError, TypeError, ValueError) as exc:
-            raise ForagerMatrixManifestError(
-                "programmatic manifest cannot be normalized"
-            ) from exc
+            raise ForagerMatrixManifestError("programmatic manifest cannot be normalized") from exc
         loaded = parse_forager_matrix_manifest(
             programmatic_payload,
             source_path=manifest.source_path,
@@ -6734,9 +6465,7 @@ def run_forager_matrix(
         extracted_root: Path | None = None
         if loaded.source_execution_mode == IMMUTABLE_SOURCE_EXECUTION_MODE:
             temporary_root = Path(
-                stack.enter_context(
-                    tempfile.TemporaryDirectory(prefix="alberta-forager-snapshot-")
-                )
+                stack.enter_context(tempfile.TemporaryDirectory(prefix="alberta-forager-snapshot-"))
             )
             extracted_root = temporary_root / "source"
             _extract_source_snapshot(
@@ -6766,8 +6495,7 @@ def run_forager_matrix(
                 maximum_bytes=len(source_snapshot.archive_bytes),
             )
             if (
-                hashlib.sha256(snapshot_bytes).hexdigest()
-                != source_snapshot.archive_sha256
+                hashlib.sha256(snapshot_bytes).hexdigest() != source_snapshot.archive_sha256
                 or snapshot_bytes != source_snapshot.archive_bytes
             ):
                 raise ForagerMatrixStateError(
