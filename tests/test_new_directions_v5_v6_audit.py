@@ -310,12 +310,12 @@ def test_v6_amendment_rejects_false_audit_status_text() -> None:
 def test_strict_json_rejects_duplicates_and_nonfinite_numbers(tmp_path: Path) -> None:
     duplicate = tmp_path / "duplicate.json"
     duplicate.write_text('{"schema":"a","schema":"b"}', encoding="utf-8")
-    with pytest.raises(ValueError, match="duplicate JSON key"):
+    with pytest.raises(ValueError, match="duplicate JSON"):
         load_strict_json(duplicate)
 
     nonfinite = tmp_path / "nonfinite.json"
     nonfinite.write_text(json.dumps({"value": float("nan")}), encoding="utf-8")
-    with pytest.raises(ValueError, match="finite"):
+    with pytest.raises(ValueError, match="finite|non-standard"):
         load_strict_json(nonfinite)
 
 
@@ -339,3 +339,17 @@ def test_maintained_audit_cli_is_packaged() -> None:
     assert project["project"]["scripts"]["asi-new-directions-audit"] == (
         "alberta_framework.benchmarks.new_directions_v5_v6_audit:main"
     )
+
+def test_strict_json_rejects_deep_object_nest_before_loads(tmp_path: Path) -> None:
+    path = tmp_path / "deep-object.json"
+    path.write_text('{"k":' * 10_000 + "0" + "}" * 10_000, encoding="utf-8")
+    with pytest.raises(ValueError, match="nesting-depth"):
+        load_strict_json(path)
+
+
+def test_strict_json_rejects_deep_array_nest_before_loads(tmp_path: Path) -> None:
+    path = tmp_path / "deep-array.json"
+    path.write_text("[" * 10_000 + "0" + "]" * 10_000, encoding="utf-8")
+    with pytest.raises(ValueError, match="nesting-depth"):
+        load_strict_json(path)
+

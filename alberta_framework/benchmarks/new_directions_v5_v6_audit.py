@@ -16,6 +16,8 @@ from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any, SupportsIndex, cast
 
+from alberta_framework._strict_json import load_strict_json_object
+
 V5_RAW_SCHEMA = "alberta.new_directions.v5_model_side.v1"
 V6_RAW_SCHEMA = "alberta.new_directions.v6_recurrence_headroom.v1"
 V5_AUDIT_SCHEMA = "asi.new_directions.v5_model_side.amendment.v1"
@@ -170,15 +172,7 @@ def _reject_duplicate_keys(pairs: list[tuple[str, object]]) -> dict[str, object]
 
 def load_strict_json(path: Path) -> dict[str, Any]:
     """Load one bounded finite primitive JSON object with duplicate rejection."""
-    data = path.read_bytes()
-    if len(data) > 16_000_000:
-        raise ValueError("JSON artifact exceeds the 16 MB audit bound")
-    try:
-        value = json.loads(data, object_pairs_hook=_reject_duplicate_keys)
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise ValueError("artifact is not strict UTF-8 JSON") from exc
-    if type(value) is not dict:
-        raise ValueError("artifact root must be an exact object")
+    value = load_strict_json_object(path)
     _primitive_json(value)
     return cast(dict[str, Any], value)
 
