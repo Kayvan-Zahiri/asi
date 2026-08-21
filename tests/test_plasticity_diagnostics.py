@@ -182,6 +182,7 @@ def test_cli_runs_only_caller_supplied_bounded_npz(
     assert payload["labels_permuted"] is False
     assert payload["scientific_promotion_allowed"] is False
 
+
 def _npy_header_bytes(shape: tuple[int, ...], dtype: object) -> bytes:
     from io import BytesIO
 

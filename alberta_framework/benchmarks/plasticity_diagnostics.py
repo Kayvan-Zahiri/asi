@@ -19,7 +19,7 @@ import zipfile
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from types import MappingProxyType
-from typing import BinaryIO, NamedTuple, SupportsIndex, cast
+from typing import IO, NamedTuple, SupportsIndex, cast
 
 import jax
 import jax.numpy as jnp
@@ -619,8 +619,7 @@ def _json_result(result: DiagnosticResult) -> str:
     return json.dumps(dataclasses.asdict(result), sort_keys=True, separators=(",", ":"))
 
 
-
-def _npy_header(buffer: BinaryIO) -> tuple[tuple[int, ...], np.dtype]:
+def _npy_header(buffer: IO[bytes]) -> tuple[tuple[int, ...], np.dtype]:
     try:
         version = np.lib.format.read_magic(buffer)
         if version == (1, 0):
