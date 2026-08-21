@@ -253,6 +253,7 @@ def test_costly_paper_lanes_are_unconditionally_closed() -> None:
     assert random_label_cifar["qualified"] is False
     assert sequential_ale["qualified"] is False
 
+
 def _npy_header_bytes(shape: tuple[int, ...], dtype: object) -> bytes:
     from io import BytesIO
 

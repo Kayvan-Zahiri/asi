@@ -19,7 +19,7 @@ import time
 import zipfile
 from collections.abc import Mapping, Sequence
 from pathlib import Path
-from typing import BinaryIO, Literal, SupportsIndex, cast
+from typing import IO, Literal, SupportsIndex, cast
 
 import jax
 import jax.numpy as jnp
@@ -676,8 +676,7 @@ def _json_result(result: NaPResult) -> str:
     )
 
 
-
-def _npy_header(buffer: BinaryIO) -> tuple[tuple[int, ...], np.dtype]:
+def _npy_header(buffer: IO[bytes]) -> tuple[tuple[int, ...], np.dtype]:
     try:
         version = np.lib.format.read_magic(buffer)
         if version == (1, 0):
