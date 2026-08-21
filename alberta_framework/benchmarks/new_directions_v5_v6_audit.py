@@ -18,6 +18,7 @@ from typing import Any, SupportsIndex, cast
 
 from alberta_framework._strict_json import load_strict_json_object
 
+_MAX_AUDIT_JSON_BYTES = 16_000_000
 V5_RAW_SCHEMA = "alberta.new_directions.v5_model_side.v1"
 V6_RAW_SCHEMA = "alberta.new_directions.v6_recurrence_headroom.v1"
 V5_AUDIT_SCHEMA = "asi.new_directions.v5_model_side.amendment.v1"
@@ -161,20 +162,13 @@ def _primitive_json(value: object, *, name: str = "payload", depth: int = 0) -> 
     raise ValueError(f"{name} contains a non-JSON primitive")
 
 
-def _reject_duplicate_keys(pairs: list[tuple[str, object]]) -> dict[str, object]:
-    result: dict[str, object] = {}
-    for key, value in pairs:
-        if key in result:
-            raise ValueError(f"duplicate JSON key: {key}")
-        result[key] = value
-    return result
-
-
 def load_strict_json(path: Path) -> dict[str, Any]:
     """Load one bounded finite primitive JSON object with duplicate rejection."""
+    if path.stat().st_size > _MAX_AUDIT_JSON_BYTES:
+        raise ValueError("JSON artifact exceeds the 16 MB audit bound")
     value = load_strict_json_object(path)
     _primitive_json(value)
-    return cast(dict[str, Any], value)
+    return value
 
 
 def file_sha256(path: Path) -> str:
