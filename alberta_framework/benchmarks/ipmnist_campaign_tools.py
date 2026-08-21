@@ -16,7 +16,7 @@ import time
 import zipfile
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Any, BinaryIO, cast
+from typing import IO, Any, cast
 
 import numpy as np
 
@@ -221,7 +221,7 @@ def build_frontier(
     }
 
 
-def _npy_header(buffer: BinaryIO) -> tuple[tuple[int, ...], np.dtype]:
+def _npy_header(buffer: IO[bytes]) -> tuple[tuple[int, ...], np.dtype]:
     try:
         version = np.lib.format.read_magic(buffer)
         if version == (1, 0):
