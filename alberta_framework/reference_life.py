@@ -157,9 +157,9 @@ def _require_config_json(raw: object, *, name: str) -> str:
 
 
 def _load_config_json(raw: object, *, name: str) -> Any:
-    _require_config_json(raw, name=name)
+    text = _require_config_json(raw, name=name)
     try:
-        return json.loads(raw)
+        return json.loads(text)
     except RecursionError as exc:
         raise ValueError(f"{name} exceeds the JSON nesting limit") from exc
     except (TypeError, json.JSONDecodeError) as exc:
