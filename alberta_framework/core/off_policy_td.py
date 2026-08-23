@@ -1099,7 +1099,9 @@ class GradientTDLinearLearner:
             & jnp.isfinite(rho_s)
         )
         previous_checked = state.replace(  # type: ignore[attr-defined]
-            eligibility_traces=_zero_if_unused(gamma_s * lam, state.eligibility_traces),
+            eligibility_traces=_zero_if_unused(
+                state.previous_gamma * lam, state.eligibility_traces
+            ),
         )
         candidate_metrics = jnp.array(
             [

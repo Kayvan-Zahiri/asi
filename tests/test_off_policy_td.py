@@ -1028,7 +1028,12 @@ class TestZeroGammaDoesNotMultiplyInfBootstrap:
         chex.assert_tree_all_finite(result.state.eligibility_traces)
 
     def test_gradient_td_does_not_multiply_inf_traces(self) -> None:
-        """previous_gamma*lam=0 drops leftover GTD traces; 0 * inf must not freeze."""
+        """previous_gamma*lam=0 drops leftover GTD traces; 0 * inf must not freeze.
+
+        The current transition's gamma is nonzero, so both the trace reset
+        and the acceptance guard must key on the prior transition's discount
+        (the episode-boundary state), not on the current call's.
+        """
         learner = GradientTDLinearLearner(step_size=0.1, trace_decay=0.9)
         state = learner.init(2).replace(  # type: ignore[attr-defined]
             eligibility_traces=jnp.full(3, jnp.inf, dtype=jnp.float32),
@@ -1041,12 +1046,13 @@ class TestZeroGammaDoesNotMultiplyInfBootstrap:
             state,
             jnp.array([0.5, -0.25], dtype=jnp.float32),
             jnp.array(1.0, dtype=jnp.float32),
-            jnp.array([jnp.inf, 0.0], dtype=jnp.float32),
-            jnp.array(0.0, dtype=jnp.float32),
+            jnp.array([0.25, 0.5], dtype=jnp.float32),
+            jnp.array(0.9, dtype=jnp.float32),
             jnp.array(1.0, dtype=jnp.float32),
         )
         assert bool(result.update_applied)
         chex.assert_tree_all_finite(result.state.eligibility_traces)
+        chex.assert_trees_all_close(result.state.previous_gamma, jnp.asarray(0.9))
 
 
 @pytest.mark.parametrize(
