@@ -169,6 +169,33 @@ class TestMultiChannel:
         # Channel 1: G_0 = 0 + 0.9*0 + 0.81*1 = 0.81; G_1 = 0.9; G_2 = 1
         chex.assert_trees_all_close(g[:, 1, 0], jnp.array([0.81, 0.9, 1.0]), atol=1e-6)
 
+    @pytest.mark.parametrize("array_type", [np.zeros, jnp.zeros])
+    def test_channel_count_limits_checked_for_numpy_and_jax(self, array_type) -> None:
+        cumulants_legal = array_type((5, 8), dtype=np.float32)
+        gammas = jnp.array([0.5], dtype=jnp.float32)
+        g = multi_channel_horizon_returns(cumulants_legal, gammas)
+        chex.assert_shape(g, (5, 8, 1))
+
+        cumulants_too_many = array_type((5, 9), dtype=np.float32)
+        with pytest.raises(
+            ValueError,
+            match=r"cumulants channel count must be an integer in \[1, 8\]",
+        ):
+            multi_channel_horizon_returns(cumulants_too_many, gammas)
+
+    @pytest.mark.parametrize("gamma_val", [True, float("nan"), float("inf"), -0.1, 1.1])
+    def test_multi_channel_rejects_invalid_gammas(self, gamma_val: object) -> None:
+        cumulants = jnp.zeros((3, 2), dtype=jnp.float32)
+        with pytest.raises(ValueError, match="gammas"):
+            multi_channel_horizon_returns(cumulants, [cast(float, gamma_val)])
+
+    @pytest.mark.parametrize("term_val", [True, float("nan"), float("inf")])
+    def test_multi_channel_rejects_invalid_terminal_value(self, term_val: object) -> None:
+        cumulants = jnp.zeros((3, 2), dtype=jnp.float32)
+        gammas = jnp.array([0.5], dtype=jnp.float32)
+        with pytest.raises(ValueError, match="terminal_value"):
+            multi_channel_horizon_returns(cumulants, gammas, terminal_value=cast(float, term_val))
+
 
 class TestRMSE:
     def test_large_finite_errors_do_not_overflow(self) -> None:

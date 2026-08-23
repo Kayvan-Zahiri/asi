@@ -215,16 +215,32 @@ def multi_channel_horizon_returns(
     Returns:
         Array of shape ``(T, C, H)`` of forward-view returns.
     """
+    gammas = _require_host_discount("gammas", gammas, ndim=1)
+    terminal_value = _require_host_finite_real("terminal_value", terminal_value)
     _require_leading_length(
         "cumulants", cumulants, ndim=2, maximum=_NEXTING_MAX_STEPS
     )
-    if isinstance(cumulants, jax.Array) and not isinstance(cumulants, jax.core.Tracer):
+    if isinstance(cumulants, jax.core.Tracer):
+        if cumulants.ndim != 2:
+            raise ValueError("cumulants must be 2-dimensional")
+    elif isinstance(cumulants, jax.Array):
+        if cumulants.ndim != 2:
+            raise ValueError("cumulants must be 2-dimensional")
         channel_count = int(cumulants.shape[1])
         if channel_count < 1 or channel_count > _NEXTING_MAX_CHANNELS:
             raise ValueError(
                 "cumulants channel count must be an integer in "
                 f"[1, {_NEXTING_MAX_CHANNELS}]"
             )
+    else:
+        array = _concrete_numeric_array("cumulants", cumulants, ndim=2)
+        if array is not None:
+            channel_count = int(array.shape[1])
+            if channel_count < 1 or channel_count > _NEXTING_MAX_CHANNELS:
+                raise ValueError(
+                    "cumulants channel count must be an integer in "
+                    f"[1, {_NEXTING_MAX_CHANNELS}]"
+                )
     _require_leading_length("gammas", gammas, ndim=1, maximum=_NEXTING_MAX_HORIZONS)
     # Vmap over channels: for each channel apply multi_horizon_returns
     def per_channel(c_series: Array) -> Array:
