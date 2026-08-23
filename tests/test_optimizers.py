@@ -400,6 +400,47 @@ class TestAutostep:
         )
         assert float(effective) <= 1.0 + 1e-6
 
+    @pytest.mark.parametrize("magnitude", [3e3, 1e4, 1e5])
+    def test_overshoot_bound_holds_at_large_feature_scale(self, magnitude: float):
+        """The Algorithm 5 guarantee must survive the numerical-safety clip.
+
+        Normalization is the last operation on alpha in Mahmood et al. 2012
+        (Algorithm 5 lines 8-10), precisely so sum(alpha_i * x_i^2) <= 1 at
+        update time; a floor applied afterwards can raise alpha back above
+        the normalized value once sum(x_i^2) is large enough, turning the
+        overshoot guard into an error amplifier.
+        """
+        optimizer = Autostep(initial_step_size=0.01, meta_step_size=0.01)
+        feature_dim = 100
+        state = optimizer.init(feature_dim=feature_dim)
+
+        observation = jnp.ones(feature_dim) * magnitude
+        error = jnp.array(1.0)
+        result = optimizer.update(state, error, observation)
+
+        effective = (
+            jnp.sum(result.new_state.step_sizes * observation**2)
+            + result.new_state.bias_step_size
+        )
+        assert float(effective) <= 1.0 + 1e-4
+
+        prediction_change = float(
+            jnp.dot(result.weight_delta, observation) + result.bias_delta
+        )
+        assert abs(1.0 - prediction_change) <= 1.0 + 1e-4
+
+    def test_overshoot_bound_holds_on_gradient_path_at_large_scale(self):
+        """The shape-generic path shares the Algorithm 5 guarantee."""
+        optimizer = Autostep(initial_step_size=0.01, meta_step_size=0.01)
+        state = optimizer.init_for_shape((100,))
+        gradient = jnp.ones(100) * 1e4
+        error = jnp.array(1.0)
+
+        step, new_state = optimizer.update_from_gradient(state, gradient, error=error)
+
+        effective = float(jnp.sum(new_state.step_sizes * gradient**2))
+        assert effective <= 1.0 + 1e-4
+
     def test_normalizer_tracks_meta_gradient_not_primary(self):
         """v_i should track |δ*x*h| (meta-gradient), not |δ*x| (primary gradient)."""
         optimizer = Autostep(initial_step_size=0.1, meta_step_size=0.1)
