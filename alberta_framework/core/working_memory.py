@@ -216,6 +216,7 @@ class WorkingMemoryArrayResult:
 
 
 _INT32_MAX = 2**31 - 1
+_MAX_WORKING_MEMORY_DECAY_RATES = 1 << 12
 _FLOAT32_MIN_NORMAL = float.fromhex("0x1.0p-126")
 _ACTUAL_INT_TYPES: tuple[type, ...] = (
     int,
@@ -287,6 +288,10 @@ def _require_array(
 def _validate_decay_rates(name: str, rates: object) -> tuple[float, ...]:
     if type(rates) is not tuple:
         raise ValueError(f"{name} must be an actual tuple")
+    if len(rates) > _MAX_WORKING_MEMORY_DECAY_RATES:
+        raise ValueError(
+            f"{name} must contain at most {_MAX_WORKING_MEMORY_DECAY_RATES} decay rates"
+        )
     return tuple(
         validated_float32_scalar(
             f"{name}[{index}]",
@@ -306,15 +311,9 @@ def _validate_config(config: WorkingMemoryConfig) -> None:
     observation_decay_rates = _validate_decay_rates(
         "observation_decay_rates", config.observation_decay_rates
     )
-    action_decay_rates = _validate_decay_rates(
-        "action_decay_rates", config.action_decay_rates
-    )
-    reward_decay_rates = _validate_decay_rates(
-        "reward_decay_rates", config.reward_decay_rates
-    )
-    gate_threshold = validated_float32_scalar(
-        "gate_threshold", config.gate_threshold, lower=0.0
-    )
+    action_decay_rates = _validate_decay_rates("action_decay_rates", config.action_decay_rates)
+    reward_decay_rates = _validate_decay_rates("reward_decay_rates", config.reward_decay_rates)
+    gate_threshold = validated_float32_scalar("gate_threshold", config.gate_threshold, lower=0.0)
     gate_temperature = validated_float32_scalar(
         "gate_temperature", config.gate_temperature, lower=_FLOAT32_MIN_NORMAL
     )
@@ -361,11 +360,7 @@ def _validate_config(config: WorkingMemoryConfig) -> None:
         raise ValueError("WorkingMemoryConfig state byte count must fit signed int32")
     if persistent_bytes > _UINT32_MAX:
         raise ValueError("working memory allocation exceeds uint32 byte accounting")
-    decay_scalars = (
-        len(observation_decay_rates)
-        + len(action_decay_rates)
-        + len(reward_decay_rates)
-    )
+    decay_scalars = len(observation_decay_rates) + len(action_decay_rates) + len(reward_decay_rates)
     signal_scalars = observation_dim + action_dim + reward_dim
     feature_work = total_state_scalars + feature_dim + 2 * signal_scalars
     update_work = (
@@ -378,12 +373,8 @@ def _validate_config(config: WorkingMemoryConfig) -> None:
     )
     diagnostics_work = total_state_scalars + 3 * trace_scalars + 9
     _require_float32_resource("WorkingMemoryConfig features", vector_scalars=feature_dim)
-    _require_float32_resource(
-        "WorkingMemoryConfig feature operation", vector_scalars=feature_work
-    )
-    _require_float32_resource(
-        "WorkingMemoryConfig update operation", vector_scalars=update_work
-    )
+    _require_float32_resource("WorkingMemoryConfig feature operation", vector_scalars=feature_work)
+    _require_float32_resource("WorkingMemoryConfig update operation", vector_scalars=update_work)
     _require_float32_resource(
         "WorkingMemoryConfig diagnostics operation", vector_scalars=diagnostics_work
     )
@@ -634,9 +625,7 @@ class WorkingMemoryFeaturizer:
         rew = _empty_or_vector(reward, cfg.reward_dim)
         raw_outer_gate = jnp.asarray(external_gate, dtype=jnp.float32)
         if raw_outer_gate.shape != ():
-            raise ValueError(
-                f"external_gate must have scalar shape (); got {raw_outer_gate.shape}"
-            )
+            raise ValueError(f"external_gate must have scalar shape (); got {raw_outer_gate.shape}")
         inputs_valid = (
             jnp.all(jnp.isfinite(obs))
             & jnp.all(jnp.isfinite(act))
@@ -709,9 +698,7 @@ class WorkingMemoryFeaturizer:
                 reward_traces=jnp.zeros_like(state.reward_traces),
             )
         update_applied = (
-            inputs_valid
-            & self._state_is_valid(previous_checked)
-            & self._state_is_valid(candidate)
+            inputs_valid & self._state_is_valid(previous_checked) & self._state_is_valid(candidate)
         )
         return WorkingMemoryUpdateResult(
             state=select_transaction(update_applied, candidate, state),
@@ -818,9 +805,7 @@ def transform_working_memory_arrays(
     state_scalars = trace_scalars + 4
     signal_scalars = cfg.observation_dim + cfg.action_dim + cfg.reward_dim
     decay_scalars = (
-        len(cfg.observation_decay_rates)
-        + len(cfg.action_decay_rates)
-        + len(cfg.reward_decay_rates)
+        len(cfg.observation_decay_rates) + len(cfg.action_decay_rates) + len(cfg.reward_decay_rates)
     )
     per_step_work = (
         3 * state_scalars
@@ -832,8 +817,7 @@ def transform_working_memory_arrays(
     )
     _require_sequence_resource(
         "working memory transform aggregate",
-        float32_scalars=steps * (signal_scalars + cfg.feature_dim() + 1)
-        + per_step_work,
+        float32_scalars=steps * (signal_scalars + cfg.feature_dim() + 1) + per_step_work,
         bool_scalars=steps,
     )
     _require_array("observations", observations, shape=(steps, cfg.observation_dim))

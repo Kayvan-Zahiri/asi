@@ -70,6 +70,7 @@ from alberta_framework.core.working_memory import (
 )
 
 _INT32_MAX = 2**31 - 1
+_MAX_FIXED_TRACE_DECAY_RATES = 1 << 12
 _ACTUAL_INT_TYPES = frozenset(
     {
         int,
@@ -119,6 +120,8 @@ def _require_decay_rates(name: str, value: object) -> tuple[float, ...]:
     if type(value) is not tuple:
         raise ValueError(f"{name} must be an actual tuple")
     rates = cast(tuple[object, ...], value)
+    if len(rates) > _MAX_FIXED_TRACE_DECAY_RATES:
+        raise ValueError(f"{name} must contain at most {_MAX_FIXED_TRACE_DECAY_RATES} decay rates")
     return tuple(
         validated_float32_scalar(
             f"{name}[{index}]",
@@ -975,9 +978,7 @@ class FixedTraceStateBuilderConfig:
             + self.n_actions * len(self.action_decay_rates)
             + 2 * len(self.outcome_decay_rates)
         )
-        feature_dim = trace_scalars + (
-            self.observation_dim if self.include_raw_observation else 0
-        )
+        feature_dim = trace_scalars + (self.observation_dim if self.include_raw_observation else 0)
         state_scalars = trace_scalars + 4
         _require_derived_int32("feature_dim", feature_dim, minimum=1)
         _require_derived_int32("state_scalars", state_scalars)
@@ -1338,12 +1339,7 @@ class OnlineGatedStateBuilderConfig:
             self.observation_dim if self.include_raw_observation else 0
         )
         parameter_count = 2 * self.hidden_dim * (event_dim + 1)
-        state_scalars = (
-            parameter_count
-            + self.hidden_dim
-            + self.hidden_dim * parameter_count
-            + 3
-        )
+        state_scalars = parameter_count + self.hidden_dim + self.hidden_dim * parameter_count + 3
         _require_derived_int32("event_dim", event_dim, minimum=1)
         _require_derived_int32("feature_dim", feature_dim, minimum=1)
         _require_derived_int32("parameter_count", parameter_count, minimum=1)

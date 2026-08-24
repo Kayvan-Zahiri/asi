@@ -457,3 +457,18 @@ def test_working_transform_resource_preflight_precedes_jax_conversion() -> None:
             HostArray(1),  # type: ignore[arg-type]
             HostArray(1),  # type: ignore[arg-type]
         )
+
+
+def test_working_memory_rejects_oversized_decay_rates() -> None:
+    with pytest.raises(ValueError, match="decay rates"):
+        WorkingMemoryConfig(
+            observation_dim=1,
+            observation_decay_rates=(0.5,) * 4097,
+        )
+
+    # 4096 boundary is accepted
+    cfg = WorkingMemoryConfig(
+        observation_dim=1,
+        observation_decay_rates=(0.5,) * 4096,
+    )
+    assert len(cfg.observation_decay_rates) == 4096
