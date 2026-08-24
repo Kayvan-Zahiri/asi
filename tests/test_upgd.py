@@ -2219,3 +2219,27 @@ class TestLoops:
         stream = RandomWalkStream(feature_dim=4, drift_rate=0.0, noise_std=0.05)
         result = run_upgd_loop(learner, stream, num_steps=50, key=jr.key(0))
         chex.assert_shape(result.metrics, (50, 4))
+
+
+class TestGradientAlignmentScaleFreedom:
+    """Gradient alignment must be scale-free across extreme float32 ranges."""
+
+    @pytest.mark.parametrize("scale", [1e-30, 1e-20, 1e-10, 1.0, 1e10, 1e20, 1e30])
+    def test_gradient_alignment_is_scale_free(self, scale: float) -> None:
+        g = (jnp.array([1.0, -0.5, 0.25], dtype=jnp.float32) * scale,)
+        g_opp = (jnp.array([-1.0, 0.5, -0.25], dtype=jnp.float32) * scale,)
+
+        align_same = UPGDLearner._gradient_alignment(g, g)
+        chex.assert_trees_all_close(align_same, jnp.asarray(1.0, dtype=jnp.float32), atol=1e-5)
+
+        align_opp = UPGDLearner._gradient_alignment(g, g_opp)
+        chex.assert_trees_all_close(align_opp, jnp.asarray(-1.0, dtype=jnp.float32), atol=1e-5)
+
+    def test_gradient_alignment_handles_zero_and_nonfinite(self) -> None:
+        g_zero = (jnp.zeros(3, dtype=jnp.float32),)
+        g_norm = (jnp.ones(3, dtype=jnp.float32),)
+        g_nan = (jnp.array([float("nan"), 1.0, 2.0], dtype=jnp.float32),)
+
+        assert float(UPGDLearner._gradient_alignment(g_zero, g_norm)) == 0.0
+        assert float(UPGDLearner._gradient_alignment(g_norm, g_zero)) == 0.0
+        assert float(UPGDLearner._gradient_alignment(g_nan, g_norm)) == 0.0
