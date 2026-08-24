@@ -780,9 +780,7 @@ class FixedBudgetFeatureLearner:
             if value.shape != shape or value.dtype != jnp.int32:
                 raise ValueError(f"state.{name} must have shape {shape} and dtype int32")
         if observation.shape != (feature_dim,) or observation.dtype != jnp.float32:
-            raise ValueError(
-                f"observation must have shape {(feature_dim,)} and dtype float32"
-            )
+            raise ValueError(f"observation must have shape {(feature_dim,)} and dtype float32")
         if targets is not None and (
             targets.shape != (self._n_tasks,) or targets.dtype != jnp.float32
         ):
@@ -1024,8 +1022,16 @@ class FixedBudgetFeatureLearner:
         finite: Array,
     ) -> Array:
         """Exponentiated-gradient preference update for utility scores."""
-        finite_mass = jnp.maximum(jnp.sum(jnp.where(finite, allocation, 0.0)), 1e-12)
-        masked_allocation = jnp.where(finite, allocation / finite_mass, 0.0)
+        finite_mass = jnp.sum(jnp.where(finite, allocation, 0.0))
+        n_valid = jnp.maximum(jnp.sum(finite.astype(jnp.float32)), 1.0)
+        uniform_fallback = jnp.where(finite, 1.0 / n_valid, 0.0)
+        masked_allocation = jnp.where(
+            finite_mass > 0.0,
+            jnp.where(
+                finite, allocation / jnp.maximum(finite_mass, jnp.finfo(jnp.float32).tiny), 0.0
+            ),
+            uniform_fallback,
+        )
         baseline = jnp.sum(masked_allocation * jnp.where(finite, scores, 0.0))
         advantages = jnp.where(finite, scores - baseline, 0.0)
         advantages = jnp.clip(
