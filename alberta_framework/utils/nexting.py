@@ -122,8 +122,17 @@ def forward_view_returns(
     """
     gamma = _require_host_discount("gamma", gamma, ndim=0)
     terminal_value = _require_host_finite_real("terminal_value", terminal_value)
-    gamma_s = jnp.asarray(gamma, dtype=cumulants.dtype)
-    init = jnp.asarray(terminal_value, dtype=cumulants.dtype)
+    computation_dtype = jnp.result_type(
+        cumulants.dtype,
+        jnp.asarray(gamma).dtype,
+        jnp.asarray(terminal_value).dtype,
+    )
+    if not jnp.issubdtype(computation_dtype, jnp.floating):
+        computation_dtype = jnp.float32
+
+    cumulants_f = jnp.asarray(cumulants, dtype=computation_dtype)
+    gamma_s = jnp.asarray(gamma, dtype=computation_dtype)
+    init = jnp.asarray(terminal_value, dtype=computation_dtype)
 
     def step(carry: Array, c: Array) -> tuple[Array, Array]:
         # gamma=0 must not multiply an inf later return (0*inf).
@@ -131,7 +140,7 @@ def forward_view_returns(
         new_carry = c + bootstrap
         return new_carry, new_carry
 
-    _, returns_reversed = jax.lax.scan(step, init, cumulants[::-1])
+    _, returns_reversed = jax.lax.scan(step, init, cumulants_f[::-1])
     return returns_reversed[::-1]
 
 

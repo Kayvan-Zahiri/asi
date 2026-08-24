@@ -64,6 +64,22 @@ class TestForwardViewReturns:
         g = forward_view_returns(c, gamma=1.0, terminal_value=10.0)
         chex.assert_trees_all_close(g, jnp.array([11.0, 11.0, 11.0]))
 
+    def test_integer_and_boolean_cumulants_promote_to_float_returns(self) -> None:
+        c_int = jnp.array([1, 0, 0, 0, 1], dtype=jnp.int32)
+        g_int = forward_view_returns(c_int, gamma=0.9)
+        expected = jnp.array([1.6561, 0.729, 0.81, 0.9, 1.0], dtype=jnp.float32)
+        chex.assert_trees_all_close(g_int, expected, atol=1e-5)
+        assert jnp.issubdtype(g_int.dtype, jnp.floating)
+
+        c_bool = jnp.array([True, False, False, False, True], dtype=jnp.bool_)
+        g_bool = forward_view_returns(c_bool, gamma=0.9)
+        chex.assert_trees_all_close(g_bool, expected, atol=1e-5)
+        assert jnp.issubdtype(g_bool.dtype, jnp.floating)
+
+        g_term = forward_view_returns(c_int, gamma=0.5, terminal_value=7.6)
+        expected_term = jnp.array([1.3, 0.6, 1.2, 2.4, 4.8], dtype=jnp.float32)
+        chex.assert_trees_all_close(g_term, expected_term, atol=1e-5)
+
     @pytest.mark.parametrize("gamma", [True, False, float("nan"), float("inf"), -0.1, 1.1])
     def test_gamma_rejects_boolean_and_non_discount_host_values(self, gamma: object) -> None:
         """True used to compile as undiscounted gamma=1.0; False as gamma=0.0."""
