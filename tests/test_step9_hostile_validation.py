@@ -244,3 +244,21 @@ def test_runtime_entry_points_require_exact_config_without_truthiness_hooks() ->
 def test_smoke_preflights_complete_output_shape_before_allocation() -> None:
     with pytest.raises(ValueError, match="observation row count"):
         run_step9_smoke(steps=2**31 - 1)
+
+
+def test_step9_config_rejects_oversized_dream_parameters() -> None:
+    with pytest.raises(ValueError, match="planning_budget"):
+        Step9DreamingConfig(planning_budget=10_001)
+    with pytest.raises(ValueError, match="dream_rollout_horizon"):
+        Step9DreamingConfig(dream_rollout_horizon=10_001)
+    with pytest.raises(ValueError, match="dream_candidate_count"):
+        Step9DreamingConfig(dream_candidate_count=10_001)
+
+    cfg = Step9DreamingConfig(
+        planning_budget=0,
+        dream_rollout_horizon=10_000,
+        dream_candidate_count=10_000,
+    )
+    assert cfg.planning_budget == 0
+    assert cfg.dream_rollout_horizon == 10_000
+    assert cfg.dream_candidate_count == 10_000
