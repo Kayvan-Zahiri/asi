@@ -50,6 +50,7 @@ from alberta_framework.core.update_safety import (
 )
 
 _INT32_MAX = 2**31 - 1
+_FLOAT32_TINY = float(np.finfo(np.float32).tiny)
 _ACTUAL_INT_TYPES = frozenset({int, *(np.dtype(code).type for code in "bBhHiIlLqQpP")})
 _ACTUAL_REAL_TYPES = _ACTUAL_INT_TYPES | frozenset(
     {float, *(np.dtype(code).type for code in "efdg")}
@@ -595,7 +596,7 @@ class LearnedResourceManager:
             finite_weight_sum > 0.0,
             jnp.where(
                 valid_actions,
-                weights / jnp.maximum(finite_weight_sum, jnp.finfo(jnp.float32).tiny),
+                weights / jnp.maximum(finite_weight_sum, _FLOAT32_TINY),
                 0.0,
             ),
             uniform_fallback,
@@ -1190,9 +1191,7 @@ class GeneratorMetaResourceManager:
         uniform_fallback = jnp.where(finite, 1.0 / n_valid, 0.0)
         masked_weights = jnp.where(
             finite_weight_sum > 0.0,
-            jnp.where(
-                finite, weights / jnp.maximum(finite_weight_sum, jnp.finfo(jnp.float32).tiny), 0.0
-            ),
+            jnp.where(finite, weights / jnp.maximum(finite_weight_sum, _FLOAT32_TINY), 0.0),
             uniform_fallback,
         )
         baseline = jnp.sum(masked_weights * adjusted)

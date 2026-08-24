@@ -51,6 +51,7 @@ from alberta_framework.core.update_safety import (
 )
 
 _INT32_MAX = 2**31 - 1
+_FLOAT32_TINY = float(np.finfo(np.float32).tiny)
 _UINT32_MAX = 2**32 - 1
 _MAX_STATE_NBYTES = 256 * 1024 * 1024
 _ACTUAL_INT_TYPES = frozenset(
@@ -1027,9 +1028,7 @@ class FixedBudgetFeatureLearner:
         uniform_fallback = jnp.where(finite, 1.0 / n_valid, 0.0)
         masked_allocation = jnp.where(
             finite_mass > 0.0,
-            jnp.where(
-                finite, allocation / jnp.maximum(finite_mass, jnp.finfo(jnp.float32).tiny), 0.0
-            ),
+            jnp.where(finite, allocation / jnp.maximum(finite_mass, _FLOAT32_TINY), 0.0),
             uniform_fallback,
         )
         baseline = jnp.sum(masked_allocation * jnp.where(finite, scores, 0.0))
