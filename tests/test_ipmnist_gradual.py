@@ -315,3 +315,19 @@ def test_gradual_pair_preflights_parameter_allocation_before_initialization() ->
             config=config,
             transition_steps=1,
         )
+
+
+@pytest.mark.parametrize(
+    "code",
+    ["b", "B", "h", "H", "i", "I", "l", "L", "q", "Q"],
+)
+def test_gradual_ipmnist_accepts_all_numpy_integer_families(code: str) -> None:
+    from alberta_framework.benchmarks.ipmnist_gradual import (
+        GradualTransitionConfig,
+        transition_alpha,
+    )
+
+    t = np.dtype(code).type
+    config = GradualTransitionConfig(mode="input_interpolation", transition_steps=t(10))
+    alpha = transition_alpha(t(1), config)
+    assert 0.0 <= alpha <= 1.0

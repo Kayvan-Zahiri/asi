@@ -2879,3 +2879,13 @@ def test_seed_batch_validation(monkeypatch: pytest.MonkeyPatch) -> None:
     unsafe = dataclasses.replace(benchmark, steps=np.iinfo(np.int32).max)
     with pytest.raises(ValueError, match="steps must be"):
         run_causal_map_forager_seeds(config, unsafe, (1,))
+
+
+@pytest.mark.parametrize(
+    "code",
+    ["b", "B", "h", "H", "i", "I", "l", "L", "q", "Q"],
+)
+def test_causal_map_forager_accepts_all_numpy_integer_families(code: str) -> None:
+    t = np.dtype(code).type
+    cfg = CausalMapForagerConfig(initial_retry_delay=t(2))
+    assert cfg.initial_retry_delay == 2
