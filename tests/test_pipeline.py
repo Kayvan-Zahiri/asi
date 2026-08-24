@@ -1196,3 +1196,39 @@ def test_associative_pipeline_narrows_only_statically_safe_integer_dtypes() -> N
 
 # silence the import lint warnings used in the test runner
 _ = jax
+
+
+def test_pipeline_horde_ac_respects_terminated_flag() -> None:
+    from alberta_framework.core.horde_actor_critic import HordeActorCriticConfig
+
+    config = AlbertaPipelineConfig(
+        n_demons=2,
+        gammas=(0.9, 0.5),
+        lamdas=(0.1, 0.1),
+        cumulant_indices=(0, 1),
+        n_actions=2,
+        control_mode="horde_ac",
+        horde_actor_critic=HordeActorCriticConfig(
+            n_actions=2,
+            actor_learning_rate=0.01,
+            actor_lamda=0.8,
+            value_head_index=0,
+        ),
+    )
+    pipeline = make_alberta_pipeline(config)
+    state = pipeline.init(jr.key(0), jnp.asarray([0.2, -0.1], dtype=jnp.float32))
+    obs = jnp.asarray([0.1, 0.3], dtype=jnp.float32)
+    reward = jnp.asarray(0.5, dtype=jnp.float32)
+    cumulants = jnp.asarray([0.5, -0.2], dtype=jnp.float32)
+
+    res_terminal = pipeline.update(
+        state, obs, reward, jnp.asarray(1.0, dtype=jnp.float32), cumulants
+    )
+
+    # In terminal transition, value target must not bootstrap on next observation
+    assert float(res_terminal.horde_td_targets[0]) == pytest.approx(0.5, abs=1e-5)
+    # Actor eligibility trace must be reset to zero on terminal transition
+    chex.assert_trees_all_close(
+        res_terminal.state.control_state.actor_trace_weights,
+        jnp.zeros_like(res_terminal.state.control_state.actor_trace_weights),
+    )
