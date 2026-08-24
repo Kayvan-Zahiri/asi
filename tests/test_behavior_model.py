@@ -674,3 +674,16 @@ def test_action_ids_still_accept_trusted_hosts_and_tracers() -> None:
         jnp.asarray(3, dtype=jnp.int32)
     )
     chex.assert_tree_all_finite(traced)
+
+
+def test_floor_and_renormalize_probabilities_degenerate_inputs_return_valid_simplex() -> None:
+    for degenerate in [
+        [0.0, 0.0, 0.0],
+        [-1.0, -2.0, -3.0],
+        [1e-38, 1e-38, 1e-38],
+        [1e38, 1.0, 1.0],
+    ]:
+        probs = jnp.array(degenerate, dtype=jnp.float32)
+        res = floor_and_renormalize_probabilities(probs, min_probability=1e-6)
+        chex.assert_trees_all_close(jnp.sum(res), 1.0, atol=1e-6)
+        assert float(jnp.min(res)) >= 1e-6 - 1e-7
