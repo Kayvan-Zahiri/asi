@@ -431,6 +431,23 @@ class TestGVFSpecRemainingFields:
                 }
             )
 
+    @pytest.mark.parametrize(
+        "dtype_code",
+        ["e", "f", "d", "g"],
+    )
+    def test_terminal_reward_accepts_all_numpy_floating_families(self, dtype_code):
+        scalar_type = np.dtype(dtype_code).type
+        value = scalar_type(1.5)
+        spec = GVFSpec(
+            name="d0",
+            demon_type=DemonType.PREDICTION,
+            gamma=0.0,
+            lamda=0.0,
+            cumulant_index=0,
+            terminal_reward=value,
+        )
+        assert spec.terminal_reward == 1.5
+
     def test_terminal_reward_rejects_class_spoofed_float(self):
         class _SpoofedFloat:
             @property
