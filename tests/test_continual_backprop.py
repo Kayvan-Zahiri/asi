@@ -244,6 +244,17 @@ class TestUtilityUpdate:
         expected = jnp.abs(activations[0] * grads[0])
         chex.assert_trees_all_close(new.utilities[0], expected)
 
+    def test_select_replacement_index_uses_bias_corrected_utility(self) -> None:
+        u0_raw = float(1.0 - 0.99**100)
+        u1_raw = float(0.9 * (1.0 - 0.99**700))
+        utilities = jnp.array([u0_raw, u1_raw], dtype=jnp.float32)
+        ages = jnp.array([100, 700], dtype=jnp.int32)
+        idx, has = _select_replacement_index(
+            utilities, ages, maturity_threshold=100, decay_rate=0.99
+        )
+        assert bool(has)
+        assert int(idx) == 1
+
 
 class TestWrapperUtilityGradients:
     """The CBP wrapper should track utility in every hidden layer."""
