@@ -1199,30 +1199,15 @@ _ = jax
 
 
 def test_pipeline_horde_ac_respects_terminated_flag() -> None:
-    from alberta_framework.core.horde_actor_critic import HordeActorCriticConfig
-
-    config = AlbertaPipelineConfig(
-        n_demons=2,
-        gammas=(0.9, 0.5),
-        lamdas=(0.1, 0.1),
-        cumulant_indices=(0, 1),
-        n_actions=2,
-        control_mode="horde_ac",
-        horde_actor_critic=HordeActorCriticConfig(
-            n_actions=2,
-            actor_learning_rate=0.01,
-            actor_lamda=0.8,
-            value_head_index=0,
-        ),
-    )
+    config = _small_horde_ac_config()
     pipeline = make_alberta_pipeline(config)
-    state = pipeline.init(jr.key(0), jnp.asarray([0.2, -0.1], dtype=jnp.float32))
-    obs = jnp.asarray([0.1, 0.3], dtype=jnp.float32)
+    context = jnp.asarray([0.1, 0.2, -0.3], dtype=jnp.float32)
+    state = pipeline.init(jr.key(0), context)
     reward = jnp.asarray(0.5, dtype=jnp.float32)
     cumulants = jnp.asarray([0.5, -0.2], dtype=jnp.float32)
 
     res_terminal = pipeline.update(
-        state, obs, reward, jnp.asarray(1.0, dtype=jnp.float32), cumulants
+        state, context, reward, jnp.asarray(1.0, dtype=jnp.float32), cumulants
     )
 
     # In terminal transition, value target must not bootstrap on next observation
