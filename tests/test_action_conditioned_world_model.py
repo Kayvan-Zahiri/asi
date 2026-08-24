@@ -400,10 +400,10 @@ def test_default_discounts_do_not_inherit_the_reward_dtype() -> None:
             model, state, observations, actions, rewards, next_observations
         )
         chex.assert_trees_all_close(defaulted.discount_errors, explicit.discount_errors)
-        chex.assert_trees_all_close(
-            defaulted.discount_predictions, explicit.discount_predictions
-        )
+        chex.assert_trees_all_close(defaulted.discount_predictions, explicit.discount_predictions)
         assert bool(jnp.all(defaulted.updates_applied))
+
+
 @pytest.mark.parametrize(
     "overrides",
     [
@@ -575,9 +575,10 @@ def test_config_canonicalizes_numpy_integer_family_and_complete_scalars() -> Non
 
 
 def test_config_accepts_exact_zero_step_size_but_rejects_float32_underflow() -> None:
-    assert ActionConditionedWorldModelConfig(
-        observation_dim=2, n_actions=2, step_size=0.0
-    ).step_size == 0.0
+    assert (
+        ActionConditionedWorldModelConfig(observation_dim=2, n_actions=2, step_size=0.0).step_size
+        == 0.0
+    )
     with pytest.raises(ValueError, match="remain positive once narrowed.*or be exact zero"):
         ActionConditionedWorldModelConfig(observation_dim=2, n_actions=2, step_size=1e-100)
 
@@ -598,7 +599,9 @@ def test_config_accepts_exact_zero_step_size_but_rejects_float32_underflow() -> 
 def test_config_rejects_invalid_complete_public_fields(overrides: dict[str, object]) -> None:
     with pytest.raises(ValueError):
         ActionConditionedWorldModelConfig(
-            observation_dim=2, n_actions=2, **overrides  # type: ignore[arg-type]
+            observation_dim=2,
+            n_actions=2,
+            **overrides,  # type: ignore[arg-type]
         )
 
 
@@ -812,9 +815,7 @@ def test_diagnostics_reflect_true_decodes_not_guard_clips() -> None:
         )
         learner_state = dataclasses.replace(
             init_state.learner_state,
-            head_params=dataclasses.replace(
-                head_params, weights=new_weights, biases=new_biases
-            ),
+            head_params=dataclasses.replace(head_params, weights=new_weights, biases=new_biases),
         )
         return dataclasses.replace(
             init_state,
@@ -844,20 +845,14 @@ def test_diagnostics_reflect_true_decodes_not_guard_clips() -> None:
     # reward range +/- the margin, unchanged by this fix.
     assert float(far_result.prediction.reward) == pytest.approx(5.05, abs=1e-4)
     assert float(near_result.prediction.reward) == pytest.approx(5.05, abs=1e-4)
-    assert float(far_result.prediction.next_observation[0]) == pytest.approx(
-        0.05, abs=1e-4
-    )
-    assert float(near_result.prediction.next_observation[0]) == pytest.approx(
-        0.05, abs=1e-4
-    )
+    assert float(far_result.prediction.next_observation[0]) == pytest.approx(0.05, abs=1e-4)
+    assert float(near_result.prediction.next_observation[0]) == pytest.approx(0.05, abs=1e-4)
 
     # reward_error must separate a badly wrong head from a nearly-correct one
     # instead of both saturating at observation_clip_margin.
     assert float(near_result.reward_error) == pytest.approx(0.05, abs=1e-3)
     assert float(far_result.reward_error) == pytest.approx(45.0, abs=1e-3)
-    assert float(near_result.next_observation_errors[0]) == pytest.approx(
-        0.05, abs=1e-3
-    )
+    assert float(near_result.next_observation_errors[0]) == pytest.approx(0.05, abs=1e-3)
     assert float(far_result.next_observation_errors[0]) == pytest.approx(
         config.max_delta_scale, abs=1e-3
     )
@@ -955,3 +950,23 @@ def test_action_world_model_rolls_back_reduction_overflow() -> None:
     assert not bool(result.update_applied)
     assert float(result.observation_mse) == 0.0
     assert int(result.state.step_count) == 0
+
+
+def test_action_world_model_observation_scale_targets_match_decoding() -> None:
+    scale = 1e-9
+    model = ActionConditionedWorldModel(
+        ActionConditionedWorldModelConfig(
+            observation_dim=1,
+            n_actions=2,
+            hidden_sizes=(),
+            observation_scale=(scale,),
+            predict_delta=True,
+        )
+    )
+    obs = jnp.array([1.0 * scale], dtype=jnp.float32)
+    next_obs = jnp.array([3.0 * scale], dtype=jnp.float32)
+    targets = model.targets(
+        obs, jnp.asarray(0.0, dtype=jnp.float32), jnp.asarray(1.0, dtype=jnp.float32), next_obs
+    )
+    # Normalized delta target: (3.0*scale - 1.0*scale) / scale == 2.0
+    assert float(targets[0]) == pytest.approx(2.0, rel=1e-5)
