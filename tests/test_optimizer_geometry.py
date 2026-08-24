@@ -283,9 +283,7 @@ def test_geometry_primitives_are_outer_jit_safe() -> None:
     np.testing.assert_allclose(corrected, [0.0, 2.0])
     invalid = jax.jit(flad_noise_component)(jnp.array([jnp.nan]), jnp.ones(1))
     assert bool(jnp.all(jnp.isnan(invalid)))
-    safe, valid = jax.jit(flad_noise_component_transaction)(
-        jnp.array([jnp.nan]), jnp.ones(1)
-    )
+    safe, valid = jax.jit(flad_noise_component_transaction)(jnp.array([jnp.nan]), jnp.ones(1))
     np.testing.assert_array_equal(safe, jnp.zeros(1))
     assert not bool(valid)
 
@@ -340,3 +338,20 @@ def test_geometry_runner_rejects_invalid_transactions(monkeypatch: pytest.Monkey
     )
     with pytest.raises(ValueError, match="transaction"):
         run_streaming_matrix_evaluation()
+
+
+def test_spectral_matrix_sign_subnormal_fails_closed() -> None:
+    # All-subnormal non-zero matrix
+    sub = np.array([[2.938736e-39, 0.0], [0.0, 1.401298e-45]], dtype=np.float32)
+    matrix, valid = jax.jit(spectral_matrix_sign_transaction)(jnp.asarray(sub))
+    assert not bool(valid)
+
+    # Exact zero matrix is valid
+    zero = np.zeros((2, 2), dtype=np.float32)
+    matrix_zero, valid_zero = jax.jit(spectral_matrix_sign_transaction)(jnp.asarray(zero))
+    assert bool(valid_zero)
+
+    # Normal matrix is valid
+    normal = np.array([[2.0, 1.0], [0.5, -1.0]], dtype=np.float32)
+    matrix_normal, valid_normal = jax.jit(spectral_matrix_sign_transaction)(jnp.asarray(normal))
+    assert bool(valid_normal)

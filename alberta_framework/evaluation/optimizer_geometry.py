@@ -116,12 +116,7 @@ def orthogonal_correction_transaction(update: Array, protected_basis: Array) -> 
     """Return a finite orthogonal correction and caller-visible validity bit."""
     vector = _trusted_array(update, name="update")
     basis = _trusted_array(protected_basis, name="protected_basis")
-    if (
-        vector.ndim != 1
-        or vector.size < 1
-        or basis.ndim != 2
-        or basis.shape[1] != vector.shape[0]
-    ):
+    if vector.ndim != 1 or vector.size < 1 or basis.ndim != 2 or basis.shape[1] != vector.shape[0]:
         raise ValueError("update must be a non-empty vector and basis rows must match its width")
     coordinates = basis @ vector
     projection = basis.T @ coordinates
@@ -172,7 +167,20 @@ def spectral_matrix_sign_transaction(matrix: Array, *, steps: int = 5) -> tuple[
     ):
         raise ValueError("matrix must be non-empty and steps a positive integer")
     norm = jnp.linalg.norm(value)
-    valid = jnp.all(jnp.isfinite(value)) & jnp.isfinite(norm)
+    has_nonzero_bits = jnp.any(
+        jax.lax.bitcast_convert_type(
+            value,
+            jnp.int32
+            if value.dtype == jnp.float32
+            else (
+                jnp.int16
+                if value.dtype == jnp.float16 or value.dtype == jnp.bfloat16
+                else jnp.int64
+            ),
+        )
+        != 0
+    )
+    valid = jnp.all(jnp.isfinite(value)) & jnp.isfinite(norm) & ((norm > 0.0) | (~has_nonzero_bits))
     x = value / jnp.maximum(norm, jnp.asarray(1e-12, dtype=value.dtype))
     if x.shape[0] > x.shape[1]:
         x = x.T
@@ -244,11 +252,7 @@ def muon_ogd_dual_update_transaction(
         raise ValueError("dual must contain one multiplier per constraint")
     if type(dual_learning_rate) is not float or not math.isfinite(dual_learning_rate):
         raise ValueError("dual_learning_rate must be a finite float")
-    if (
-        dual_learning_rate < 0.0
-        or type(dual_steps) is not int
-        or not 1 <= dual_steps <= 32
-    ):
+    if dual_learning_rate < 0.0 or type(dual_steps) is not int or not 1 <= dual_steps <= 32:
         raise ValueError("dual learning rate must be non-negative and dual_steps bounded positive")
     valid = (
         jnp.all(jnp.isfinite(value))
@@ -271,9 +275,7 @@ def muon_ogd_dual_update_transaction(
         )
         multipliers = next_multipliers
     shifted = value + jnp.einsum("k,kij->ij", multipliers, protected)
-    update, sign_valid = spectral_matrix_sign_transaction(
-        shifted, steps=newton_schulz_steps
-    )
+    update, sign_valid = spectral_matrix_sign_transaction(shifted, steps=newton_schulz_steps)
     valid = valid & jnp.all(jnp.isfinite(shifted)) & sign_valid
     safe_update = jnp.where(valid, update, jnp.zeros_like(update))
     safe_dual = jnp.where(valid, multipliers, jnp.zeros_like(multipliers))
@@ -438,9 +440,7 @@ def _runtime_identity() -> dict[str, object]:
         "machine": _runtime_text("machine", platform.machine()),
         "packages": {
             "jax": _runtime_text("JAX version", jax.__version__),
-            "jaxlib": _runtime_text(
-                "jaxlib version", importlib.metadata.version("jaxlib")
-            ),
+            "jaxlib": _runtime_text("jaxlib version", importlib.metadata.version("jaxlib")),
             "numpy": _runtime_text("NumPy version", np.__version__),
         },
         "default_backend": _runtime_text("JAX backend", jax.default_backend()),
@@ -495,9 +495,7 @@ def _execute_frozen_stream(*, measure_timing: bool) -> dict[str, object]:
     constraints, basis = _protected_geometry(rows, columns)
     target_updates: list[Array] = []
     for matrix in stream:
-        target_update, target_valid = orthogonal_correction_transaction(
-            matrix.reshape(-1), basis
-        )
+        target_update, target_valid = orthogonal_correction_transaction(matrix.reshape(-1), basis)
         _require_valid(target_valid, name="target projection")
         target_updates.append(target_update.reshape((rows, columns)))
     target = jnp.sum(jnp.stack(target_updates), axis=0)
@@ -527,9 +525,7 @@ def _execute_frozen_stream(*, measure_timing: bool) -> dict[str, object]:
                 )
                 processed = flat_processed.reshape((rows, columns))
             elif arm == "fogo_projection":
-                flat_processed, valid = orthogonal_correction_transaction(
-                    matrix.reshape(-1), basis
-                )
+                flat_processed, valid = orthogonal_correction_transaction(matrix.reshape(-1), basis)
                 processed = flat_processed.reshape((rows, columns))
             elif arm == "flad_zero_gradient":
                 flat_processed, valid = flad_noise_component_transaction(
@@ -671,10 +667,7 @@ def _exact_equal(actual: object, expected: object) -> bool:
     if type(expected) is dict:
         actual_dict = cast(dict[object, object], actual)
         expected_dict = cast(dict[object, object], expected)
-        if (
-            len(actual_dict) > 32
-            or len(actual_dict) != len(expected_dict)
-        ):
+        if len(actual_dict) > 32 or len(actual_dict) != len(expected_dict):
             return False
         if not all(type(key) is str for key in actual_dict):
             return False
@@ -687,9 +680,13 @@ def _exact_equal(actual: object, expected: object) -> bool:
     if type(expected) is list:
         actual_list = cast(list[object], actual)
         expected_list = cast(list[object], expected)
-        return len(actual_list) <= 128 and len(actual_list) == len(expected_list) and all(
-            _exact_equal(left, right)
-            for left, right in zip(actual_list, expected_list, strict=True)
+        return (
+            len(actual_list) <= 128
+            and len(actual_list) == len(expected_list)
+            and all(
+                _exact_equal(left, right)
+                for left, right in zip(actual_list, expected_list, strict=True)
+            )
         )
     if type(expected) is str:
         actual_text = cast(str, actual)
