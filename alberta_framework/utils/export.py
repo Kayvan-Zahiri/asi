@@ -532,11 +532,20 @@ def _get_significance_marker(
         return ""
 
     p = result.p_value
-    if p < 0.001:
+    alpha = result.alpha
+    if alpha == 0.05:
+        if p < 0.001:
+            return r"$^{***}$"
+        elif p < 0.01:
+            return r"$^{**}$"
+        elif p < 0.05:
+            return r"$^{*}$"
+        return ""
+    if p < alpha / 100.0:
         return r"$^{***}$"
-    elif p < 0.01:
+    elif p < alpha / 10.0:
         return r"$^{**}$"
-    elif p < 0.05:
+    elif p <= alpha:
         return r"$^{*}$"
     return ""
 
@@ -624,11 +633,20 @@ def _get_md_significance_marker(
         return ""
 
     p = result.p_value
-    if p < 0.001:
+    alpha = result.alpha
+    if alpha == 0.05:
+        if p < 0.001:
+            return " ***"
+        elif p < 0.01:
+            return " **"
+        elif p < 0.05:
+            return " *"
+        return ""
+    if p < alpha / 100.0:
         return " ***"
-    elif p < 0.01:
+    elif p < alpha / 10.0:
         return " **"
-    elif p < 0.05:
+    elif p <= alpha:
         return " *"
     return ""
 
