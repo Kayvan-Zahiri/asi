@@ -28,24 +28,8 @@ from jaxtyping import Bool, Float
 from alberta_framework.core._float32_scalars import validated_float32_scalar
 
 _INT32_MAX = 2**31 - 1
-_ACTUAL_INT_TYPES = frozenset(
-    {
-        int,
-        np.int8,
-        np.int16,
-        np.int32,
-        np.int64,
-        np.uint8,
-        np.uint16,
-        np.uint32,
-        np.uint64,
-        np.longlong,
-        np.ulonglong,
-    }
-)
-_ACTUAL_FLOAT_TYPES = frozenset(
-    {float, *(np.dtype(code).type for code in ("e", "f", "d", "g"))}
-)
+_ACTUAL_INT_TYPES = frozenset({int, *(np.dtype(code).type for code in "bBhHiIlLqQpP")})
+_ACTUAL_FLOAT_TYPES = frozenset({float, *(np.dtype(code).type for code in ("e", "f", "d", "g"))})
 
 
 def _require_int32(name: str, value: object, *, minimum: int, maximum: int = _INT32_MAX) -> int:
@@ -75,16 +59,13 @@ def _preflight_update_working_set(feature_dim: int) -> None:
     # an execution backend can sometimes donate/alias it.
     update_scalars = 4 * feature_dim * feature_dim + 7 * feature_dim + 8
     if 4 * update_scalars > _INT32_MAX:
-        raise ValueError(
-            "reward-model update working set byte count must fit signed int32"
-        )
+        raise ValueError("reward-model update working set byte count must fit signed int32")
 
 
 def _validated_config_float(name: str, value: object, **bounds: Any) -> float:
     actual_type = type(value)
     if not any(
-        actual_type is allowed_type
-        for allowed_type in (*_ACTUAL_INT_TYPES, *_ACTUAL_FLOAT_TYPES)
+        actual_type is allowed_type for allowed_type in (*_ACTUAL_INT_TYPES, *_ACTUAL_FLOAT_TYPES)
     ):
         raise ValueError(f"{name} must be a finite real scalar")
     return validated_float32_scalar(name, value, **bounds)
@@ -336,6 +317,7 @@ class RLSRewardModel:
             gain=jnp.where(update_applied, gain, jnp.zeros_like(gain)),
             update_applied=update_applied,
         )
+
 
 __all__ = [
     "RLSRewardModel",

@@ -141,21 +141,7 @@ _CONFIG_FIELDS = {
     "cumulant_indices",
     "step_size",
 }
-_ACTUAL_INT_TYPES = frozenset(
-    {
-        int,
-        np.int8,
-        np.int16,
-        np.int32,
-        np.int64,
-        np.uint8,
-        np.uint16,
-        np.uint32,
-        np.uint64,
-        np.longlong,
-        np.ulonglong,
-    }
-)
+_ACTUAL_INT_TYPES = frozenset({int, *(np.dtype(code).type for code in "bBhHiIlLqQpP")})
 
 
 def _require_int32(name: str, value: object, *, minimum: int, maximum: int = _INT32_MAX) -> int:
@@ -233,24 +219,18 @@ class StackedHordeConfig:
         raw_sequences = {
             "gammas": _require_sequence("gammas", self.gammas),
             "lamdas": _require_sequence("lamdas", self.lamdas),
-            "cumulant_indices": _require_sequence(
-                "cumulant_indices", self.cumulant_indices
-            ),
+            "cumulant_indices": _require_sequence("cumulant_indices", self.cumulant_indices),
         }
         for name, seq in raw_sequences.items():
             if len(seq) != n_demons:
                 raise ValueError(f"{name} must have length n_demons={n_demons}")
 
         gammas = tuple(
-            validated_float32_scalar(
-                f"gammas[{i}]", value, lower=0.0, upper=1.0
-            )
+            validated_float32_scalar(f"gammas[{i}]", value, lower=0.0, upper=1.0)
             for i, value in enumerate(raw_sequences["gammas"])
         )
         lamdas = tuple(
-            validated_float32_scalar(
-                f"lamdas[{i}]", value, lower=0.0, upper=1.0
-            )
+            validated_float32_scalar(f"lamdas[{i}]", value, lower=0.0, upper=1.0)
             for i, value in enumerate(raw_sequences["lamdas"])
         )
 
