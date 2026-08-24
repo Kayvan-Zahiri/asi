@@ -938,3 +938,33 @@ def test_stacked_horde_public_state_shape_rejected_before_dot() -> None:
     state = horde.init().replace(weights=jnp.zeros((1, 3), dtype=jnp.float32))
     with pytest.raises(ValueError, match="weights"):
         horde.predict(state, jnp.ones(2, dtype=jnp.float32))
+
+
+def test_stacked_horde_rejects_oversized_demon_count() -> None:
+    with pytest.raises(ValueError, match="n_demons"):
+        StackedHordeConfig(
+            n_demons=4097,
+            feature_dim=2,
+            gammas=(0.9,) * 4097,
+            lamdas=(0.1,) * 4097,
+            cumulant_indices=(0,) * 4097,
+        )
+
+    # 4096 boundary is accepted
+    cfg = StackedHordeConfig(
+        n_demons=4096,
+        feature_dim=2,
+        gammas=(0.9,) * 4096,
+        lamdas=(0.1,) * 4096,
+        cumulant_indices=(0,) * 4096,
+    )
+    assert cfg.n_demons == 4096
+
+
+def test_stacked_horde_nexting_spec_rejects_oversized_demons() -> None:
+    with pytest.raises(ValueError, match="derived n_demons"):
+        nexting_spec(
+            feature_dim=2,
+            cumulant_indices=tuple(range(100)),
+            gammas=tuple(0.9 for _ in range(50)),
+        )

@@ -132,6 +132,7 @@ def _require_positive_normal_float32_step_size(value: object) -> float:
 
 
 _INT32_MAX = 2**31 - 1
+_MAX_STACKED_HORDE_DEMONS = 1 << 12
 _CONFIG_FIELDS = {
     "type",
     "n_demons",
@@ -170,13 +171,19 @@ def _require_int32(name: str, value: object, *, minimum: int, maximum: int = _IN
 def _require_sequence(name: str, value: object) -> tuple[object, ...]:
     if type(value) is not tuple:
         raise ValueError(f"{name} must be an actual tuple")
-    return cast(tuple[object, ...], value)
+    seq = cast(tuple[object, ...], value)
+    if len(seq) > _MAX_STACKED_HORDE_DEMONS:
+        raise ValueError(f"{name} length must not exceed {_MAX_STACKED_HORDE_DEMONS}")
+    return seq
 
 
 def _decode_sequence(name: str, value: object) -> tuple[object, ...]:
     if type(value) not in (list, tuple):
         raise ValueError(f"{name} must be an actual list or tuple")
-    return tuple(cast(list[object] | tuple[object, ...], value))
+    seq = cast(list[object] | tuple[object, ...], value)
+    if len(seq) > _MAX_STACKED_HORDE_DEMONS:
+        raise ValueError(f"{name} length must not exceed {_MAX_STACKED_HORDE_DEMONS}")
+    return tuple(seq)
 
 
 def _preflight_horde_resources(n_demons: int, feature_dim: int) -> None:
@@ -227,30 +234,26 @@ class StackedHordeConfig:
 
     def __post_init__(self) -> None:
         """Validate the configuration."""
-        n_demons = _require_int32("n_demons", self.n_demons, minimum=1)
+        n_demons = _require_int32(
+            "n_demons", self.n_demons, minimum=1, maximum=_MAX_STACKED_HORDE_DEMONS
+        )
         feature_dim = _require_int32("feature_dim", self.feature_dim, minimum=1)
 
         raw_sequences = {
             "gammas": _require_sequence("gammas", self.gammas),
             "lamdas": _require_sequence("lamdas", self.lamdas),
-            "cumulant_indices": _require_sequence(
-                "cumulant_indices", self.cumulant_indices
-            ),
+            "cumulant_indices": _require_sequence("cumulant_indices", self.cumulant_indices),
         }
         for name, seq in raw_sequences.items():
             if len(seq) != n_demons:
                 raise ValueError(f"{name} must have length n_demons={n_demons}")
 
         gammas = tuple(
-            validated_float32_scalar(
-                f"gammas[{i}]", value, lower=0.0, upper=1.0
-            )
+            validated_float32_scalar(f"gammas[{i}]", value, lower=0.0, upper=1.0)
             for i, value in enumerate(raw_sequences["gammas"])
         )
         lamdas = tuple(
-            validated_float32_scalar(
-                f"lamdas[{i}]", value, lower=0.0, upper=1.0
-            )
+            validated_float32_scalar(f"lamdas[{i}]", value, lower=0.0, upper=1.0)
             for i, value in enumerate(raw_sequences["lamdas"])
         )
 
@@ -334,8 +337,8 @@ def nexting_spec(
     )
     canonical_lamda = validated_float32_scalar("lamda", lamda, lower=0.0, upper=1.0)
     n_demons = len(canonical_indices) * len(canonical_gammas)
-    if n_demons < 1 or n_demons > _INT32_MAX:
-        raise ValueError("derived n_demons must be in the signed int32 domain")
+    if n_demons < 1 or n_demons > _MAX_STACKED_HORDE_DEMONS:
+        raise ValueError(f"derived n_demons must be in [1, {_MAX_STACKED_HORDE_DEMONS}]")
     _preflight_horde_resources(n_demons, feature_dim)
     idxs: list[int] = []
     gs: list[float] = []
