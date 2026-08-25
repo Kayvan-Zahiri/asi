@@ -988,3 +988,14 @@ class TestCBPWrapperConstructorIdentities:
         payload[field] = value
         with pytest.raises(ValueError, match="serialized"):
             CBPMultiHeadMLPLearner.from_config(payload)
+
+def test_select_replacement_index_uses_bias_corrected_utility() -> None:
+    # Scenario A: Unit 0 has utility EMA 0.633967 at age 100 (true utility 1.0)
+    # Unit 1 has utility EMA 0.899209 at age 700 (true utility 0.9)
+    # Raw EMA ranks unit 0 lower, but bias-corrected Eq. 8 ranks unit 1 lower
+    utilities = jnp.array([0.633967, 0.899209], dtype=jnp.float32)
+    ages = jnp.array([100, 700], dtype=jnp.int32)
+    idx, has = _select_replacement_index(utilities, ages, maturity_threshold=100, decay_rate=0.99)
+    assert bool(has)
+    assert int(idx) == 1
+
