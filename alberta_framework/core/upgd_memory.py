@@ -675,7 +675,13 @@ def _active_mse(prediction: Array, target: Array) -> Array:
 
 def _normalize_simplex(prediction: Array) -> Array:
     clipped = jnp.maximum(prediction, 0.0)
-    return clipped / jnp.maximum(jnp.sum(clipped), 1e-12)
+    max_val = jnp.max(clipped, axis=-1, keepdims=True)
+    _, exp = jnp.frexp(max_val)
+    rescaled = jnp.ldexp(clipped, -exp)
+    total = jnp.sum(rescaled, axis=-1, keepdims=True)
+    is_positive = (total > 0.0) & jnp.isfinite(total)
+    uniform = jnp.ones_like(prediction) / prediction.shape[-1]
+    return jnp.where(is_positive, rescaled / jnp.where(is_positive, total, 1.0), uniform)
 
 
 class UPGDMemoryLearner:
