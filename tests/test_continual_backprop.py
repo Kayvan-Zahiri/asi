@@ -988,3 +988,17 @@ class TestCBPWrapperConstructorIdentities:
         payload[field] = value
         with pytest.raises(ValueError, match="serialized"):
             CBPMultiHeadMLPLearner.from_config(payload)
+
+
+def test_select_replacement_index_uses_bias_corrected_utility() -> None:
+    from alberta_framework.core.continual_backprop import _select_replacement_index
+
+    # Unit 0: age 100, raw EMA = 0.634 (steady-state 1.0)
+    # Unit 1: age 700, raw EMA = 0.899 (steady-state 0.9)
+    # Bias-corrected utilities: unit 0 = 1.0, unit 1 = 0.9
+    # Unit 1 should be selected for replacement (index 1).
+    utilities = jnp.array([0.633967, 0.899209], dtype=jnp.float32)
+    ages = jnp.array([100, 700], dtype=jnp.int32)
+    idx, has_candidate = _select_replacement_index(utilities, ages, maturity_threshold=100, decay_rate=0.99)
+    assert bool(has_candidate)
+    assert int(idx) == 1

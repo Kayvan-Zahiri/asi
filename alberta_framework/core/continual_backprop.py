@@ -483,13 +483,14 @@ def _select_replacement_index(
     utility: Array,
     age: Array,
     maturity_threshold: int,
+    decay_rate: float = 0.99,
 ) -> tuple[Array, Array]:
     """Pick the index of the lowest-utility mature unit, if any.
 
     A unit is "mature" iff ``age >= maturity_threshold``. Among mature
-    units we pick the one with the smallest utility. If no mature unit
-    exists, ``selected`` is ``-1`` (sentinel) and ``has_candidate`` is
-    ``False``.
+    units we pick the one with the smallest bias-corrected utility (Dohare
+    et al. 2024, Eq. 8). If no mature unit exists, ``selected`` is ``-1``
+    (sentinel) and ``has_candidate`` is ``False``.
 
     Implementation: replace the utility of immature or non-finite units
     with ``+inf`` before taking ``argmin`` so they are never chosen.
@@ -498,6 +499,7 @@ def _select_replacement_index(
         utility: Per-unit utility array, shape ``(num_units,)``.
         age: Per-unit age array (same shape).
         maturity_threshold: Minimum age for eligibility.
+        decay_rate: Utility EMA decay factor.
 
     Returns:
         Tuple ``(index, has_candidate)`` where ``index`` is the chosen
@@ -505,7 +507,10 @@ def _select_replacement_index(
     """
     mature = age >= jnp.asarray(maturity_threshold, dtype=age.dtype)
     eligible = mature & jnp.isfinite(utility)
-    masked_utility = jnp.where(eligible, utility, jnp.inf)
+    decay = jnp.asarray(decay_rate, dtype=jnp.float32)
+    bias_correction = jnp.maximum(1.0 - jnp.power(decay, age.astype(jnp.float32)), 1e-12)
+    debiased_utility = utility / bias_correction
+    masked_utility = jnp.where(eligible, debiased_utility, jnp.inf)
     has_candidate = jnp.any(eligible)
     idx = jnp.argmin(masked_utility)
     selected = jnp.where(has_candidate, idx, jnp.int32(-1))
@@ -687,6 +692,7 @@ def replace_units_with_flags(
             new_cbp_state.utilities[layer_idx],
             new_cbp_state.ages[layer_idx],
             config.maturity_threshold,
+            config.decay_rate,
         )
         # Only replace if we both budgeted for it AND found a mature unit.
         gated = jnp.logical_and(do_replace, has_candidate)
