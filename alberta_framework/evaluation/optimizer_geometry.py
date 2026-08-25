@@ -173,7 +173,15 @@ def spectral_matrix_sign_transaction(matrix: Array, *, steps: int = 5) -> tuple[
         raise ValueError("matrix must be non-empty and steps a positive integer")
     norm = jnp.linalg.norm(value)
     valid = jnp.all(jnp.isfinite(value)) & jnp.isfinite(norm)
-    x = value / jnp.maximum(norm, jnp.asarray(1e-12, dtype=value.dtype))
+    _, exponent = jnp.frexp(jnp.max(jnp.abs(value)))
+    rescaled = jnp.ldexp(value, -exponent)
+    rescaled_norm = jnp.linalg.norm(rescaled)
+    positive = rescaled_norm > 0
+    x = jnp.where(
+        positive,
+        rescaled / jnp.where(positive, rescaled_norm, jnp.ones_like(rescaled_norm)),
+        jnp.zeros_like(rescaled),
+    )
     if x.shape[0] > x.shape[1]:
         x = x.T
         transposed = True
