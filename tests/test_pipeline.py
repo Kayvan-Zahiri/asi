@@ -1196,3 +1196,34 @@ def test_associative_pipeline_narrows_only_statically_safe_integer_dtypes() -> N
 
 # silence the import lint warnings used in the test runner
 _ = jax
+
+
+def test_horde_ac_pipeline_honors_terminated() -> None:
+    pipe_cfg = AlbertaPipelineConfig(
+        features=Step2FeatureConfig.identity(observation_dim=3),
+        horde=Step3HordeConfig(
+            gammas=(0.9, 0.5),
+            lamdas=(0.0, 0.0),
+            hidden_sizes=(),
+        ),
+        horde_ac=HordeActorCriticPipelineConfig(
+            n_actions=2,
+            actor_lamda=0.8,
+            value_head_index=0,
+        ),
+        control_mode="horde_ac",
+    )
+    pipeline = make_alberta_pipeline(pipe_cfg)
+
+    state = pipeline.init(jr.key(0), jnp.asarray([0.2, -0.1, 0.4], dtype=jnp.float32))
+    obs = jnp.asarray([0.1, 0.3, -0.2], dtype=jnp.float32)
+    reward = jnp.asarray(0.5, dtype=jnp.float32)
+    cumulants = jnp.asarray([0.5, -0.2], dtype=jnp.float32)
+
+    res_cont = pipeline.update(state, obs, reward, jnp.asarray(0.0, dtype=jnp.float32), cumulants)
+    res_term = pipeline.update(state, obs, reward, jnp.asarray(1.0, dtype=jnp.float32), cumulants)
+
+    # In terminal step, the value-head target should be reward alone (0.5), not bootstrapped
+    assert jnp.isclose(res_term.horde_td_targets[0], 0.5)
+    # Traces in terminal step should not carry forward
+    assert not jnp.array_equal(res_cont.horde_td_targets, res_term.horde_td_targets)
