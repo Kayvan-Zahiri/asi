@@ -1196,3 +1196,35 @@ def test_associative_pipeline_narrows_only_statically_safe_integer_dtypes() -> N
 
 # silence the import lint warnings used in the test runner
 _ = jax
+
+def test_pipeline_horde_ac_respects_terminated_flag() -> None:
+    config = AlbertaPipelineConfig(
+        features=Step2FeatureConfig.identity(observation_dim=3),
+        horde=Step3HordeConfig(
+            gammas=(0.9, 0.5),
+            lamdas=(0.0, 0.0),
+            hidden_sizes=(),
+            step_size=0.05,
+        ),
+        horde_ac=HordeActorCriticPipelineConfig(
+            n_actions=2,
+            value_head_index=0,
+            actor_lamda=0.8,
+        ),
+        control_mode="horde_ac",
+    )
+    pipeline = AlbertaPipeline(config)
+    state = pipeline.init(jr.key(0), jnp.asarray([0.2, -0.1, 0.4], dtype=jnp.float32))
+    obs = jnp.asarray([0.1, 0.3, -0.2], dtype=jnp.float32)
+    reward = jnp.asarray(0.5, dtype=jnp.float32)
+    cumulants = jnp.asarray([0.5, -0.2], dtype=jnp.float32)
+
+    res_cont = pipeline.update(state, obs, reward, jnp.asarray(0.0, dtype=jnp.float32), cumulants)
+    res_term = pipeline.update(state, obs, reward, jnp.asarray(1.0, dtype=jnp.float32), cumulants)
+
+    # In terminal step, value head target is reward alone (0.5), not bootstrapped (0.3454)
+    assert jnp.allclose(res_term.horde_td_targets[0], 0.5, atol=1e-5)
+    assert not jnp.allclose(res_cont.horde_td_targets[0], 0.5, atol=1e-5)
+    # In terminal step, actor traces are zeroed
+    assert jnp.allclose(res_term.state.control_state.actor_trace_weights, 0.0)
+
