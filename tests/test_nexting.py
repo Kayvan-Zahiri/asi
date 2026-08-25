@@ -21,6 +21,25 @@ from alberta_framework.utils.nexting import (
 
 
 class TestForwardViewReturns:
+
+    def test_integer_and_boolean_cumulants_promote_to_float_returns(self) -> None:
+        c_int = jnp.array([1, 0, 0, 0, 1], dtype=jnp.int32)
+        c_bool = jnp.array([True, False, False, False, True], dtype=jnp.bool_)
+        expected = jnp.array([1.6561, 0.729, 0.81, 0.9, 1.0], dtype=jnp.float32)
+
+        g_int = forward_view_returns(c_int, gamma=0.9)
+        g_bool = forward_view_returns(c_bool, gamma=0.9)
+
+        chex.assert_trees_all_close(g_int, expected, atol=1e-5)
+        chex.assert_trees_all_close(g_bool, expected, atol=1e-5)
+        assert jnp.issubdtype(g_int.dtype, jnp.floating)
+        assert jnp.issubdtype(g_bool.dtype, jnp.floating)
+
+        # Fractional terminal value with integer cumulants
+        g_init = forward_view_returns(c_int, gamma=0.9, terminal_value=7.6)
+        expected_init = jnp.array([6.143823, 5.715359, 6.3504, 7.056, 7.84], dtype=jnp.float32)
+        chex.assert_trees_all_close(g_init, expected_init, atol=1e-4)
+
     def test_gamma_zero_equals_next_cumulant(self) -> None:
         c = jnp.array([1.0, 2.0, 3.0, 4.0, 5.0])
         g = forward_view_returns(c, gamma=0.0)
