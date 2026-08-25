@@ -2,6 +2,7 @@ import copy
 import json
 from pathlib import Path
 
+import chex
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -340,3 +341,28 @@ def test_geometry_runner_rejects_invalid_transactions(monkeypatch: pytest.Monkey
     )
     with pytest.raises(ValueError, match="transaction"):
         run_streaming_matrix_evaluation()
+
+def test_flad_noise_component_is_scale_free_across_gradient_scales() -> None:
+    delta = np.array([1.0, -2.0, 0.5, 3.0], dtype=np.float32)
+    grad = np.array([2.0, 1.0, -1.0, 0.5], dtype=np.float32)
+
+    def reference(d_arr: np.ndarray, g_arr: np.ndarray) -> np.ndarray:
+        d = np.asarray(d_arr, dtype=np.float64)
+        g = np.asarray(g_arr, dtype=np.float64)
+        denom = float(g @ g)
+        return d if denom == 0.0 else d - g * (float(g @ d) / denom)
+
+    for scale in (1e30, 1e20, 1.0, 1e-10, 1e-19, 1e-20, 1e-25, 1e-30):
+        g = jnp.asarray(grad * np.float32(scale))
+        safe, valid = jax.jit(flad_noise_component_transaction)(jnp.asarray(delta), g)
+        assert bool(valid)
+        ref = reference(delta, grad * np.float32(scale))
+        chex.assert_trees_all_close(safe, jnp.asarray(ref, dtype=jnp.float32), atol=1e-5)
+
+    # Exact zero gradient returns delta
+    safe_zero, valid_zero = jax.jit(flad_noise_component_transaction)(
+        jnp.asarray(delta), jnp.zeros_like(jnp.asarray(grad))
+    )
+    assert bool(valid_zero)
+    chex.assert_trees_all_close(safe_zero, jnp.asarray(delta), atol=1e-7)
+
