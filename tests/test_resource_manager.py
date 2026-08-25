@@ -668,9 +668,7 @@ def _minimal_generator_manager(**overrides: object) -> GeneratorMetaResourceMana
         ("advantage_clip", True),
     ],
 )
-def test_learned_resource_manager_rejects_invalid_float32_config(
-    field: str, value: object
-) -> None:
+def test_learned_resource_manager_rejects_invalid_float32_config(field: str, value: object) -> None:
     with pytest.raises(ValueError, match=field):
         LearnedResourceManager(n_actions=2, **{field: value})  # type: ignore[arg-type]
 
@@ -686,10 +684,17 @@ def test_resource_manager_float32_config_is_canonical_and_json_safe() -> None:
         advantage_clip=np.float32(2.0),
     )
     config = manager.to_config()
-    assert all(type(config[name]) is float for name in (
-        "learning_rate", "discount", "exploration", "loss_decay", "cost_weight",
-        "advantage_clip",
-    ))
+    assert all(
+        type(config[name]) is float
+        for name in (
+            "learning_rate",
+            "discount",
+            "exploration",
+            "loss_decay",
+            "cost_weight",
+            "advantage_clip",
+        )
+    )
 
 
 def test_resource_manager_preflights_complete_state_before_allocation() -> None:
@@ -719,7 +724,7 @@ def test_generator_config_rejects_hostile_sequences_and_accepts_mapping_proxy() 
 
 @pytest.mark.parametrize("shape", [(), (1,), (1, 2), (2, 1), (3,)])
 def test_resource_manager_updates_reject_wrong_vector_shapes_under_jit(
-    shape: tuple[int, ...]
+    shape: tuple[int, ...],
 ) -> None:
     learned = LearnedResourceManager(n_actions=2)
     generator = _minimal_generator_manager()
@@ -859,3 +864,19 @@ def test_resource_manager_serialized_schemas_are_exact() -> None:
         invalid.update(mutation)
         with pytest.raises(ValueError, match=match):
             GeneratorMetaResourceManager.from_config(invalid)
+
+
+def test_learned_resource_manager_preserves_centering_under_extreme_gap() -> None:
+    # Extreme preference gap where leading action is masked out with NaN
+    manager = LearnedResourceManager(n_actions=3, n_contexts=1, exploration=0.0, learning_rate=1.0)
+    base_state = manager.init()
+    for gap in [0.0, 30.0, 60.0, 200.0]:
+        state = base_state.replace(log_weights=jnp.array([[gap, 0.0, 0.0]], dtype=jnp.float32))
+        res = manager.update(
+            state, jnp.array([float("nan"), 1.0, 3.0], dtype=jnp.float32), context_id=0
+        )
+        # Surviving actions (indices 1 and 2) have losses 1.0 and 3.0 -> advantages are +1 and -1
+        adv1 = float(res.advantages[1])
+        adv2 = float(res.advantages[2])
+        assert adv1 == pytest.approx(1.0, abs=1e-5)
+        assert adv2 == pytest.approx(-1.0, abs=1e-5)

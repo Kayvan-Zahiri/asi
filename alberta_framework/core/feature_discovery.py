@@ -105,6 +105,17 @@ def validated_float32_scalar(name: str, value: object, **domain: Any) -> float:
     return stored
 
 
+def _masked_normalized_weights(weights: Array, mask: Array) -> Array:
+    """Normalize weights over the active mask, falling back to uniform over the mask."""
+    active_weights = jnp.where(mask, weights, 0.0)
+    mass = jnp.sum(active_weights)
+    count = jnp.maximum(jnp.sum(mask.astype(jnp.float32)), 1.0)
+    uniform = jnp.where(mask, 1.0 / count, 0.0)
+    normalized = active_weights / jnp.maximum(mass, jnp.asarray(1e-12, dtype=jnp.float32))
+    valid_mass = (mass > 1e-12) & jnp.isfinite(mass) & (jnp.abs(jnp.sum(normalized) - 1.0) < 0.1)
+    return jnp.where(valid_mass, normalized, uniform)
+
+
 def _skip_zero_scale(scale: float, value: Array) -> Array:
     """Keep finite multiplication exact while repairing zero-scaled poison."""
     product = scale * value
@@ -1036,8 +1047,7 @@ class FixedBudgetFeatureLearner:
         finite: Array,
     ) -> Array:
         """Exponentiated-gradient preference update for utility scores."""
-        finite_mass = jnp.maximum(jnp.sum(jnp.where(finite, allocation, 0.0)), 1e-12)
-        masked_allocation = jnp.where(finite, allocation / finite_mass, 0.0)
+        masked_allocation = _masked_normalized_weights(allocation, finite)
         baseline = jnp.sum(masked_allocation * jnp.where(finite, scores, 0.0))
         advantages = jnp.where(finite, scores - baseline, 0.0)
         advantages = jnp.clip(

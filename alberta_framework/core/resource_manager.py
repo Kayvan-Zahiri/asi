@@ -165,6 +165,17 @@ def _require_vector(name: str, value: object, length: int, *, dtype: Any) -> Arr
     return cast(Array, value)
 
 
+def _masked_normalized_weights(weights: Array, mask: Array) -> Array:
+    """Normalize weights over the active mask, falling back to uniform over the mask."""
+    active_weights = jnp.where(mask, weights, 0.0)
+    mass = jnp.sum(active_weights)
+    count = jnp.maximum(jnp.sum(mask.astype(jnp.float32)), 1.0)
+    uniform = jnp.where(mask, 1.0 / count, 0.0)
+    normalized = active_weights / jnp.maximum(mass, jnp.asarray(1e-12, dtype=jnp.float32))
+    valid_mass = (mass > 1e-12) & jnp.isfinite(mass) & (jnp.abs(jnp.sum(normalized) - 1.0) < 0.1)
+    return jnp.where(valid_mass, normalized, uniform)
+
+
 def _skip_zero_scale(scale: float, value: Array) -> Array:
     """Keep finite multiplication exact while repairing zero-scaled poison."""
     product = scale * value
@@ -594,8 +605,7 @@ class LearnedResourceManager:
         adjusted = jnp.where(valid_actions, safe_losses + cost_terms, 0.0)
 
         weights = self._weights_jit(state, context)
-        finite_weight_sum = jnp.maximum(jnp.sum(jnp.where(valid_actions, weights, 0.0)), 1e-12)
-        masked_weights = jnp.where(valid_actions, weights / finite_weight_sum, 0.0)
+        masked_weights = _masked_normalized_weights(weights, valid_actions)
         baseline = jnp.sum(masked_weights * adjusted)
         advantages = jnp.where(valid_actions, baseline - adjusted, 0.0)
         advantages = jnp.clip(
@@ -1191,8 +1201,7 @@ class GeneratorMetaResourceManager:
         adjusted = jnp.where(finite, safe_rewards - cost_terms, 0.0)
 
         weights = self._weights_jit(state, context)
-        finite_weight_sum = jnp.maximum(jnp.sum(jnp.where(finite, weights, 0.0)), 1e-12)
-        masked_weights = jnp.where(finite, weights / finite_weight_sum, 0.0)
+        masked_weights = _masked_normalized_weights(weights, finite)
         baseline = jnp.sum(masked_weights * adjusted)
         selection_input_valid = jnp.asarray(True, dtype=jnp.bool_)
         if self._update_rule == "exp3":
