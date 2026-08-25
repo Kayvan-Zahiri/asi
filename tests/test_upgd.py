@@ -2219,3 +2219,26 @@ class TestLoops:
         stream = RandomWalkStream(feature_dim=4, drift_rate=0.0, noise_std=0.05)
         result = run_upgd_loop(learner, stream, num_steps=50, key=jr.key(0))
         chex.assert_shape(result.metrics, (50, 4))
+
+    def test_gradient_alignment_is_scale_free(self):
+        for exponent in (10, 8, 4, 0, -4, -8, -10):
+            scale = 10.0**exponent
+            learner = UPGDLearner(
+                n_heads=1,
+                hidden_sizes=(),
+                sparsity=0.0,
+                step_size=0.0,
+                perturbation_sigma=0.0,
+                meta_plasticity_mode="gradient_alignment",
+                meta_plasticity_step_size=0.5,
+                meta_plasticity_min_multiplier=0.1,
+                meta_plasticity_max_multiplier=10.0,
+            )
+            state = learner.init(feature_dim=3, key=jr.key(16))
+            obs = jnp.array([1.0, -0.5, 0.25], dtype=jnp.float32) * scale
+            target = jnp.array([1.0], dtype=jnp.float32) * scale
+            state = learner.update(state, obs, target).state
+            state = learner.update(state, obs, target).state
+            assert jnp.allclose(state.meta_head_weight_log_scale, 0.5, atol=1e-5)
+            assert jnp.allclose(state.meta_head_bias_log_scale, 0.5, atol=1e-5)
+
