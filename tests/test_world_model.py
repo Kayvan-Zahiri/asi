@@ -439,3 +439,25 @@ def test_world_model_config_rejects_hostile_float_subclass_without_hooks() -> No
     with pytest.raises(ValueError, match="finite real scalar"):
         WorldModelConfig(observation_dim=2, step_size=HostileFloat(0.1))
     assert not hook_ran
+
+def test_world_model_observation_scale_round_trip_below_1e6() -> None:
+    from alberta_framework.core.world_model import (
+        ActionConditionedWorldModel,
+        ActionConditionedWorldModelConfig,
+    )
+
+    for scale in (1.0, 1e-3, 1e-6, 1e-7, 1e-9, 1e-12, 1e-20, 1e-30):
+        config = ActionConditionedWorldModelConfig(
+            observation_dim=1,
+            n_actions=2,
+            hidden_sizes=(),
+            observation_scale=(scale,),
+            predict_delta=True,
+        )
+        model = ActionConditionedWorldModel(config)
+        obs = jnp.asarray([1.0 * scale], dtype=jnp.float32)
+        next_obs = jnp.asarray([3.0 * scale], dtype=jnp.float32)
+        target = model.targets(obs, jnp.array(0, dtype=jnp.int32), jnp.array(0.0), next_obs)
+        # Delta is 2.0 * scale, normalized delta target must be 2.0
+        chex.assert_trees_all_close(target[0], jnp.float32(2.0), atol=1e-5)
+
