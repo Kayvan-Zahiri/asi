@@ -340,3 +340,14 @@ def test_geometry_runner_rejects_invalid_transactions(monkeypatch: pytest.Monkey
     )
     with pytest.raises(ValueError, match="transaction"):
         run_streaming_matrix_evaluation()
+
+def test_spectral_matrix_sign_underflow_scale_preserves_orthogonal_sign() -> None:
+    m = jnp.array([[2.0, 1.0], [0.5, -1.0]], dtype=jnp.float32)
+    expected_sign, _ = jax.jit(spectral_matrix_sign_transaction)(m)
+
+    for scale in (1e-13, 1e-15, 1e-20, 1e-25):
+        tiny = m * jnp.asarray(scale, dtype=jnp.float32)
+        safe, valid = jax.jit(spectral_matrix_sign_transaction)(tiny)
+        assert bool(valid)
+        np.testing.assert_allclose(safe, expected_sign, rtol=1e-5, atol=1e-6)
+
