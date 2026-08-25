@@ -173,11 +173,11 @@ def spectral_matrix_sign_transaction(matrix: Array, *, steps: int = 5) -> tuple[
         raise ValueError("matrix must be non-empty and steps a positive integer")
     norm = jnp.linalg.norm(value)
     uint_type = {
-        jnp.dtype("float32"): jnp.uint32,
-        jnp.dtype("float64"): jnp.uint64,
-        jnp.dtype("float16"): jnp.uint16,
-        jnp.dtype("bfloat16"): jnp.uint16,
-    }.get(value.dtype, jnp.uint32)
+        1: jnp.uint8,
+        2: jnp.uint16,
+        4: jnp.uint32,
+        8: jnp.uint64,
+    }.get(value.dtype.itemsize, jnp.uint32)
     mask_int = (1 << (value.dtype.itemsize * 8 - 1)) - 1
     mask = jnp.asarray(mask_int, dtype=uint_type)
     has_nonzero_bits = jnp.any(

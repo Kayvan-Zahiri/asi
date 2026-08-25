@@ -350,8 +350,22 @@ def test_spectral_matrix_sign_subnormal_fails_closed() -> None:
     assert not bool(valid)
     assert bool(jnp.all(safe == 0.0))
 
-    # Exact zero matrix remains valid
+    # Exact zero and signed zero matrices remain valid
     zeros_f32 = jnp.zeros((2, 2), dtype=jnp.float32)
     safe_zero, valid_zero = spectral_matrix_sign_transaction(zeros_f32)
     assert bool(valid_zero)
     assert bool(jnp.all(safe_zero == 0.0))
+
+    signed_zeros_f32 = jnp.array([[-0.0, -0.0], [-0.0, -0.0]], dtype=jnp.float32)
+    safe_neg_zero, valid_neg_zero = spectral_matrix_sign_transaction(signed_zeros_f32)
+    assert bool(valid_neg_zero)
+    assert bool(jnp.all(safe_neg_zero == 0.0))
+
+    # Float8 unit matrices evaluate eagerly and under JIT
+    for dt_name in ("float8_e4m3fn", "float8_e5m2"):
+        dt = getattr(jnp, dt_name)
+        eye_f8 = jnp.eye(2, dtype=dt)
+        safe_f8, valid_f8 = spectral_matrix_sign_transaction(eye_f8)
+        assert bool(valid_f8)
+        jit_safe_f8, jit_valid_f8 = jax.jit(spectral_matrix_sign_transaction)(eye_f8)
+        assert bool(jit_valid_f8)
