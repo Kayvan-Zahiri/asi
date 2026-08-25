@@ -11,6 +11,7 @@ from alberta_framework.core.upgd_memory import (
     UPGDMemoryConfig,
     UPGDMemoryLearner,
     UPGDMemoryState,
+    _normalize_simplex,
     run_upgd_memory_arrays,
 )
 
@@ -564,3 +565,21 @@ def test_upgd_memory_preserves_legal_closed_endpoints() -> None:
     assert allocation_endpoint.target_allocation_rate == 1.0
     assert fixed_threshold.min_novelty_threshold == 0.5
     assert fixed_threshold.max_novelty_threshold == 0.5
+
+@pytest.mark.parametrize(
+    "p",
+    [
+        [0.0, 0.0, 0.0],
+        [-1.0, -2.0, -3.0],
+        [1e38, 1.0, 1.0],
+        [7.5e-13, 0.0, 0.0],
+        [1e-30, 0.0, 0.0],
+        [1.0, 2.0, 3.0],
+    ],
+)
+def test_normalize_simplex_preserves_unit_mass(p: list[float]) -> None:
+    arr = jnp.asarray(p, dtype=jnp.float32)
+    norm = _normalize_simplex(arr)
+    assert bool(jnp.all(norm >= 0.0))
+    assert bool(jnp.isclose(jnp.sum(norm), 1.0, atol=1e-5))
+
