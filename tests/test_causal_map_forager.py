@@ -3086,3 +3086,10 @@ def test_deterministic_inv_cdf_coefficients_are_pinned() -> None:
         if isinstance(node, ast.Constant) and isinstance(node.value, float)
     )
     assert observed == _AS241_SOURCE_CONSTANTS
+
+@pytest.mark.parametrize("code", ("b", "B", "h", "H", "i", "I", "l", "L", "q", "Q"))
+def test_causal_map_forager_admits_all_numpy_integer_families(code: str) -> None:
+    int_type = np.dtype(code).type
+    cfg = CausalMapForagerConfig(initial_retry_delay=int_type(1))
+    assert cfg.initial_retry_delay == 1
+
