@@ -303,3 +303,13 @@ def test_prototype_valid_construction() -> None:
     assert restored == cfg
     gru = GRUPerceptionConfig(observation_dim=4, hidden_dim=4)
     assert gru.augmented_dim() == 8
+
+def test_prototype_agent_config_caps_n_dreams_per_step() -> None:
+    oak = _oak()
+    with pytest.raises(ValueError, match="n_dreams_per_step"):
+        PrototypeAgentConfig(oak=oak, n_dreams_per_step=10_001)
+
+    payload = {"type": "PrototypeAgentConfig", "oak": oak.to_config(), "n_dreams_per_step": 10_001}
+    with pytest.raises(ValueError, match="n_dreams_per_step"):
+        PrototypeAgentConfig.from_config(payload)
+

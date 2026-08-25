@@ -725,7 +725,7 @@ class PrototypeAgentConfig:
                 "n_dreams_per_step",
                 self.n_dreams_per_step,
                 minimum=0,
-                maximum=_INT32_MAX,
+                maximum=10_000,
             ),
         )
         # horde_hidden_sizes: hostile-safe per-element validation
@@ -1335,7 +1335,7 @@ class PrototypeAgentConfig:
             "buffer_capacity", data.pop("buffer_capacity", 200), minimum=1, maximum=_INT32_MAX
         )
         n_dreams_per_step = _require_int(
-            "n_dreams_per_step", data.pop("n_dreams_per_step", 0), minimum=0, maximum=_INT32_MAX
+            "n_dreams_per_step", data.pop("n_dreams_per_step", 0), minimum=0, maximum=10_000
         )
         dream_next_observation_mode = data.pop(
             "dream_next_observation_mode",
