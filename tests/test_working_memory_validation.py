@@ -457,3 +457,31 @@ def test_working_transform_resource_preflight_precedes_jax_conversion() -> None:
             HostArray(1),  # type: ignore[arg-type]
             HostArray(1),  # type: ignore[arg-type]
         )
+
+
+def test_working_memory_decay_rates_cardinality_bounds() -> None:
+    # 4096 is accepted
+    rates_4096 = (0.5,) * 4096
+    cfg = WorkingMemoryConfig(
+        observation_dim=2,
+        action_dim=1,
+        reward_dim=1,
+        observation_decay_rates=rates_4096,
+    )
+    assert len(cfg.observation_decay_rates) == 4096
+
+    # 4097 is rejected before per-element validation
+    rates_4097 = (0.5,) * 4097
+    with pytest.raises(ValueError, match="at most 4096 decay rates"):
+        WorkingMemoryConfig(
+            observation_dim=2,
+            action_dim=1,
+            reward_dim=1,
+            observation_decay_rates=rates_4097,
+        )
+
+    # Deserialization rejects > 4096 items
+    payload = cfg.to_config()
+    payload["observation_decay_rates"] = [0.5] * 4097
+    with pytest.raises(ValueError, match="at most 4096 decay rates"):
+        WorkingMemoryConfig.from_config(payload)

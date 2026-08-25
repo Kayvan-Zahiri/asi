@@ -124,8 +124,23 @@ class WorkingMemoryConfig:
             if key in payload:
                 value = payload[key]
                 if type(value) is list:
+                    if len(value) > _MAX_WORKING_MEMORY_CONFIGURATION_ITEMS:
+                        raise ValueError(
+
+                                f"{key} must contain at most "
+                                f"{_MAX_WORKING_MEMORY_CONFIGURATION_ITEMS} decay rates"
+
+                        )
                     payload[key] = tuple(value)
-                elif type(value) is not tuple:
+                elif type(value) is tuple:
+                    if len(value) > _MAX_WORKING_MEMORY_CONFIGURATION_ITEMS:
+                        raise ValueError(
+
+                                f"{key} must contain at most "
+                                f"{_MAX_WORKING_MEMORY_CONFIGURATION_ITEMS} decay rates"
+
+                        )
+                else:
                     raise ValueError(f"{key} must be an actual list or tuple")
                 if any(type(item) is not float for item in payload[key]):
                     raise ValueError(f"serialized {key} values must be JSON numbers")
@@ -216,6 +231,7 @@ class WorkingMemoryArrayResult:
 
 
 _INT32_MAX = 2**31 - 1
+_MAX_WORKING_MEMORY_CONFIGURATION_ITEMS = 1 << 12
 _FLOAT32_MIN_NORMAL = float.fromhex("0x1.0p-126")
 _ACTUAL_INT_TYPES: tuple[type, ...] = (
     int,
@@ -287,6 +303,10 @@ def _require_array(
 def _validate_decay_rates(name: str, rates: object) -> tuple[float, ...]:
     if type(rates) is not tuple:
         raise ValueError(f"{name} must be an actual tuple")
+    if len(rates) > _MAX_WORKING_MEMORY_CONFIGURATION_ITEMS:
+        raise ValueError(
+            f"{name} must contain at most {_MAX_WORKING_MEMORY_CONFIGURATION_ITEMS} decay rates"
+        )
     return tuple(
         validated_float32_scalar(
             f"{name}[{index}]",
