@@ -443,6 +443,11 @@ def _divide_by_positive_scale(values: Array, scale: Array) -> Array:
     return jnp.where(scale > 0.0, scaled, 0.0)
 
 
+def _skip_zero_scale(scale: Array, value: Array) -> Array:
+    """Skip ``0 * inf`` so a closed unit gate does not poison sensitivity."""
+    return jnp.where(scale == 0.0, jnp.zeros_like(value), scale * value)
+
+
 def _scale_safe_clip_by_l2_norm(
     values: Array,
     clip: Array,
@@ -1715,7 +1720,16 @@ class OnlineGatedStateBuilder:
 
         gate_weights, gate_bias, _, _ = self._unpack_parameters(state.parameters)
         gate = jax.nn.sigmoid(gate_weights @ safe_event + gate_bias)
-        new_sensitivity = direct_sensitivity + ((1.0 - gate)[:, None] * state.parameter_sensitivity)
+        forget_scale = (1.0 - gate)[:, None]
+        checked_sensitivity = jnp.where(
+            forget_scale == 0.0,
+            jnp.zeros_like(state.parameter_sensitivity),
+            state.parameter_sensitivity,
+        )
+        new_sensitivity = direct_sensitivity + _skip_zero_scale(
+            forget_scale,
+            state.parameter_sensitivity,
+        )
         candidate_state = OnlineGatedStateBuilderState(
             parameters=state.parameters,
             hidden=new_hidden,
@@ -1725,7 +1739,12 @@ class OnlineGatedStateBuilder:
             last_gradient_norm=state.last_gradient_norm,
         )
         update_applied = (
-            event_valid & self._state_is_valid(state) & self._state_is_valid(candidate_state)
+            event_valid
+            & self._state_is_valid(
+                state,
+                parameter_sensitivity=checked_sensitivity,
+            )
+            & self._state_is_valid(candidate_state)
         )
         next_state = select_transaction(update_applied, candidate_state, state)
         representation = self.encode(next_state, raw_observation)
@@ -1826,11 +1845,20 @@ class OnlineGatedStateBuilder:
         )
 
     @staticmethod
-    def _state_is_valid(state: OnlineGatedStateBuilderState) -> Array:
+    def _state_is_valid(
+        state: OnlineGatedStateBuilderState,
+        *,
+        parameter_sensitivity: Array | None = None,
+    ) -> Array:
+        sensitivity = (
+            state.parameter_sensitivity
+            if parameter_sensitivity is None
+            else parameter_sensitivity
+        )
         return (
             jnp.all(jnp.isfinite(state.parameters))
             & jnp.all(jnp.isfinite(state.hidden))
-            & jnp.all(jnp.isfinite(state.parameter_sensitivity))
+            & jnp.all(jnp.isfinite(sensitivity))
             & jnp.isfinite(state.last_gradient_norm)
             & (state.last_gradient_norm >= 0.0)
             & (state.step_count >= 0)

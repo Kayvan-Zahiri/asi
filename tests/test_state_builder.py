@@ -185,6 +185,45 @@ def test_fixed_trace_episode_reset_clears_memory_but_preserves_event_count() -> 
     assert bool(jnp.any(restarted_state.observation_traces != 0.0))
 
 
+def test_online_gated_unit_gate_one_does_not_multiply_inf_sensitivity() -> None:
+    """A fully open gate forgets old sensitivity; 0 * inf must not freeze updates."""
+    builder = OnlineGatedStateBuilder(
+        OnlineGatedStateBuilderConfig(
+            observation_dim=2,
+            hidden_dim=2,
+        )
+    )
+    state = builder.init(jr.key(11))
+    cfg = builder.config
+    matrix_size = cfg.hidden_dim * cfg.event_dim()
+    saturated_gate_parameters = (
+        state.parameters.at[:matrix_size]
+        .set(0.0)
+        .at[matrix_size : matrix_size + cfg.hidden_dim]
+        .set(90.0)
+    )
+    state = state.replace(parameters=saturated_gate_parameters)
+    state, _ = builder.start(state, jnp.asarray([1.0, 0.0]))
+    poisoned = state.replace(
+        parameter_sensitivity=jnp.full_like(state.parameter_sensitivity, jnp.inf)
+    )
+    gate = jnp.ones((builder.config.hidden_dim,), dtype=jnp.float32)
+    forget_scale = (1.0 - gate)[:, None]
+    raw = forget_scale * jnp.asarray(jnp.inf, dtype=jnp.float32)
+    assert not bool(jnp.all(jnp.isfinite(raw)))
+
+    next_state, reported = builder.update(
+        poisoned,
+        jnp.asarray([0.0, 1.0]),
+        0,
+        0.0,
+        1.0,
+    )
+
+    chex.assert_tree_all_finite(next_state)
+    assert bool(jnp.all(jnp.isfinite(reported)))
+
+
 def test_online_gated_builder_updates_recurrent_parameters_from_delayed_gradient() -> None:
     builder = OnlineGatedStateBuilder(
         OnlineGatedStateBuilderConfig(
