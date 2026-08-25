@@ -564,3 +564,20 @@ def test_upgd_memory_preserves_legal_closed_endpoints() -> None:
     assert allocation_endpoint.target_allocation_rate == 1.0
     assert fixed_threshold.min_novelty_threshold == 0.5
     assert fixed_threshold.max_novelty_threshold == 0.5
+
+def test_normalize_simplex_guarantees_proper_simplex_distribution() -> None:
+    from alberta_framework.core.upgd_memory import _normalize_simplex
+
+    for p in (
+        [0.0, 0.0, 0.0],
+        [-1.0, -2.0, -3.0],
+        [1e38, 1.0, 1.0],
+        [7.5e-13, 0.0, 0.0],
+        [1e-30, 0.0, 0.0],
+        [0.2, 0.3, 0.5],
+    ):
+        arr = jnp.asarray(p, dtype=jnp.float32)
+        res = jax.jit(_normalize_simplex)(arr)
+        chex.assert_trees_all_close(jnp.sum(res), jnp.float32(1.0), atol=1e-5)
+        assert bool(jnp.all(res >= 0.0))
+
