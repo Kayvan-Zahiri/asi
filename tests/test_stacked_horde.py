@@ -939,3 +939,39 @@ def test_stacked_horde_public_state_shape_rejected_before_dot() -> None:
     state = horde.init().replace(weights=jnp.zeros((1, 3), dtype=jnp.float32))
     with pytest.raises(ValueError, match="weights"):
         horde.predict(state, jnp.ones(2, dtype=jnp.float32))
+
+
+def test_stacked_horde_demon_count_cardinality_bounds() -> None:
+    # 4096 is accepted
+    cfg = StackedHordeConfig(
+        n_demons=4096,
+        feature_dim=2,
+        gammas=(0.9,) * 4096,
+        lamdas=(0.1,) * 4096,
+        cumulant_indices=(0,) * 4096,
+    )
+    assert cfg.n_demons == 4096
+
+    # 4097 is rejected
+    with pytest.raises(ValueError, match="n_demons must be an integer in \\[1, 4096\\]"):
+        StackedHordeConfig(
+            n_demons=4097,
+            feature_dim=2,
+            gammas=(0.9,) * 4097,
+            lamdas=(0.1,) * 4097,
+            cumulant_indices=(0,) * 4097,
+        )
+
+    # from_config rejects oversized sequences
+    payload = cfg.to_config()
+    payload["gammas"] = [0.9] * 4097
+    with pytest.raises(ValueError, match="must contain at most 4096 items"):
+        StackedHordeConfig.from_config(payload)
+
+    # nexting_spec rejects oversized product
+    with pytest.raises(ValueError, match="nexting demon count must be <= 4096"):
+        nexting_spec(
+            feature_dim=2,
+            cumulant_indices=tuple(range(100)),
+            gammas=(0.1,) * 50,
+        )
