@@ -2219,3 +2219,27 @@ class TestLoops:
         stream = RandomWalkStream(feature_dim=4, drift_rate=0.0, noise_std=0.05)
         result = run_upgd_loop(learner, stream, num_steps=50, key=jr.key(0))
         chex.assert_shape(result.metrics, (50, 4))
+
+
+def test_upgd_gradient_alignment_scale_free() -> None:
+    # Scale-free gradient alignment across 20 orders of magnitude
+    t1 = (jnp.array([1.0, -2.0, 3.0], dtype=jnp.float32),)
+    for scale in (1e-10, 1e-5, 1.0, 1e5, 1e10):
+        scaled_t1 = (t1[0] * jnp.asarray(scale, dtype=jnp.float32),)
+        # Identical
+        align_pos = UPGDLearner._gradient_alignment(scaled_t1, scaled_t1)
+        assert jnp.isclose(align_pos, 1.0, atol=1e-5)
+        # Reversed
+        scaled_t1_neg = (-scaled_t1[0],)
+        align_neg = UPGDLearner._gradient_alignment(scaled_t1, scaled_t1_neg)
+        assert jnp.isclose(align_neg, -1.0, atol=1e-5)
+
+
+def test_upgd_gradient_alignment_empty_or_nonfinite() -> None:
+    zero_t = (jnp.zeros(3, dtype=jnp.float32),)
+    norm_t = (jnp.array([1.0, 2.0, 3.0], dtype=jnp.float32),)
+    nan_t = (jnp.array([1.0, float("nan"), 3.0], dtype=jnp.float32),)
+
+    assert jnp.isclose(UPGDLearner._gradient_alignment(zero_t, norm_t), 0.0)
+    assert jnp.isclose(UPGDLearner._gradient_alignment(norm_t, zero_t), 0.0)
+    assert jnp.isclose(UPGDLearner._gradient_alignment(nan_t, norm_t), 0.0)

@@ -1991,18 +1991,43 @@ class UPGDLearner:
         return jnp.sqrt(total + 1e-12)
 
     @staticmethod
+    def _tuple_max_abs(xs: tuple[Array, ...]) -> Array:
+        """Maximum absolute value across a static tuple of arrays."""
+        if not xs:
+            return jnp.array(0.0, dtype=jnp.float32)
+        max_val = jnp.max(jnp.abs(xs[0]))
+        for x in xs[1:]:
+            max_val = jnp.maximum(max_val, jnp.max(jnp.abs(x)))
+        return max_val
+
+    @staticmethod
     def _gradient_alignment(
         previous: tuple[Array, ...],
         current: tuple[Array, ...],
     ) -> Array:
-        """Cosine alignment of two gradient tuples, zero for empty gradients."""
-        previous_norm = UPGDLearner._tuple_norm(previous)
-        current_norm = UPGDLearner._tuple_norm(current)
-        return jnp.where(
-            (previous_norm > 1e-6) & (current_norm > 1e-6),
-            UPGDLearner._tuple_dot(previous, current) / (previous_norm * current_norm + 1e-12),
-            jnp.array(0.0, dtype=jnp.float32),
+        """Cosine alignment of two gradient tuples, zero for empty or non-finite gradients."""
+        if not previous or not current:
+            return jnp.array(0.0, dtype=jnp.float32)
+        prev_max = UPGDLearner._tuple_max_abs(previous)
+        curr_max = UPGDLearner._tuple_max_abs(current)
+        _, prev_exp = jnp.frexp(prev_max)
+        _, curr_exp = jnp.frexp(curr_max)
+        prev_scaled = tuple(jnp.ldexp(x, -prev_exp) for x in previous)
+        curr_scaled = tuple(jnp.ldexp(y, -curr_exp) for y in current)
+        prev_norm_sq = sum(jnp.sum(jnp.square(x)) for x in prev_scaled)
+        curr_norm_sq = sum(jnp.sum(jnp.square(y)) for y in curr_scaled)
+        dot_scaled = sum(jnp.sum(x * y) for x, y in zip(prev_scaled, curr_scaled))
+        denom = jnp.sqrt(prev_norm_sq * curr_norm_sq)
+        cos = jnp.clip(dot_scaled / jnp.where(denom > 0.0, denom, 1.0), -1.0, 1.0)
+        valid = (
+            (prev_max > 0.0)
+            & (curr_max > 0.0)
+            & jnp.isfinite(prev_max)
+            & jnp.isfinite(curr_max)
+            & (denom > 0.0)
+            & jnp.isfinite(cos)
         )
+        return jnp.where(valid, cos, jnp.array(0.0, dtype=jnp.float32))
 
     @functools.partial(jax.jit, static_argnums=(0,))
     def predict(self, state: UPGDState, observation: Array) -> Array:
