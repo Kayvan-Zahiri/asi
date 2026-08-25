@@ -464,7 +464,7 @@ class _FloatSpoof:
         ({"max_delta_scale": 1e100}, "max_delta_scale must remain finite once narrowed"),
         ({"reward_scale": 1e-100}, "reward_scale must remain positive once narrowed"),
         ({"max_delta_scale": 1e-100}, "max_delta_scale must remain positive once narrowed"),
-        ({"observation_scale": (1e-100, 1.0)}, "must remain positive once narrowed"),
+        ({"observation_scale": (1e-100, 1.0)}, r"must be >=|must remain positive once narrowed"),
         (
             {"utility_decay": 1.0 - 1e-10},
             r"utility_decay must remain in \[0.0, 1.0\) once narrowed",

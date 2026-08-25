@@ -53,6 +53,7 @@ from alberta_framework.core.update_safety import (
 )
 
 _INT32_MAX = 2**31 - 1
+_FLOAT32_MIN_NORMAL = float.fromhex("0x1.0p-126")
 _ACTUAL_INT_TYPES = frozenset(
     {
         int,
@@ -365,7 +366,7 @@ class ActionConditionedWorldModelConfig:
                 raise ValueError("observation_scale length must equal observation_dim")
             observation_scale = tuple(
                 _validated_config_float(
-                    f"observation_scale[{index}]", scale, positive=True
+                    f"observation_scale[{index}]", scale, lower=_FLOAT32_MIN_NORMAL
                 )
                 for index, scale in enumerate(observation_scale)
             )
