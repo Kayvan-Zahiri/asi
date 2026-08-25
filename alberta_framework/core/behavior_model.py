@@ -222,16 +222,24 @@ def floor_and_renormalize_probabilities(
     """
     probs = jnp.asarray(probabilities, dtype=jnp.float32)
     n_actions = probabilities.shape[-1]
+    uniform = jnp.ones_like(probs) / n_actions
     if min_probability * n_actions >= 1.0:
-        return jnp.ones_like(probs) / n_actions
+        return uniform
     clipped = jnp.maximum(probs, 0.0)
+    total_mass = jnp.sum(clipped, axis=-1, keepdims=True)
     normalizer = jnp.maximum(
-        jnp.sum(clipped, axis=-1, keepdims=True),
+        total_mass,
         jnp.asarray(1e-12, dtype=jnp.float32),
     )
     normalized = clipped / normalizer
     floor_mass = jnp.asarray(min_probability * n_actions, dtype=jnp.float32)
-    return jnp.asarray(min_probability, dtype=jnp.float32) + (1.0 - floor_mass) * normalized
+    result = jnp.asarray(min_probability, dtype=jnp.float32) + (1.0 - floor_mass) * normalized
+    valid_mass = (
+        (total_mass > 1e-12)
+        & jnp.isfinite(total_mass)
+        & (jnp.abs(jnp.sum(normalized, axis=-1, keepdims=True) - 1.0) < 0.1)
+    )
+    return jnp.where(valid_mass, result, uniform)
 
 
 def selected_action_probabilities(

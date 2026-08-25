@@ -868,3 +868,11 @@ class TestBehaviorModelSequenceCeiling:
         result = run_behavior_model_from_arrays(model, state, observations, actions)
         chex.assert_shape(result.probabilities, (12, 3))
         assert int(result.state.step_count) == 12
+
+def test_floor_and_renormalize_probabilities_degenerate_inputs_return_simplex() -> None:
+    # Zero mass and float32 underflow degenerate cases must return valid simplex summing to 1.0
+    for probs in ([0.0, 0.0, 0.0], [1e38, 1.0, 1.0]):
+        out = floor_and_renormalize_probabilities(jnp.asarray(probs, jnp.float32))
+        chex.assert_trees_all_close(jnp.sum(out), 1.0, atol=1e-6)
+        chex.assert_trees_all_close(out, jnp.ones(3, dtype=jnp.float32) / 3.0, atol=1e-6)
+
