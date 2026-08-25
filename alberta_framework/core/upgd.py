@@ -134,8 +134,7 @@ def _require_upgd_array_steps(observations: object, targets: object) -> int:
     except ValueError as error:
         if observations.ndim == 2 and not 1 <= observations.shape[0] <= _UPGD_LOOP_MAX_STEPS:
             raise ValueError(
-                "observations num_steps must be an integer in "
-                f"[1, {_UPGD_LOOP_MAX_STEPS}]"
+                f"observations num_steps must be an integer in [1, {_UPGD_LOOP_MAX_STEPS}]"
             ) from None
         raise error
     require_jax_leading_length("targets", targets, _UPGD_LOOP_BUDGET, ranks=(2,))
@@ -173,9 +172,7 @@ def _validated_config_float(
     return stored
 
 
-def _require_float32_resource(
-    name: str, *, vector_scalars: int, fixed_scalars: int = 0
-) -> None:
+def _require_float32_resource(name: str, *, vector_scalars: int, fixed_scalars: int = 0) -> None:
     total = vector_scalars + fixed_scalars
     if total > _INT32_MAX:
         raise ValueError(f"{name} scalar count must fit signed int32")
@@ -677,13 +674,9 @@ class UPGDLearner:
             raise ValueError("hidden_sizes must be a tuple of integers")
         canonical_hidden: list[int] = []
         for idx, size in enumerate(hidden_sizes):
-            canonical_hidden.append(
-                _require_int(f"hidden_sizes[{idx}]", size, minimum=1)
-            )
+            canonical_hidden.append(_require_int(f"hidden_sizes[{idx}]", size, minimum=1))
         hidden_sizes = tuple(canonical_hidden)
-        validated_step_size = _validated_config_float(
-            "step_size", step_size, lower=0.0
-        )
+        validated_step_size = _validated_config_float("step_size", step_size, lower=0.0)
         validated_perturbation_sigma = _validated_config_float(
             "perturbation_sigma", perturbation_sigma, lower=0.0
         )
@@ -710,8 +703,9 @@ class UPGDLearner:
             "leaky_relu_slope", leaky_relu_slope, lower=0.0
         )
         loss_normalization = _require_choice(
-            "loss_normalization", loss_normalization,
-                frozenset({"mean", "sum", "target_density", "target_structure"})
+            "loss_normalization",
+            loss_normalization,
+            frozenset({"mean", "sum", "target_density", "target_structure"}),
         )
         validated_positive_target_loss_scale = _validated_config_float(
             "positive_target_loss_scale", positive_target_loss_scale, lower=0.0
@@ -741,15 +735,21 @@ class UPGDLearner:
             "head_repetition_multiplier", head_repetition_multiplier, lower=0.0
         )
         validated_head_repetition_decay = _validated_config_float(
-            "head_repetition_decay", head_repetition_decay,
-                lower=0.0, upper=1.0, upper_inclusive=False
+            "head_repetition_decay",
+            head_repetition_decay,
+            lower=0.0,
+            upper=1.0,
+            upper_inclusive=False,
         )
         validated_head_repetition_delta_threshold = _validated_config_float(
             "head_repetition_delta_threshold", head_repetition_delta_threshold, lower=0.0
         )
         validated_head_repetition_pressure_threshold = _validated_config_float(
-            "head_repetition_pressure_threshold", head_repetition_pressure_threshold,
-                lower=0.0, upper=1.0, upper_inclusive=False
+            "head_repetition_pressure_threshold",
+            head_repetition_pressure_threshold,
+            lower=0.0,
+            upper=1.0,
+            upper_inclusive=False,
         )
         head_repetition_warmup_steps = _require_int(
             "head_repetition_warmup_steps", head_repetition_warmup_steps, minimum=0
@@ -770,26 +770,32 @@ class UPGDLearner:
                 upper_inclusive=False,
             )
         validated_unit_long_utility_decay = _validated_config_float(
-            "unit_long_utility_decay", unit_long_utility_decay,
-                lower=0.0, upper=1.0, upper_inclusive=False
+            "unit_long_utility_decay",
+            unit_long_utility_decay,
+            lower=0.0,
+            upper=1.0,
+            upper_inclusive=False,
         )
         validated_unit_gradient_decay = _validated_config_float(
             "unit_gradient_decay", unit_gradient_decay, lower=0.0, upper=1.0, upper_inclusive=False
         )
         unit_replacement_criterion = _require_choice(
-            "unit_replacement_criterion", unit_replacement_criterion,
-                frozenset({"low_utility", "stale_gradient_ratio", "low_long_and_gradient"})
+            "unit_replacement_criterion",
+            unit_replacement_criterion,
+            frozenset({"low_utility", "stale_gradient_ratio", "low_long_and_gradient"}),
         )
         unit_replacement_fanin = _require_choice(
-            "unit_replacement_fanin", unit_replacement_fanin,
-                frozenset({"random", "gradient_columns"})
+            "unit_replacement_fanin",
+            unit_replacement_fanin,
+            frozenset({"random", "gradient_columns"}),
         )
         validated_unit_replacement_loss_gate_ratio = _validated_config_float(
             "unit_replacement_loss_gate_ratio", unit_replacement_loss_gate_ratio, lower=0.0
         )
         unit_replacement_budget_mode = _require_choice(
-            "unit_replacement_budget_mode", unit_replacement_budget_mode,
-                frozenset({"always", "gated", "loss_pressure"})
+            "unit_replacement_budget_mode",
+            unit_replacement_budget_mode,
+            frozenset({"always", "gated", "loss_pressure"}),
         )
         validated_unit_replacement_outgoing_scale = _validated_config_float(
             "unit_replacement_outgoing_scale", unit_replacement_outgoing_scale, lower=0.0
@@ -810,8 +816,9 @@ class UPGDLearner:
             "loss_slow_decay", loss_slow_decay, lower=0.0, upper=1.0, upper_inclusive=False
         )
         adaptive_kappa_mode = _require_choice(
-            "adaptive_kappa_mode", adaptive_kappa_mode,
-                frozenset({"none", "loss_ratio", "gradient_alignment"})
+            "adaptive_kappa_mode",
+            adaptive_kappa_mode,
+            frozenset({"none", "loss_ratio", "gradient_alignment"}),
         )
         validated_adaptive_kappa_base = _validated_config_float(
             "adaptive_kappa_base", adaptive_kappa_base, positive=True
@@ -875,15 +882,14 @@ class UPGDLearner:
         adaptive_kappa_meta_warmup_steps = _require_int(
             "adaptive_kappa_meta_warmup_steps", adaptive_kappa_meta_warmup_steps, minimum=0
         )
-        if (
-            type(meta_plasticity_mode) is not str
-            or meta_plasticity_mode not in {"none", "gradient_alignment"}
-        ):
+        if type(meta_plasticity_mode) is not str or meta_plasticity_mode not in {
+            "none",
+            "gradient_alignment",
+        }:
             if type(meta_plasticity_mode) is str:
                 host_mpm = _require_exact_str("meta_plasticity_mode", meta_plasticity_mode)
                 msg = (
-                    "meta_plasticity_mode must be 'none' or 'gradient_alignment', "
-                    f"got '{host_mpm}'"
+                    f"meta_plasticity_mode must be 'none' or 'gradient_alignment', got '{host_mpm}'"
                 )
             else:
                 msg = "meta_plasticity_mode must be 'none' or 'gradient_alignment', got non-string"
@@ -923,10 +929,7 @@ class UPGDLearner:
                 "two_timescale_simplex",
             ),
         }
-        if (
-            type(readout_mode) is not str
-            or readout_mode not in readout_aliases
-        ):
+        if type(readout_mode) is not str or readout_mode not in readout_aliases:
             if type(readout_mode) is str:
                 host_rm = _require_exact_str("readout_mode", readout_mode)
                 msg = (
@@ -983,18 +986,17 @@ class UPGDLearner:
                     "got non-string"
                 )
             raise ValueError(msg)
-        if (
-            type(resolved_readout_prediction_mode) is not str
-            or resolved_readout_prediction_mode not in {
-                "identity",
-                "softmax",
-                "adaptive_simplex",
-                "factorized_simplex",
-                "adaptive_factorized_simplex",
-                "two_timescale_simplex",
-                "unit_clip",
-            }
-        ):
+        if type(
+            resolved_readout_prediction_mode
+        ) is not str or resolved_readout_prediction_mode not in {
+            "identity",
+            "softmax",
+            "adaptive_simplex",
+            "factorized_simplex",
+            "adaptive_factorized_simplex",
+            "two_timescale_simplex",
+            "unit_clip",
+        }:
             if type(resolved_readout_prediction_mode) is str:
                 host_rrpm = _require_exact_str(
                     "resolved_readout_prediction_mode",
@@ -1031,8 +1033,9 @@ class UPGDLearner:
             "readout_input_mode", readout_input_mode, frozenset({"hidden", "hidden_plus_input"})
         )
         readout_head_normalization = _require_choice(
-            "readout_head_normalization", readout_head_normalization,
-                frozenset({"none", "hidden_norm"})
+            "readout_head_normalization",
+            readout_head_normalization,
+            frozenset({"none", "hidden_norm"}),
         )
         validated_readout_margin = _validated_config_float(
             "readout_margin", readout_margin, lower=0.0
@@ -1044,43 +1047,55 @@ class UPGDLearner:
             "readout_label_adapter_step_size", readout_label_adapter_step_size, lower=0.0
         )
         validated_readout_label_adapter_identity_regularization = _validated_config_float(
-            "readout_label_adapter_identity_regularization", readout_label_adapter_identity_regularization,  # noqa: E501
-                lower=0.0
+            "readout_label_adapter_identity_regularization",
+            readout_label_adapter_identity_regularization,  # noqa: E501
+            lower=0.0,
         )
         validated_readout_label_adapter_entropy_regularization = _validated_config_float(
-            "readout_label_adapter_entropy_regularization", readout_label_adapter_entropy_regularization,  # noqa: E501
-                lower=0.0
+            "readout_label_adapter_entropy_regularization",
+            readout_label_adapter_entropy_regularization,  # noqa: E501
+            lower=0.0,
         )
         validated_readout_label_adapter_floor = _validated_config_float(
-            "readout_label_adapter_floor", readout_label_adapter_floor,
-                lower=0.0, upper=1.0, upper_inclusive=False
+            "readout_label_adapter_floor",
+            readout_label_adapter_floor,
+            lower=0.0,
+            upper=1.0,
+            upper_inclusive=False,
         )
         validated_readout_fast_head_step_size_multiplier = _validated_config_float(
-            "readout_fast_head_step_size_multiplier", readout_fast_head_step_size_multiplier,
-                lower=0.0
+            "readout_fast_head_step_size_multiplier",
+            readout_fast_head_step_size_multiplier,
+            lower=0.0,
         )
         validated_readout_fast_head_bias_step_size_multiplier = _validated_config_float(
-            "readout_fast_head_bias_step_size_multiplier", readout_fast_head_bias_step_size_multiplier,  # noqa: E501
-                lower=0.0
+            "readout_fast_head_bias_step_size_multiplier",
+            readout_fast_head_bias_step_size_multiplier,  # noqa: E501
+            lower=0.0,
         )
         validated_readout_fast_trunk_gradient_multiplier = _validated_config_float(
-            "readout_fast_trunk_gradient_multiplier", readout_fast_trunk_gradient_multiplier,
-                lower=0.0
+            "readout_fast_trunk_gradient_multiplier",
+            readout_fast_trunk_gradient_multiplier,
+            lower=0.0,
         )
         readout_fast_head_bounder_mode = _require_choice(
-            "readout_fast_head_bounder_mode", readout_fast_head_bounder_mode,
-                frozenset({"shared", "separate"})
+            "readout_fast_head_bounder_mode",
+            readout_fast_head_bounder_mode,
+            frozenset({"shared", "separate"}),
         )
         validated_readout_slow_simplex_gradient_multiplier = _validated_config_float(
-            "readout_slow_simplex_gradient_multiplier", readout_slow_simplex_gradient_multiplier,
-                lower=0.0
+            "readout_slow_simplex_gradient_multiplier",
+            readout_slow_simplex_gradient_multiplier,
+            lower=0.0,
         )
         validated_readout_simplex_bias_decay = _validated_config_float(
             "readout_simplex_bias_decay", readout_simplex_bias_decay, lower=0.0, upper=1.0
         )
         validated_readout_simplex_bias_centering_rate = _validated_config_float(
-            "readout_simplex_bias_centering_rate", readout_simplex_bias_centering_rate,
-                lower=0.0, upper=1.0
+            "readout_simplex_bias_centering_rate",
+            readout_simplex_bias_centering_rate,
+            lower=0.0,
+            upper=1.0,
         )
 
         if type(use_layer_norm) is not bool:
@@ -1110,9 +1125,7 @@ class UPGDLearner:
                 fixed_scalars=int(n_heads),
             )
         else:
-            _require_float32_resource(
-                "heads", vector_scalars=int(n_heads), fixed_scalars=0
-            )
+            _require_float32_resource("heads", vector_scalars=int(n_heads), fixed_scalars=0)
         # Complete readout-related preflight for label adapter (n_heads^2)
         _require_float32_resource(
             "readout_label_adapter",
@@ -1184,9 +1197,7 @@ class UPGDLearner:
         self._adaptive_kappa_meta_max_multiplier = float(
             validated_adaptive_kappa_meta_max_multiplier
         )
-        self._adaptive_kappa_meta_warmup_steps = int(
-            adaptive_kappa_meta_warmup_steps
-        )
+        self._adaptive_kappa_meta_warmup_steps = int(adaptive_kappa_meta_warmup_steps)
         self._meta_plasticity_mode = meta_plasticity_mode
         self._meta_plasticity_step_size = float(validated_meta_plasticity_step_size)
         self._meta_plasticity_min_multiplier = float(validated_meta_plasticity_min_multiplier)
@@ -1707,7 +1718,9 @@ class UPGDLearner:
                 unit_scalars += 4 * fan_out  # unit_utilities, long, grad_ema, ages
             unit_scalars += 2 * len(trunk_layer_sizes[1:])  # replacement counts/accumulators
         if store_grad:
-            grad_scalars += total_trunk_params + total_trunk_bias + total_head_params + total_head_bias  # noqa: E501
+            grad_scalars += (
+                total_trunk_params + total_trunk_bias + total_head_params + total_head_bias
+            )  # noqa: E501
         total_scalars = (
             total_trunk_params
             + total_trunk_bias
@@ -1983,11 +1996,15 @@ class UPGDLearner:
         return total
 
     @staticmethod
-    def _rescaled_tuple_norm(xs: tuple[Array, ...]) -> tuple[Array, tuple[Array, ...], Array]:
+    def _rescaled_tuple_norm(
+        xs: tuple[Array, ...],
+    ) -> tuple[Array, Array, tuple[Array, ...], Array]:
         """Compute exact power-of-two rescaled tuple, unscaled norm, and rescaled norm."""
         max_abs = jnp.array(0.0, dtype=jnp.float32)
+        is_finite = jnp.array(True, dtype=jnp.bool_)
         for x in xs:
             if x.size > 0:
+                is_finite = is_finite & jnp.all(jnp.isfinite(x))
                 max_abs = jnp.maximum(max_abs, jnp.max(jnp.abs(x)))
         _, exponent = jnp.frexp(max_abs)
         rescaled = tuple(jnp.ldexp(x, -exponent) for x in xs)
@@ -1996,12 +2013,12 @@ class UPGDLearner:
             rescaled_sum_sq = rescaled_sum_sq + jnp.sum(jnp.square(rx))
         rescaled_norm = jnp.sqrt(rescaled_sum_sq)
         norm = jnp.ldexp(rescaled_norm, exponent)
-        return norm, rescaled, rescaled_norm
+        return is_finite, norm, rescaled, rescaled_norm
 
     @staticmethod
     def _tuple_norm(xs: tuple[Array, ...]) -> Array:
         """L2 norm over a static tuple of arrays, robust to underflow/overflow."""
-        norm, _, _ = UPGDLearner._rescaled_tuple_norm(xs)
+        _, norm, _, _ = UPGDLearner._rescaled_tuple_norm(xs)
         return norm
 
     @staticmethod
@@ -2010,14 +2027,16 @@ class UPGDLearner:
         current: tuple[Array, ...],
     ) -> Array:
         """Cosine alignment of two gradient tuples, zero for empty/nonfinite gradients."""
-        prev_norm, prev_rescaled, prev_rn = UPGDLearner._rescaled_tuple_norm(previous)
-        curr_norm, curr_rescaled, curr_rn = UPGDLearner._rescaled_tuple_norm(current)
+        prev_finite, _, prev_rescaled, prev_rn = UPGDLearner._rescaled_tuple_norm(previous)
+        curr_finite, _, curr_rescaled, curr_rn = UPGDLearner._rescaled_tuple_norm(current)
         dot = jnp.array(0.0, dtype=jnp.float32)
         for rx, ry in zip(prev_rescaled, curr_rescaled):
             dot = dot + jnp.sum(rx * ry)
         valid = (
-            jnp.isfinite(prev_norm)
-            & jnp.isfinite(curr_norm)
+            prev_finite
+            & curr_finite
+            & jnp.isfinite(prev_rn)
+            & jnp.isfinite(curr_rn)
             & (prev_rn > 0.0)
             & (curr_rn > 0.0)
         )
@@ -3412,17 +3431,14 @@ class UPGDLearner:
 
 def _has_trusted_array_type(value: object) -> bool:
     actual_type = type(value)
-    return (
-        actual_type is np.ndarray
-        or issubclass(
-            actual_type,
-            (
-                jax.Array,
-                jax.core.Tracer,
-                jax.ShapeDtypeStruct,
-                jax.core.ShapedArray,
-            ),
-        )
+    return actual_type is np.ndarray or issubclass(
+        actual_type,
+        (
+            jax.Array,
+            jax.core.Tracer,
+            jax.ShapeDtypeStruct,
+            jax.core.ShapedArray,
+        ),
     )
 
 
