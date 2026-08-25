@@ -47,12 +47,55 @@ class _StringSubclass(str):
     pass
 
 
-def _shard(path: Path, *, seed: int, accuracy: float) -> None:
+def _shard(
+    path: Path,
+    *,
+    seed: int,
+    accuracy: float,
+    config_name: str | None = None,
+    n_tasks: int | None = None,
+) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        json.dumps({"seed": seed, "per_task_accuracy": [accuracy, accuracy]}),
-        encoding="utf-8",
-    )
+    inferred_arm = path.stem.split("_seed")[0] if "_seed" in path.stem else "disc_r1"
+    arm = config_name if config_name is not None else inferred_arm
+    num_tasks = n_tasks if n_tasks is not None else (200 if "confirm" in str(path) else 60)
+    payload = {
+        "base_learner": "upgd_w",
+        "config": {
+            "hidden1": 300,
+            "hidden2": 150,
+            "input_dim": 784,
+            "n_classes": 10,
+            "n_tasks": num_tasks,
+            "task_length": 5000,
+        },
+        "config_name": arm,
+        "created_unix": 1785805898.8687427,
+        "environment": {
+            "jax": "0.11.0",
+            "numpy": "2.5.1",
+            "platform": "Linux-7.0.0-28-generic-x86_64-with-glibc2.39",
+            "python": "3.12.3",
+        },
+        "evidence_policy": {
+            "development_only": True,
+            "evidence_class": "development_screening_diagnostic",
+            "scientific_promotion_allowed": False,
+        },
+        "hyperparameters": {
+            "step_size": 0.037,
+            "noise_std": 0.0,
+            "weight_decay": 0.0001,
+        },
+        "noise_mode": "step",
+        "per_task_accuracy": [accuracy] * num_tasks,
+        "per_task_loss": [1.0] * num_tasks,
+        "per_task_plasticity": [0.4] * num_tasks,
+        "schema": "alberta.ipmnist_screening.shard.v1",
+        "seed": seed,
+        "wall_clock_seconds": 10.0,
+    }
+    path.write_text(json.dumps(payload), encoding="utf-8")
 
 
 def _ceiling_run(
@@ -383,7 +426,7 @@ def test_ceiling_confirm_alignment_rejects_delta_above_frozen_tolerance(
     tmp_path: Path,
 ) -> None:
     confirm = tmp_path / "confirm"
-    _shard(confirm / "sigma0_ndecay099_seed0.json", seed=0, accuracy=0.8)
+    _shard(confirm / "sigma0_ndecay099_seed0.json", seed=0, accuracy=0.8, n_tasks=2)
     run = {"seed": 0, "per_task_accuracy": [0.8, 0.8 + 2 * CONFIRM_ALIGNMENT_ATOL]}
 
     with pytest.raises(ValueError, match="exceeds atol"):
@@ -713,7 +756,7 @@ def test_rule_summary_rejects_duplicate_json_object_keys(tmp_path: Path) -> None
     for name in SCREEN_ARMS[1:]:
         _shard(screen / f"{name}_seed0.json", seed=0, accuracy=0.8)
     (screen / f"{SCREEN_ARMS[0]}_seed0.json").write_text(
-        '{"seed":0,"per_task_accuracy":[0.1],"per_task_accuracy":[0.9]}',
+        '{"schema":"alberta.ipmnist_screening.shard.v1","config_name":"disc_r1","seed":0,"per_task_accuracy":[0.1],"per_task_accuracy":[0.9]}',
         encoding="utf-8",
     )
     with pytest.raises(ValueError, match="duplicate"):
@@ -727,9 +770,44 @@ def test_rule_summary_rejects_invalid_accuracy_payloads(
     screen = tmp_path / "screen"
     path = screen / f"{SCREEN_ARMS[0]}_seed0.json"
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        json.dumps({"seed": 0, "per_task_accuracy": accuracy}), encoding="utf-8"
-    )
+    acc = accuracy if not accuracy or len(accuracy) == 60 else accuracy * 60
+    payload = {
+        "base_learner": "upgd_w",
+        "config": {
+            "hidden1": 300,
+            "hidden2": 150,
+            "input_dim": 784,
+            "n_classes": 10,
+            "n_tasks": 60,
+            "task_length": 5000,
+        },
+        "config_name": SCREEN_ARMS[0],
+        "created_unix": 1785805898.8687427,
+        "environment": {
+            "jax": "0.11.0",
+            "numpy": "2.5.1",
+            "platform": "Linux-7.0.0-28-generic-x86_64-with-glibc2.39",
+            "python": "3.12.3",
+        },
+        "evidence_policy": {
+            "development_only": True,
+            "evidence_class": "development_screening_diagnostic",
+            "scientific_promotion_allowed": False,
+        },
+        "hyperparameters": {
+            "step_size": 0.037,
+            "noise_std": 0.0,
+            "weight_decay": 0.0001,
+        },
+        "noise_mode": "step",
+        "per_task_accuracy": acc,
+        "per_task_loss": [1.0] * 60,
+        "per_task_plasticity": [0.4] * 60,
+        "schema": "alberta.ipmnist_screening.shard.v1",
+        "seed": 0,
+        "wall_clock_seconds": 10.0,
+    }
+    path.write_text(json.dumps(payload), encoding="utf-8")
     with pytest.raises(ValueError):
         build_legacy_rule_discovery_summary(
             screen, tmp_path / "confirm", seeds=(0,)
@@ -771,3 +849,40 @@ def test_current_rule_discovery_legacy_payload_reconstructs_exactly() -> None:
     )
 
     assert actual == expected
+
+def test_rule_summary_rejects_misattributed_arm_name(tmp_path: Path) -> None:
+    screen = tmp_path / "screen"
+    for name in SCREEN_ARMS:
+        _shard(screen / f"{name}_seed0.json", seed=0, accuracy=0.8)
+    # Write a shard with filename disc_r1_seed0.json but config_name sigma0_shiftnorm_d099
+    _shard(
+        screen / f"{SCREEN_ARMS[0]}_seed0.json",
+        seed=0,
+        accuracy=0.8,
+        config_name=CHAMPION,
+    )
+    with pytest.raises(ValueError, match="does not match expected arm"):
+        build_legacy_rule_discovery_summary(screen, tmp_path / "confirm", seeds=(0,))
+
+
+def test_rule_summary_rejects_mismatched_stage_task_count(tmp_path: Path) -> None:
+    screen = tmp_path / "screen"
+    confirm = tmp_path / "confirm"
+    for name in SCREEN_ARMS:
+        _shard(screen / f"{name}_seed0.json", seed=0, accuracy=0.8)
+    # Put a 60-task shard in confirmation directory (which expects 200 tasks)
+    _shard(
+        confirm / f"{CHAMPION}_seed0.json",
+        seed=0,
+        accuracy=0.8,
+        n_tasks=60,
+    )
+    _shard(
+        confirm / "disc_r1_pscale_norms_seed0.json",
+        seed=0,
+        accuracy=0.8,
+        n_tasks=200,
+    )
+    with pytest.raises(ValueError, match="expected 200"):
+        build_legacy_rule_discovery_summary(screen, confirm, seeds=(0,))
+
