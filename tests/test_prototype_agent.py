@@ -1239,6 +1239,36 @@ class TestGRUPerceptionStateInit:
 
 
 class TestGRUPerceptionUpdate:
+    def test_unit_update_gate_one_does_not_multiply_inf_hidden(self) -> None:
+        """A fully open update gate must forget poisoned hidden state without NaN."""
+        from alberta_framework.core.prototype_agent import (
+            GRUPerceptionConfig,
+            _gru_step,
+            _init_gru_state,
+        )
+
+        gru = _init_gru_state(GRUPerceptionConfig(observation_dim=2, hidden_dim=2), jr.key(0))
+        gru = gru.replace(
+            hidden=jnp.full((2,), jnp.inf, dtype=jnp.float32),
+            W_z=jnp.zeros_like(gru.W_z),
+            U_z=jnp.zeros_like(gru.U_z),
+            b_z=jnp.full((2,), 90.0, dtype=jnp.float32),
+            W_r=jnp.zeros_like(gru.W_r),
+            U_r=jnp.zeros_like(gru.U_r),
+            b_r=jnp.full((2,), -90.0, dtype=jnp.float32),
+            W_h=jnp.zeros_like(gru.W_h),
+            U_h=jnp.zeros_like(gru.U_h),
+            b_h=jnp.asarray([0.25, -0.25], dtype=jnp.float32),
+        )
+        raw = (1.0 - jnp.ones((2,), dtype=jnp.float32)) * jnp.asarray(jnp.inf, dtype=jnp.float32)
+        assert not bool(jnp.all(jnp.isfinite(raw)))
+
+        new_gru, augmented = _gru_step(gru, jnp.zeros((2,), dtype=jnp.float32))
+
+        chex.assert_tree_all_finite(new_gru)
+        chex.assert_tree_all_finite(augmented)
+        chex.assert_trees_all_close(new_gru.hidden, jnp.tanh(gru.b_h))
+
     def test_hidden_updates_after_start(self) -> None:
         agent = PrototypeAgent(_gru_config())
         state0 = agent.init(jr.key(0))

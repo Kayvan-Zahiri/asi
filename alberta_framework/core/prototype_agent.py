@@ -479,6 +479,11 @@ def _glorot_uniform(key: Array, shape: tuple[int, int]) -> Array:
     return jr.uniform(key, shape, dtype=jnp.float32, minval=-limit, maxval=limit)
 
 
+def _skip_zero_scale(scale: Array, value: Array) -> Array:
+    """Skip ``0 * inf`` so a closed GRU gate does not poison hidden state."""
+    return jnp.where(scale == 0.0, jnp.zeros_like(value), scale * value)
+
+
 def _init_gru_state(cfg: GRUPerceptionConfig, key: Array) -> GRUPerceptionState:
     """Glorot-uniform weight init + zero hidden state."""
     keys = jr.split(key, 6)
@@ -507,10 +512,11 @@ def _gru_step(
     ``[obs, new_hidden]`` as the augmented observation.
     """
     h = gru.hidden
-    z = jax.nn.sigmoid(gru.W_z @ obs + gru.U_z @ h + gru.b_z)
-    r = jax.nn.sigmoid(gru.W_r @ obs + gru.U_r @ h + gru.b_r)
-    h_tilde = jnp.tanh(gru.W_h @ obs + gru.U_h @ (r * h) + gru.b_h)
-    new_h = (1.0 - z) * h + z * h_tilde
+    safe_h = jnp.where(jnp.isfinite(h), h, jnp.zeros_like(h))
+    z = jax.nn.sigmoid(gru.W_z @ obs + gru.U_z @ safe_h + gru.b_z)
+    r = jax.nn.sigmoid(gru.W_r @ obs + gru.U_r @ safe_h + gru.b_r)
+    h_tilde = jnp.tanh(gru.W_h @ obs + gru.U_h @ _skip_zero_scale(r, safe_h) + gru.b_h)
+    new_h = _skip_zero_scale(1.0 - z, h) + _skip_zero_scale(z, h_tilde)
     new_gru = cast(GRUPerceptionState, gru.replace(hidden=new_h))
     return new_gru, jnp.concatenate([obs, new_h], axis=0)
 
