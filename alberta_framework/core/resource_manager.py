@@ -594,8 +594,22 @@ class LearnedResourceManager:
         adjusted = jnp.where(valid_actions, safe_losses + cost_terms, 0.0)
 
         weights = self._weights_jit(state, context)
-        finite_weight_sum = jnp.maximum(jnp.sum(jnp.where(valid_actions, weights, 0.0)), 1e-12)
-        masked_weights = jnp.where(valid_actions, weights / finite_weight_sum, 0.0)
+        masked_raw = jnp.where(valid_actions, weights, 0.0)
+        total_mass = jnp.sum(masked_raw)
+        n_valid = jnp.sum(valid_actions.astype(jnp.float32))
+        uniform_fallback = jnp.where(
+            valid_actions,
+            1.0 / jnp.maximum(n_valid, 1.0),
+            0.0,
+        )
+        safe_total = jnp.where(total_mass > 0.0, total_mass, 1.0)
+        normalized = masked_raw / safe_total
+        norm_sum = jnp.sum(normalized)
+        masked_weights = jnp.where(
+            (total_mass > 0.0) & (norm_sum > 0.0),
+            normalized,
+            uniform_fallback,
+        )
         baseline = jnp.sum(masked_weights * adjusted)
         advantages = jnp.where(valid_actions, baseline - adjusted, 0.0)
         advantages = jnp.clip(
@@ -1191,8 +1205,22 @@ class GeneratorMetaResourceManager:
         adjusted = jnp.where(finite, safe_rewards - cost_terms, 0.0)
 
         weights = self._weights_jit(state, context)
-        finite_weight_sum = jnp.maximum(jnp.sum(jnp.where(finite, weights, 0.0)), 1e-12)
-        masked_weights = jnp.where(finite, weights / finite_weight_sum, 0.0)
+        masked_raw = jnp.where(finite, weights, 0.0)
+        total_mass = jnp.sum(masked_raw)
+        n_valid = jnp.sum(finite.astype(jnp.float32))
+        uniform_fallback = jnp.where(
+            finite,
+            1.0 / jnp.maximum(n_valid, 1.0),
+            0.0,
+        )
+        safe_total = jnp.where(total_mass > 0.0, total_mass, 1.0)
+        normalized = masked_raw / safe_total
+        norm_sum = jnp.sum(normalized)
+        masked_weights = jnp.where(
+            (total_mass > 0.0) & (norm_sum > 0.0),
+            normalized,
+            uniform_fallback,
+        )
         baseline = jnp.sum(masked_weights * adjusted)
         selection_input_valid = jnp.asarray(True, dtype=jnp.bool_)
         if self._update_rule == "exp3":

@@ -859,3 +859,22 @@ def test_resource_manager_serialized_schemas_are_exact() -> None:
         invalid.update(mutation)
         with pytest.raises(ValueError, match=match):
             GeneratorMetaResourceManager.from_config(invalid)
+
+def test_learned_resource_manager_preserves_centering_under_large_leader_gaps() -> None:
+    for gap in (0.0, 20.0, 30.0, 40.0, 80.0, 200.0):
+        manager = LearnedResourceManager(n_actions=3, n_contexts=1, exploration=0.0)
+        state = manager.init()
+        # Set action 0 ahead by gap
+        new_log_weights = state.log_weights.at[0, 0].set(gap)
+        state = state.replace(log_weights=new_log_weights)
+
+        # Action 0 has NaN loss, survivors have losses 1.0 and 3.0
+        losses = jnp.array([float("nan"), 1.0, 3.0], dtype=jnp.float32)
+        result = manager.update(state, losses, 0)
+
+        # Baseline of 1.0 and 3.0 with equal allocation is 2.0
+        # Advantages must be +1.0 for action 1, -1.0 for action 2
+        adv = result.advantages
+        chex.assert_trees_all_close(adv[1], jnp.float32(1.0), atol=1e-4)
+        chex.assert_trees_all_close(adv[2], jnp.float32(-1.0), atol=1e-4)
+

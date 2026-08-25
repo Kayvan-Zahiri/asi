@@ -1036,8 +1036,22 @@ class FixedBudgetFeatureLearner:
         finite: Array,
     ) -> Array:
         """Exponentiated-gradient preference update for utility scores."""
-        finite_mass = jnp.maximum(jnp.sum(jnp.where(finite, allocation, 0.0)), 1e-12)
-        masked_allocation = jnp.where(finite, allocation / finite_mass, 0.0)
+        masked_raw = jnp.where(finite, allocation, 0.0)
+        total_mass = jnp.sum(masked_raw)
+        n_valid = jnp.sum(finite.astype(jnp.float32))
+        uniform_fallback = jnp.where(
+            finite,
+            1.0 / jnp.maximum(n_valid, 1.0),
+            0.0,
+        )
+        safe_total = jnp.where(total_mass > 0.0, total_mass, 1.0)
+        normalized = masked_raw / safe_total
+        norm_sum = jnp.sum(normalized)
+        masked_allocation = jnp.where(
+            (total_mass > 0.0) & (norm_sum > 0.0),
+            normalized,
+            uniform_fallback,
+        )
         baseline = jnp.sum(masked_allocation * jnp.where(finite, scores, 0.0))
         advantages = jnp.where(finite, scores - baseline, 0.0)
         advantages = jnp.clip(
