@@ -259,19 +259,15 @@ def test_pipeline_sarsa_control_contains_step3_prediction_demons() -> None:
     config = _small_pipeline_config()
     pipeline = make_alberta_pipeline(config)
     assert pipeline.config.control_mode == "sarsa"
-    assert pipeline.control.horde.n_demons == (
-        config.control.n_actions + config.horde.n_demons
-    )
-    assert pipeline.control.horde.horde_spec.demons[config.control.n_actions].name == (
-        "gvf_0"
-    )
+    assert pipeline.control.horde.n_demons == (config.control.n_actions + config.horde.n_demons)
+    assert pipeline.control.horde.horde_spec.demons[config.control.n_actions].name == ("gvf_0")
 
     initial_observation = jnp.asarray([0.2, -0.1, 0.4], dtype=jnp.float32)
     state = pipeline.init(jr.key(0), initial_observation)
     prediction_head_index = config.control.n_actions
-    old_prediction_head = (
-        state.control_state.learner_state.head_params.weights[prediction_head_index]
-    )
+    old_prediction_head = state.control_state.learner_state.head_params.weights[
+        prediction_head_index
+    ]
 
     result = pipeline.update(
         state,
@@ -281,11 +277,9 @@ def test_pipeline_sarsa_control_contains_step3_prediction_demons() -> None:
         jnp.asarray([1.0, -0.5], dtype=jnp.float32),
     )
 
-    new_prediction_head = (
-        result.state.control_state.learner_state.head_params.weights[
-            prediction_head_index
-        ]
-    )
+    new_prediction_head = result.state.control_state.learner_state.head_params.weights[
+        prediction_head_index
+    ]
     assert not jnp.allclose(old_prediction_head, new_prediction_head)
 
 
@@ -327,9 +321,7 @@ def test_pipeline_with_upgd_step2_smoke() -> None:
     )
     assert int(result.state.step_count) == 1
     chex.assert_shape(result.features, (8,))
-    chex.assert_tree_all_finite(
-        (result.features, result.horde_predictions, result.q_values)
-    )
+    chex.assert_tree_all_finite((result.features, result.horde_predictions, result.q_values))
     smoke = run_pipeline_smoke(config, steps=4, seed=11)
     assert smoke.finite
     assert smoke.feature_shape == (4, 8)
@@ -420,9 +412,7 @@ def test_pipeline_with_horde_ac_control_smoke() -> None:
         result.state.horde_state,
         next_ac_state.critic_state,
     )
-    chex.assert_tree_all_finite(
-        (result.features, result.horde_predictions, result.q_values)
-    )
+    chex.assert_tree_all_finite((result.features, result.horde_predictions, result.q_values))
     assert config.horde_ac is not None
     assert 0 <= int(result.action) < config.horde_ac.n_actions
 
@@ -455,9 +445,7 @@ def test_pipeline_with_associative_step2_smoke() -> None:
     )
     assert int(result.state.step_count) == 1
     chex.assert_shape(result.features, (8,))
-    chex.assert_tree_all_finite(
-        (result.features, result.horde_predictions, result.q_values)
-    )
+    chex.assert_tree_all_finite((result.features, result.horde_predictions, result.q_values))
 
     smoke = run_pipeline_smoke(config, steps=4, seed=3)
     assert smoke.finite
@@ -503,13 +491,9 @@ def test_pipeline_behavioral_learns() -> None:
     terminated = jnp.zeros(n_steps, dtype=jnp.float32)
 
     state = pipeline.init(jr.key(99), observations[0])
-    result = pipeline.run_arrays(
-        state, observations[1:], rewards, terminated, cumulants
-    )
+    result = pipeline.run_arrays(state, observations[1:], rewards, terminated, cumulants)
     # Per-step squared error between the (single) demon's TD target and prediction.
-    sq_err = jnp.square(
-        result.horde_predictions[:, 0] - cumulants[:, 0]
-    )
+    sq_err = jnp.square(result.horde_predictions[:, 0] - cumulants[:, 0])
     initial_mse = float(jnp.mean(sq_err[:200]))
     final_mse = float(jnp.mean(sq_err[-200:]))
 
@@ -530,9 +514,7 @@ def test_pipeline_cumulant_fn_overrides_default() -> None:
 
     config = _small_pipeline_config()
     pipeline = make_alberta_pipeline(config, cumulant_fn=cumulant_fn)
-    state = pipeline.init(
-        jr.key(0), jnp.asarray([0.2, -0.1, 0.4], dtype=jnp.float32)
-    )
+    state = pipeline.init(jr.key(0), jnp.asarray([0.2, -0.1, 0.4], dtype=jnp.float32))
     result = pipeline.update(
         state,
         jnp.asarray([0.1, 0.3, -0.2], dtype=jnp.float32),
@@ -541,9 +523,7 @@ def test_pipeline_cumulant_fn_overrides_default() -> None:
     )
     # With gamma=0 in our test config, td_target ≈ cumulant. Verify the demon
     # 0 target equals the sentinel.
-    chex.assert_trees_all_close(
-        result.horde_td_targets[0], sentinel[0], atol=1e-5
-    )
+    chex.assert_trees_all_close(result.horde_td_targets[0], sentinel[0], atol=1e-5)
 
 
 def test_observation_channel_cumulant_fn_wraps_channels() -> None:
@@ -727,9 +707,7 @@ _INVALID_PIPELINE_ASSOCIATIVE_FIELDS: tuple[tuple[str, object], ...] = (
 
 
 @pytest.mark.parametrize(("field", "value"), _INVALID_PIPELINE_ASSOCIATIVE_FIELDS)
-def test_pipeline_associative_fields_reject_invalid_inputs(
-    field: str, value: object
-) -> None:
+def test_pipeline_associative_fields_reject_invalid_inputs(field: str, value: object) -> None:
     with pytest.raises(ValueError):
         Step2AssociativePipelineConfig(**{field: value})
 
@@ -806,9 +784,7 @@ def test_pipeline_associative_requires_ordered_weight_bounds() -> None:
         pytest.param((2**200 + 1, 2**200), id="above-one-rounds-to-one"),
     ],
 )
-def test_pipeline_unit_interval_rejects_exact_fraction_boundaries(
-    ratio: tuple[int, int]
-) -> None:
+def test_pipeline_unit_interval_rejects_exact_fraction_boundaries(ratio: tuple[int, int]) -> None:
     with pytest.raises(ValueError, match=r"sparsity must be in \[0, 1\]"):
         Step2UPGDConfig(sparsity=Fraction(*ratio))
 
@@ -1196,3 +1172,34 @@ def test_associative_pipeline_narrows_only_statically_safe_integer_dtypes() -> N
 
 # silence the import lint warnings used in the test runner
 _ = jax
+
+
+def test_pipeline_horde_ac_honors_termination_discount() -> None:
+    cfg = AlbertaPipelineConfig(
+        features=Step2FeatureConfig(observation_dim=3),
+        step2="identity",
+        control_mode="horde_ac",
+        horde=Step3HordeConfig(gammas=(0.9, 0.5), lamdas=(0.0, 0.0)),
+        horde_ac=HordeActorCriticPipelineConfig(value_head_index=0, actor_lamda=0.8),
+    )
+    pipeline = AlbertaPipeline(cfg)
+    state = pipeline.init(jr.key(0), jnp.asarray([0.2, -0.1, 0.4], dtype=jnp.float32))
+    obs = jnp.asarray([0.1, 0.3, -0.2], dtype=jnp.float32)
+    reward = jnp.asarray(0.5, dtype=jnp.float32)
+    cumulants = jnp.asarray([0.5, -0.2], dtype=jnp.float32)
+
+    res_nonterm = pipeline.update(
+        state, obs, reward, jnp.asarray(0.0, dtype=jnp.float32), cumulants
+    )
+    res_term = pipeline.update(state, obs, reward, jnp.asarray(1.0, dtype=jnp.float32), cumulants)
+
+    # In non-terminal transition, value head target bootstraps from V(s')
+    assert float(res_nonterm.horde_td_targets[0]) != float(reward)
+
+    # In terminal transition, value head target is reward alone (0.5), actor trace is cleared
+    chex.assert_trees_all_close(res_term.horde_td_targets[0], reward, atol=1e-5)
+    chex.assert_trees_all_close(
+        res_term.state.control_state.actor_trace_weights,
+        jnp.zeros_like(res_term.state.control_state.actor_trace_weights),
+        atol=1e-5,
+    )
