@@ -16,13 +16,12 @@ from alberta_framework.benchmarks.upgd_ipmnist import IPMNISTConfig
 from alberta_framework.evaluation.bounded_elastic_ipmnist_nonpromoting import (
     registered_bounded_elastic_hyperparameters,
 )
+from tests._forager_matched_platform import HAS_O_TMPFILE, requires_o_tmpfile
 
 SMALL = IPMNISTConfig(n_tasks=1, task_length=5000, input_dim=2, hidden1=4, hidden2=2, n_classes=2)
 
 
-def _run_for_test(
-    data_x: object, data_y: object, *, config: IPMNISTConfig
-) -> dict[str, object]:
+def _run_for_test(data_x: object, data_y: object, *, config: IPMNISTConfig) -> dict[str, object]:
     return runner._run_bounded_elastic_matched_authorized(
         data_x,
         data_y,
@@ -125,9 +124,11 @@ def _fake_run(
 ) -> ScreeningRunResult:
     del data_x, data_y
     resolved = cast(Any, spec)
-    value = 0.5 + float(
-        runner.TEST_ONLY_SEEDS.index(seed) + tuple(runner.ARMS).index(resolved.name)
-    ) / 100.0
+    value = (
+        0.5
+        + float(runner.TEST_ONLY_SEEDS.index(seed) + tuple(runner.ARMS).index(resolved.name))
+        / 100.0
+    )
     return ScreeningRunResult(
         config_name=resolved.name,
         base_learner="upgd_w",
@@ -145,7 +146,10 @@ def test_campaign_runs_all_four_arms_across_frozen_seeds(monkeypatch: pytest.Mon
     monkeypatch.setattr(runner, "run_screening_config", _fake_run)
     result = cast(dict[str, Any], _run_for_test(*_data(), config=SMALL))
     runner._validate_bounded_elastic_matched_authorized(
-        result, *_data(), config=SMALL, seeds=runner.TEST_ONLY_SEEDS,
+        result,
+        *_data(),
+        config=SMALL,
+        seeds=runner.TEST_ONLY_SEEDS,
         _capability=runner._TEST_EXECUTION_CAPABILITY,
     )
     assert [(row["seed"], row["arm"]) for row in result["rows"]] == [
@@ -235,7 +239,10 @@ def test_validator_rejects_identity_resource_and_roster_forgery(
     _resign(forged)
     with pytest.raises(ValueError, match="execution identity"):
         runner._validate_bounded_elastic_matched_authorized(
-            forged, *_data(), config=SMALL, seeds=runner.TEST_ONLY_SEEDS,
+            forged,
+            *_data(),
+            config=SMALL,
+            seeds=runner.TEST_ONLY_SEEDS,
             _capability=runner._TEST_EXECUTION_CAPABILITY,
         )
 
@@ -244,7 +251,10 @@ def test_validator_rejects_identity_resource_and_roster_forgery(
     _resign(forged)
     with pytest.raises(ValueError, match="step/query"):
         runner._validate_bounded_elastic_matched_authorized(
-            forged, *_data(), config=SMALL, seeds=runner.TEST_ONLY_SEEDS,
+            forged,
+            *_data(),
+            config=SMALL,
+            seeds=runner.TEST_ONLY_SEEDS,
             _capability=runner._TEST_EXECUTION_CAPABILITY,
         )
 
@@ -253,7 +263,10 @@ def test_validator_rejects_identity_resource_and_roster_forgery(
     _resign(missing)
     with pytest.raises(ValueError, match="roster"):
         runner._validate_bounded_elastic_matched_authorized(
-            missing, *_data(), config=SMALL, seeds=runner.TEST_ONLY_SEEDS,
+            missing,
+            *_data(),
+            config=SMALL,
+            seeds=runner.TEST_ONLY_SEEDS,
             _capability=runner._TEST_EXECUTION_CAPABILITY,
         )
 
@@ -270,7 +283,10 @@ def test_validator_reexecutes_and_rejects_self_consistent_metric_forgery(
 
     with pytest.raises(ValueError, match="reexecution"):
         runner._validate_bounded_elastic_matched_authorized(
-            forged, *_data(), config=SMALL, seeds=runner.TEST_ONLY_SEEDS,
+            forged,
+            *_data(),
+            config=SMALL,
+            seeds=runner.TEST_ONLY_SEEDS,
             _capability=runner._TEST_EXECUTION_CAPABILITY,
         )
 
@@ -286,11 +302,15 @@ def test_campaign_rejects_unregistered_outcome_decisions(
 
     with pytest.raises(ValueError, match="inconclusive"):
         runner._validate_bounded_elastic_matched_authorized(
-            forged, *_data(), config=SMALL, seeds=runner.TEST_ONLY_SEEDS,
+            forged,
+            *_data(),
+            config=SMALL,
+            seeds=runner.TEST_ONLY_SEEDS,
             _capability=runner._TEST_EXECUTION_CAPABILITY,
         )
 
 
+@requires_o_tmpfile
 def test_writer_is_create_only_and_retains_negative_outcomes(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -298,22 +318,34 @@ def test_writer_is_create_only_and_retains_negative_outcomes(
     result = _run_for_test(*_data(), config=SMALL)
     destination = tmp_path / "bounded-elastic.json"
     runner._write_bounded_elastic_matched_authorized(
-        destination, result, *_data(), config=SMALL, seeds=runner.TEST_ONLY_SEEDS,
+        destination,
+        result,
+        *_data(),
+        config=SMALL,
+        seeds=runner.TEST_ONLY_SEEDS,
         _capability=runner._TEST_EXECUTION_CAPABILITY,
     )
     retained = json.loads(destination.read_bytes())
     runner._validate_bounded_elastic_matched_authorized(
-        retained, *_data(), config=SMALL, seeds=runner.TEST_ONLY_SEEDS,
+        retained,
+        *_data(),
+        config=SMALL,
+        seeds=runner.TEST_ONLY_SEEDS,
         _capability=runner._TEST_EXECUTION_CAPABILITY,
     )
     with pytest.raises(FileExistsError):
         runner._write_bounded_elastic_matched_authorized(
-            destination, result, *_data(), config=SMALL, seeds=runner.TEST_ONLY_SEEDS,
+            destination,
+            result,
+            *_data(),
+            config=SMALL,
+            seeds=runner.TEST_ONLY_SEEDS,
             _capability=runner._TEST_EXECUTION_CAPABILITY,
         )
     assert not destination.with_name(f".{destination.name}.reservation").exists()
 
 
+@requires_o_tmpfile
 def test_writer_strictly_rereads_before_link_and_retains_failed_attempt(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -340,6 +372,7 @@ def test_writer_strictly_rereads_before_link_and_retains_failed_attempt(
     assert marker.read_bytes() == b"asi-bounded-elastic-consumed-without-result-v1\n"
 
 
+@requires_o_tmpfile
 def test_writer_retains_reservation_after_reexecution_failure(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -367,6 +400,7 @@ def test_writer_retains_reservation_after_reexecution_failure(
 
 
 @pytest.mark.parametrize("replace_linked_inode", [False, True])
+@requires_o_tmpfile
 def test_post_link_failure_rolls_back_only_the_exact_published_inode(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -407,6 +441,7 @@ def test_post_link_failure_rolls_back_only_the_exact_published_inode(
     assert marker.read_bytes() == b"asi-bounded-elastic-consumed-without-result-v1\n"
 
 
+@requires_o_tmpfile
 def test_link_success_followed_by_exception_rolls_back_exact_inode(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -434,6 +469,7 @@ def test_link_success_followed_by_exception_rolls_back_exact_inode(
     assert marker.read_bytes() == b"asi-bounded-elastic-consumed-without-result-v1\n"
 
 
+@requires_o_tmpfile
 def test_writer_rejects_replaced_visible_reservation_before_publication(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -464,6 +500,7 @@ def test_writer_rejects_replaced_visible_reservation_before_publication(
     marker.unlink()
 
 
+@requires_o_tmpfile
 def test_writer_parent_swap_does_not_publish_through_replacement(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -498,9 +535,7 @@ def test_writer_parent_swap_does_not_publish_through_replacement(
 def test_public_writer_is_closed_before_creating_output(tmp_path: Path) -> None:
     destination = tmp_path / "never" / "report.json"
     with pytest.raises(RuntimeError, match="standalone.*disabled"):
-        runner.write_bounded_elastic_matched(
-            destination, {}, *_data(), config=SMALL
-        )
+        runner.write_bounded_elastic_matched(destination, {}, *_data(), config=SMALL)
     with pytest.raises(RuntimeError, match="reservation-first transaction"):
         runner._write_bounded_elastic_matched_authorized(
             destination,
@@ -552,6 +587,7 @@ def test_standalone_paths_remain_disabled_after_flag_transition(
     assert not destination.parent.exists()
 
 
+@requires_o_tmpfile
 def test_transaction_reserves_before_dataset_load_or_runner(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -579,6 +615,7 @@ def test_transaction_reserves_before_dataset_load_or_runner(
     assert marker.read_bytes() == b"prior reservation"
 
 
+@requires_o_tmpfile
 def test_transaction_retains_owned_tombstone_after_first_dispatch_failure(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -615,6 +652,7 @@ def test_transaction_retains_owned_tombstone_after_first_dispatch_failure(
     assert calls == 1
 
 
+@requires_o_tmpfile
 def test_transaction_publishes_only_after_strict_reexecution(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -655,7 +693,10 @@ def test_preflight_rejects_unbounded_or_wrong_dataset_before_execution(
     x, y = _data()
     with pytest.raises(ValueError, match="float32"):
         runner._run_bounded_elastic_matched_authorized(
-            x.astype(np.float64), y, config=SMALL, seeds=runner.TEST_ONLY_SEEDS,
+            x.astype(np.float64),
+            y,
+            config=SMALL,
+            seeds=runner.TEST_ONLY_SEEDS,
             _capability=runner._TEST_EXECUTION_CAPABILITY,
         )
     huge = IPMNISTConfig(
@@ -668,7 +709,10 @@ def test_preflight_rejects_unbounded_or_wrong_dataset_before_execution(
     )
     with pytest.raises(ValueError, match="persistent-memory"):
         runner._run_bounded_elastic_matched_authorized(
-            x, y, config=huge, seeds=runner.TEST_ONLY_SEEDS,
+            x,
+            y,
+            config=huge,
+            seeds=runner.TEST_ONLY_SEEDS,
             _capability=runner._TEST_EXECUTION_CAPABILITY,
         )
     assert calls == 0
@@ -698,9 +742,7 @@ def test_resource_envelope_uses_task_length_and_rejects_unaccounted_dataset_copy
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     envelope = runner._numeric_resource_envelope(config=SMALL, dataset_rows=5000)
-    assert envelope["schedule_bytes"] == SMALL.n_tasks * (
-        SMALL.task_length + SMALL.input_dim
-    ) * 4
+    assert envelope["schedule_bytes"] == SMALL.n_tasks * (SMALL.task_length + SMALL.input_dim) * 4
     assert "combined_numeric_bytes" not in envelope
     plan = runner.frozen_plan()
     assert "backend copies" in cast(str, plan["numeric_resource_scope"])
@@ -762,9 +804,7 @@ def test_json_preflight_rejects_nested_hostile_type_without_dispatching_hooks() 
         ({"field": "\ud800"}, "invalid Unicode"),
     ],
 )
-def test_json_preflight_rejects_hostile_scalar_bounds(
-    value: object, message: str
-) -> None:
+def test_json_preflight_rejects_hostile_scalar_bounds(value: object, message: str) -> None:
     with pytest.raises(ValueError, match=message):
         runner._json_preflight(value)
 
@@ -795,9 +835,7 @@ def test_seed_roster_validation_does_not_dispatch_hostile_equality(
 def test_output_path_bounds_fail_before_directory_creation(tmp_path: Path) -> None:
     destination = tmp_path / "never" / ("x" * 241) / "report.json"
     with pytest.raises(ValueError, match="oversized component"):
-        runner._reserve_output(
-            destination, _capability=runner._TEST_EXECUTION_CAPABILITY
-        )
+        runner._reserve_output(destination, _capability=runner._TEST_EXECUTION_CAPABILITY)
     assert not (tmp_path / "never").exists()
 
 
@@ -837,7 +875,17 @@ def test_source_identity_detects_dependency_input_mutation(
     changed = runner._source_identity()
     assert changed[dependency_input] != original[dependency_input]
     assert all(
-        changed[path] == digest
-        for path, digest in original.items()
-        if path != dependency_input
+        changed[path] == digest for path, digest in original.items() if path != dependency_input
     )
+
+
+@pytest.mark.skipif(
+    HAS_O_TMPFILE,
+    reason="Linux publishes the document instead of refusing",
+)
+def test_bounded_elastic_matched_fails_closed_without_o_tmpfile(tmp_path: Path) -> None:
+    destination = tmp_path / "report.json"
+    with pytest.raises(
+        OSError, match="immutable output publication requires Linux descriptor support"
+    ):
+        runner._reserve_output(destination, _capability=runner._TEST_EXECUTION_CAPABILITY)
