@@ -14,12 +14,15 @@ import pytest
 import alberta_framework.utils.export as export_module
 from alberta_framework.utils.experiments import AggregatedResults, MetricSummary
 from alberta_framework.utils.export import (
+    _get_md_significance_marker,
+    _get_significance_marker,
     export_to_csv,
     export_to_json,
     generate_latex_table,
     generate_markdown_table,
     save_experiment_report,
 )
+from alberta_framework.utils.statistics import SignificanceResult
 
 pytestmark = pytest.mark.unit
 
@@ -581,3 +584,48 @@ def test_export_rejects_boolean_summary_statistics(
 
     with pytest.raises(ValueError, match="refusing to export boolean as numeric measurement"):
         generate_markdown_table(results)
+
+
+def test_significance_markers_derive_from_stored_alpha() -> None:
+    # Significant at alpha=0.10, p=0.08 -> marker present (*)
+    r_high_alpha = SignificanceResult(
+        test_name="wilcoxon",
+        statistic=1.0,
+        p_value=0.08,
+        significant=True,
+        alpha=0.10,
+        effect_size=0.5,
+        method_a="a",
+        method_b="b",
+    )
+    sig_map = {("a", "b"): r_high_alpha}
+    assert _get_md_significance_marker("a", "b", sig_map) == " *"
+    assert _get_significance_marker("a", "b", sig_map) == r"$^{*}$"
+
+    # Non-significant result -> empty marker regardless of alpha
+    r_insig = SignificanceResult(
+        test_name="wilcoxon",
+        statistic=1.0,
+        p_value=0.12,
+        significant=False,
+        alpha=0.10,
+        effect_size=0.1,
+        method_a="a",
+        method_b="b",
+    )
+    assert _get_md_significance_marker("a", "b", {("a", "b"): r_insig}) == ""
+    assert _get_significance_marker("a", "b", {("a", "b"): r_insig}) == ""
+
+    # Holm-corrected alpha=0.0025, p=0.002 -> p < alpha, p >= alpha/10 -> single star (*)
+    r_holm = SignificanceResult(
+        test_name="ttest",
+        statistic=5.0,
+        p_value=0.002,
+        significant=True,
+        alpha=0.0025,
+        effect_size=1.2,
+        method_a="a",
+        method_b="b",
+    )
+    assert _get_md_significance_marker("a", "b", {("a", "b"): r_holm}) == " *"
+    assert _get_significance_marker("a", "b", {("a", "b"): r_holm}) == r"$^{*}$"

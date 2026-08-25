@@ -516,11 +516,43 @@ def generate_latex_table(
 
     if significance_results:
         lines.append(r"\vspace{0.5em}")
-        lines.append(r"\footnotesize{$^*$ $p < 0.05$, $^{**}$ $p < 0.01$, $^{***}$ $p < 0.001$}")
+        lines.append(_format_significance_legend_latex(significance_results))
 
     lines.append(r"\end{table}")
 
     return "\n".join(lines)
+
+
+def _format_significance_legend_latex(
+    significance_results: dict[tuple[str, str], "SignificanceResult"],
+) -> str:
+    alphas = {r.alpha for r in significance_results.values()}
+    if len(alphas) == 1 and 0.05 in alphas:
+        return r"\footnotesize{$^*$ $p < 0.05$, $^{**}$ $p < 0.01$, $^{***}$ $p < 0.001$}"
+    if len(alphas) == 1:
+        a = next(iter(alphas))
+        return (
+            rf"\footnotesize{{$^*$ $p < {a:g}$, "
+            rf"$^{{**}}$ $p < {a / 10:g}$, "
+            rf"$^{{***}}$ $p < {a / 100:g}$}}"
+        )
+    return (
+        r"\footnotesize{$^*$ $p < \alpha$, "
+        r"$^{**}$ $p < \alpha/10$, "
+        r"$^{***}$ $p < \alpha/100$ (decision thresholds)}"
+    )
+
+
+def _format_significance_legend_md(
+    significance_results: dict[tuple[str, str], "SignificanceResult"],
+) -> str:
+    alphas = {r.alpha for r in significance_results.values()}
+    if len(alphas) == 1 and 0.05 in alphas:
+        return r"\* p < 0.05, \*\* p < 0.01, \*\*\* p < 0.001"
+    if len(alphas) == 1:
+        a = next(iter(alphas))
+        return rf"\* p < {a:g}, \*\* p < {a / 10:g}, \*\*\* p < {a / 100:g}"
+    return r"\* p < \alpha, \*\* p < \alpha/10, \*\*\* p < \alpha/100 (decision thresholds)"
 
 
 def _get_significance_marker(
@@ -547,11 +579,12 @@ def _get_significance_marker(
         return ""
 
     p = result.p_value
-    if p < 0.001:
+    alpha = result.alpha
+    if p < alpha / 100.0:
         return r"$^{***}$"
-    elif p < 0.01:
+    elif p < alpha / 10.0:
         return r"$^{**}$"
-    elif p < 0.05:
+    elif p < alpha:
         return r"$^{*}$"
     return ""
 
@@ -611,7 +644,7 @@ def generate_markdown_table(
 
     if significance_results:
         lines.append("")
-        lines.append("\\* p < 0.05, \\*\\* p < 0.01, \\*\\*\\* p < 0.001")
+        lines.append(_format_significance_legend_md(significance_results))
 
     return "\n".join(lines)
 
@@ -639,11 +672,12 @@ def _get_md_significance_marker(
         return ""
 
     p = result.p_value
-    if p < 0.001:
+    alpha = result.alpha
+    if p < alpha / 100.0:
         return " ***"
-    elif p < 0.01:
+    elif p < alpha / 10.0:
         return " **"
-    elif p < 0.05:
+    elif p < alpha:
         return " *"
     return ""
 
