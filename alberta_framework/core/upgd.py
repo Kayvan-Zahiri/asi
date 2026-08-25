@@ -49,17 +49,10 @@ import numpy as np
 from jax import Array
 from jaxtyping import Float
 
-from alberta_framework._scan_resources import (
-    ScanBudget,
-    require_jax_leading_length,
-    require_matching_jax_leading_length,
-    require_scan_steps,
-)
 from alberta_framework.core._float32_scalars import (
     validated_float32_scalar_with_ratio,
 )
 from alberta_framework.core.initializers import sparse_init
-from alberta_framework.core.normalizers import _saturating_int32_counter_increment
 from alberta_framework.core.optimizers import Bounder, ObGDBounding
 from alberta_framework.core.types import MLPParams
 from alberta_framework.core.update_safety import zero_if_collapsed_infinity
@@ -74,10 +67,6 @@ def _require_exact_str(name: object, value: object) -> str:
 
 
 _INT32_MAX = 2**31 - 1
-# Public last-fit in tests is 5_000 array steps / 50 stream steps. Origin handed
-# ``10**12`` to ``jnp.arange`` with no reject — hang/OOM, not an INT32 leftover.
-_UPGD_LOOP_MAX_STEPS = 10_000
-_UPGD_LOOP_BUDGET = ScanBudget("UPGD learning-loop", _UPGD_LOOP_MAX_STEPS)
 _ACTUAL_INT_TYPES: frozenset[type] = frozenset(
     {
         int,
@@ -110,37 +99,6 @@ def _require_int(name: str, value: object, *, minimum: int, maximum: int = _INT3
     if not minimum <= canonical <= maximum:
         raise ValueError(f"{name} must be an integer")
     return canonical
-
-
-def _require_upgd_loop_steps(name: str, value: object) -> int:
-    """Reject scan lengths above the public last-fit before ``jnp.arange``."""
-    return require_scan_steps(name, value, _UPGD_LOOP_BUDGET)
-
-
-def _require_upgd_array_steps(observations: object, targets: object) -> int:
-    """Reject pre-collected scan lengths above the public last-fit before scan."""
-    if not isinstance(observations, jax.Array):
-        raise TypeError(
-            "observations must be a trusted array; observations and targets must be JAX arrays"
-        )
-    if not isinstance(targets, jax.Array):
-        raise TypeError(
-            "targets must be a trusted array; observations and targets must be JAX arrays"
-        )
-    try:
-        num_steps = require_jax_leading_length(
-            "observations", observations, _UPGD_LOOP_BUDGET, ranks=(2,)
-        )
-    except ValueError as error:
-        if observations.ndim == 2 and not 1 <= observations.shape[0] <= _UPGD_LOOP_MAX_STEPS:
-            raise ValueError(
-                "observations num_steps must be an integer in "
-                f"[1, {_UPGD_LOOP_MAX_STEPS}]"
-            ) from None
-        raise error
-    require_jax_leading_length("targets", targets, _UPGD_LOOP_BUDGET, ranks=(2,))
-    require_matching_jax_leading_length("targets", targets, expected=num_steps)
-    return num_steps
 
 
 def _require_choice(name: str, value: object, choices: frozenset[str]) -> str:
@@ -1983,51 +1941,51 @@ class UPGDLearner:
         return total
 
     @staticmethod
-    def _tuple_norm(xs: tuple[Array, ...]) -> Array:
-        """L2 norm over a static tuple of arrays."""
-        total = jnp.array(0.0, dtype=jnp.float32)
+    def _rescaled_tuple_norm(xs: tuple[Array, ...]) -> tuple[Array, Array, tuple[Array, ...], Array]:
+        """Compute exact power-of-two rescaled tuple, unscaled norm, and rescaled norm."""
+        max_abs = jnp.array(0.0, dtype=jnp.float32)
+        is_finite = jnp.array(True, dtype=jnp.bool_)
         for x in xs:
-            total = total + jnp.sum(jnp.square(x))
-        return jnp.sqrt(total + 1e-12)
+            if x.size > 0:
+                is_finite = is_finite & jnp.all(jnp.isfinite(x))
+                max_abs = jnp.maximum(max_abs, jnp.max(jnp.abs(x)))
+        _, exponent = jnp.frexp(max_abs)
+        rescaled = tuple(jnp.ldexp(x, -exponent) for x in xs)
+        rescaled_sum_sq = jnp.array(0.0, dtype=jnp.float32)
+        for rx in rescaled:
+            rescaled_sum_sq = rescaled_sum_sq + jnp.sum(jnp.square(rx))
+        rescaled_norm = jnp.sqrt(rescaled_sum_sq)
+        norm = jnp.ldexp(rescaled_norm, exponent)
+        return is_finite, norm, rescaled, rescaled_norm
 
     @staticmethod
-    def _tuple_max_abs(xs: tuple[Array, ...]) -> Array:
-        """Maximum absolute value across a static tuple of arrays."""
-        if not xs:
-            return jnp.array(0.0, dtype=jnp.float32)
-        max_val = jnp.max(jnp.abs(xs[0]))
-        for x in xs[1:]:
-            max_val = jnp.maximum(max_val, jnp.max(jnp.abs(x)))
-        return max_val
+    def _tuple_norm(xs: tuple[Array, ...]) -> Array:
+        """L2 norm over a static tuple of arrays, robust to underflow/overflow."""
+        _, norm, _, _ = UPGDLearner._rescaled_tuple_norm(xs)
+        return norm
 
     @staticmethod
     def _gradient_alignment(
         previous: tuple[Array, ...],
         current: tuple[Array, ...],
     ) -> Array:
-        """Cosine alignment of two gradient tuples, zero for empty or non-finite gradients."""
-        if not previous or not current:
-            return jnp.array(0.0, dtype=jnp.float32)
-        prev_max = UPGDLearner._tuple_max_abs(previous)
-        curr_max = UPGDLearner._tuple_max_abs(current)
-        _, prev_exp = jnp.frexp(prev_max)
-        _, curr_exp = jnp.frexp(curr_max)
-        prev_scaled = tuple(jnp.ldexp(x, -prev_exp) for x in previous)
-        curr_scaled = tuple(jnp.ldexp(y, -curr_exp) for y in current)
-        prev_norm_sq = sum(jnp.sum(jnp.square(x)) for x in prev_scaled)
-        curr_norm_sq = sum(jnp.sum(jnp.square(y)) for y in curr_scaled)
-        dot_scaled = sum(jnp.sum(x * y) for x, y in zip(prev_scaled, curr_scaled))
-        denom = jnp.sqrt(prev_norm_sq * curr_norm_sq)
-        cos = jnp.clip(dot_scaled / jnp.where(denom > 0.0, denom, 1.0), -1.0, 1.0)
+        """Cosine alignment of two gradient tuples, zero for empty/nonfinite gradients."""
+        prev_finite, _, prev_rescaled, prev_rn = UPGDLearner._rescaled_tuple_norm(previous)
+        curr_finite, _, curr_rescaled, curr_rn = UPGDLearner._rescaled_tuple_norm(current)
+        dot = jnp.array(0.0, dtype=jnp.float32)
+        for rx, ry in zip(prev_rescaled, curr_rescaled):
+            dot = dot + jnp.sum(rx * ry)
         valid = (
-            (prev_max > 0.0)
-            & (curr_max > 0.0)
-            & jnp.isfinite(prev_max)
-            & jnp.isfinite(curr_max)
-            & (denom > 0.0)
-            & jnp.isfinite(cos)
+            prev_finite
+            & curr_finite
+            & jnp.isfinite(prev_rn)
+            & jnp.isfinite(curr_rn)
+            & (prev_rn > 0.0)
+            & (curr_rn > 0.0)
         )
-        return jnp.where(valid, cos, jnp.array(0.0, dtype=jnp.float32))
+        safe_denom = jnp.where(valid, prev_rn * curr_rn, jnp.ones_like(prev_rn))
+        cosine = jnp.where(valid, dot / safe_denom, jnp.zeros_like(dot))
+        return jnp.where(jnp.isfinite(cosine), cosine, jnp.zeros_like(cosine))
 
     @functools.partial(jax.jit, static_argnums=(0,))
     def predict(self, state: UPGDState, observation: Array) -> Array:
@@ -3394,7 +3352,7 @@ class UPGDLearner:
             previous_head_weight_grads=next_previous_head_weight_grads,
             previous_head_bias_grads=next_previous_head_bias_grads,
             key=new_key,
-            step_count=_saturating_int32_counter_increment(state.step_count),
+            step_count=state.step_count + 1,
             birth_timestamp=state.birth_timestamp,
             uptime_s=state.uptime_s,
         )
@@ -3412,45 +3370,6 @@ class UPGDLearner:
 # =============================================================================
 # Loops
 # =============================================================================
-
-
-def _has_trusted_array_type(value: object) -> bool:
-    actual_type = type(value)
-    return (
-        actual_type is np.ndarray
-        or issubclass(
-            actual_type,
-            (
-                jax.Array,
-                jax.core.Tracer,
-                jax.ShapeDtypeStruct,
-                jax.core.ShapedArray,
-            ),
-        )
-    )
-
-
-def _trusted_array(
-    name: str,
-    value: object,
-    *,
-    shape: tuple[int, ...],
-    dtype: Any,
-) -> Array:
-    """Validate static array metadata without dispatching on hostile objects."""
-    if not _has_trusted_array_type(value):
-        raise TypeError(f"{name} must be a trusted array")
-    trusted = cast(Array, value)
-    try:
-        actual_shape = tuple(trusted.shape)
-        actual_dtype = np.dtype(trusted.dtype)
-    except (AttributeError, TypeError, ValueError) as error:
-        raise TypeError(f"{name} must expose trusted shape and dtype metadata") from error
-    if actual_shape != shape:
-        raise ValueError(f"{name} must have shape {shape}")
-    if actual_dtype != np.dtype(dtype):
-        raise TypeError(f"{name} must have dtype {np.dtype(dtype)}")
-    return trusted
 
 
 def run_upgd_arrays(
@@ -3471,31 +3390,7 @@ def run_upgd_arrays(
     Returns:
         :class:`UPGDLearningResult` with the final state and the per-step
         4-column metrics array.
-
-    Raises:
-        TypeError: If ``observations`` or ``targets`` is not a JAX array.
-        ValueError: If ``num_steps`` is not an exact integer in
-            ``[1, 10_000]``.
     """
-    num_steps = _require_upgd_array_steps(observations, targets)
-    if type(learner) is not UPGDLearner:
-        raise TypeError("learner must be an exact UPGDLearner")
-    if type(state) is not UPGDState:
-        raise TypeError("state must be an exact UPGDState")
-
-    feature_dim = (
-        state.trunk_params.weights[0].shape[1]
-        if state.trunk_params.weights
-        else state.head_params.weights[0].shape[1]
-    )
-    checked_obs = _trusted_array(
-        "observations", observations, shape=(num_steps, feature_dim), dtype=jnp.float32
-    )
-    checked_targets = _trusted_array(
-        "targets", targets, shape=(num_steps, learner.n_heads), dtype=jnp.float32
-    )
-
-    _require_float32_resource("upgd array metrics", vector_scalars=4 * num_steps)
 
     def step_fn(carry: UPGDState, inputs: tuple[Array, Array]) -> tuple[UPGDState, Array]:
         obs, tgt = inputs
@@ -3503,7 +3398,7 @@ def run_upgd_arrays(
         return result.state, result.metrics
 
     t0 = time.time()
-    final_state, metrics = jax.lax.scan(step_fn, state, (checked_obs, checked_targets))
+    final_state, metrics = jax.lax.scan(step_fn, state, (observations, targets))
     elapsed = time.time() - t0
     final_state = final_state.replace(uptime_s=final_state.uptime_s + elapsed)  # type: ignore[attr-defined]  # noqa: E501
     return UPGDLearningResult(state=final_state, metrics=metrics)  # type: ignore[call-arg]
@@ -3534,17 +3429,7 @@ def run_upgd_loop[StreamStateT](
     Returns:
         :class:`UPGDLearningResult` with the final state and the per-step
         4-column metrics array.
-
-    Raises:
-        ValueError: If ``num_steps`` exceeds the documented protocol ceiling
-            (``10_000``).
     """
-    num_steps = _require_upgd_loop_steps("num_steps", num_steps)
-    if type(learner) is not UPGDLearner:
-        raise TypeError("learner must be an exact UPGDLearner")
-    if learner_state is not None and type(learner_state) is not UPGDState:
-        raise TypeError("learner_state must be an exact UPGDState")
-    _require_float32_resource("upgd loop metrics", vector_scalars=4 * num_steps)
     stream_key, init_key = jax.random.split(key)
     if learner_state is None:
         learner_state = learner.init(stream.feature_dim, init_key)
