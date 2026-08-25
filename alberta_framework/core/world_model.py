@@ -282,6 +282,22 @@ def _saturating_increment(value: Array) -> Array:
     return jnp.minimum(value, jnp.asarray(_INT32_MAX - 1, dtype=jnp.int32)) + one
 
 
+def _skip_zero_scale(scale: Array, value: Array) -> Array:
+    """Skip ``0 * inf`` so a disabled error EMA does not poison diagnostics."""
+    return jnp.where(scale == 0.0, jnp.zeros_like(value), scale * value)
+
+
+def _model_error_ema_for_finite_guard(error_decay: float, model_error_ema: Array) -> Array:
+    """Treat poisoned error EMA as discarded when decay zeroes it."""
+    if error_decay != 0.0:
+        return model_error_ema
+    return jnp.where(
+        jnp.isfinite(model_error_ema),
+        model_error_ema,
+        jnp.zeros_like(model_error_ema),
+    )
+
+
 def _float32_operand(
     name: str,
     value: Array | float | int,
@@ -557,8 +573,13 @@ def _rollback_multi_head_result(
 def _action_world_model_state_is_valid(
     state: ActionConditionedWorldModelState,
     observation_dim: int,
+    *,
+    model_error_ema: Array | None = None,
 ) -> Bool[Array, ""]:
     """Accept either the intentional empty-bound sentinels or finite learned bounds."""
+    checked_error_ema = (
+        state.model_error_ema if model_error_ema is None else model_error_ema
+    )
     direct_structure_valid = (
         state.observation_min.shape == (observation_dim,)
         and state.observation_max.shape == (observation_dim,)
@@ -589,7 +610,7 @@ def _action_world_model_state_is_valid(
     return (
         direct_structure_valid
         & floating_tree_is_finite(state.learner_state)
-        & jnp.isfinite(state.model_error_ema)
+        & jnp.isfinite(checked_error_ema)
         & (state.step_count >= 0)
         & (finite_bounds | empty_bounds)
     )
@@ -976,10 +997,15 @@ class ActionConditionedWorldModel:
         prediction_error = observation_mse + reward_error**2 + discount_error**2
 
         error_decay = jnp.asarray(self._config.error_decay, dtype=jnp.float32)
+        checked_error_ema = _model_error_ema_for_finite_guard(
+            self._config.error_decay,
+            state.model_error_ema,
+        )
         next_error_ema = jnp.where(
             state.step_count == 0,
             prediction_error,
-            error_decay * state.model_error_ema + (1.0 - error_decay) * prediction_error,
+            _skip_zero_scale(error_decay, state.model_error_ema)
+            + (1.0 - error_decay) * prediction_error,
         )
 
         observed_stack_min = jnp.minimum(safe_obs, safe_next_obs)
@@ -1008,7 +1034,11 @@ class ActionConditionedWorldModel:
         update_applied = (
             inputs_valid
             & learner_result.update_applied
-            & _action_world_model_state_is_valid(state, self._config.observation_dim)
+            & _action_world_model_state_is_valid(
+                state,
+                self._config.observation_dim,
+                model_error_ema=checked_error_ema,
+            )
             & floating_tree_is_finite(candidate_state)
             & diagnostics_finite
         )

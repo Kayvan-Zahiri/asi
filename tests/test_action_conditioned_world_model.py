@@ -669,6 +669,45 @@ def test_update_rejects_out_of_range_discounts(discount: float) -> None:
     assert bool(accepted.update_applied)
 
 
+def test_zero_error_decay_does_not_multiply_inf_model_error_ema() -> None:
+    """error_decay=0 replaces the diagnostic EMA; 0 * inf must not freeze updates."""
+    config = ActionConditionedWorldModelConfig(
+        observation_dim=2,
+        n_actions=2,
+        hidden_sizes=(),
+        step_size=0.05,
+        sparsity=0.0,
+        error_decay=0.0,
+    )
+    model = ActionConditionedWorldModel(config)
+    state = model.init(jr.key(19))
+    warmed = model.update(
+        state,
+        jnp.array([0.1, -0.2], dtype=jnp.float32),
+        jnp.int32(1),
+        0.5,
+        0.9,
+        jnp.array([0.2, 0.1], dtype=jnp.float32),
+    )
+    assert bool(warmed.update_applied)
+    poisoned = dataclasses.replace(warmed.state, model_error_ema=jnp.asarray(jnp.inf))
+    raw = jnp.asarray(0.0, dtype=jnp.float32) * jnp.asarray(jnp.inf, dtype=jnp.float32)
+    assert not bool(jnp.isfinite(raw))
+
+    result = model.update(
+        poisoned,
+        jnp.array([0.0, 0.0], dtype=jnp.float32),
+        jnp.int32(0),
+        0.25,
+        0.99,
+        jnp.array([0.1, 0.0], dtype=jnp.float32),
+    )
+
+    assert bool(result.update_applied)
+    chex.assert_tree_all_finite(result.state)
+    assert bool(jnp.isfinite(result.state.model_error_ema))
+
+
 def test_guarded_dreamer_rejects_warmup_and_accepts_after_real_updates() -> None:
     config = ActionConditionedWorldModelConfig(
         observation_dim=2,
