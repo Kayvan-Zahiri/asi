@@ -1983,26 +1983,52 @@ class UPGDLearner:
         return total
 
     @staticmethod
+    def _scale_free_unit_tuple(xs: tuple[Array, ...]) -> tuple[tuple[Array, ...], Array]:
+        """Normalize a static tuple of arrays to unit L2 norm in a scale-free manner."""
+        max_val = jnp.array(0.0, dtype=jnp.float32)
+        all_finite = jnp.array(True, dtype=jnp.bool_)
+        for x in xs:
+            max_val = jnp.maximum(max_val, jnp.max(jnp.abs(x)))
+            all_finite = all_finite & jnp.all(jnp.isfinite(x))
+        _, exp = jnp.frexp(max_val)
+        scaled_xs = tuple(jnp.ldexp(x, -exp) for x in xs)
+        sq_sum = jnp.array(0.0, dtype=jnp.float32)
+        for sx in scaled_xs:
+            sq_sum = sq_sum + jnp.sum(jnp.square(sx))
+        norm = jnp.sqrt(sq_sum)
+        valid = (
+            (max_val > 0.0)
+            & (sq_sum > 0.0)
+            & jnp.isfinite(sq_sum)
+            & jnp.isfinite(norm)
+            & (norm > 0.0)
+            & all_finite
+        )
+        unit_xs = tuple(
+            jnp.where(valid, sx / jnp.where(valid, norm, 1.0), 0.0)
+            for sx in scaled_xs
+        )
+        return unit_xs, valid
+
+    @staticmethod
     def _tuple_norm(xs: tuple[Array, ...]) -> Array:
         """L2 norm over a static tuple of arrays."""
         total = jnp.array(0.0, dtype=jnp.float32)
         for x in xs:
             total = total + jnp.sum(jnp.square(x))
-        return jnp.sqrt(total + 1e-12)
+        return jnp.sqrt(total)
 
     @staticmethod
     def _gradient_alignment(
         previous: tuple[Array, ...],
         current: tuple[Array, ...],
     ) -> Array:
-        """Cosine alignment of two gradient tuples, zero for empty gradients."""
-        previous_norm = UPGDLearner._tuple_norm(previous)
-        current_norm = UPGDLearner._tuple_norm(current)
-        return jnp.where(
-            (previous_norm > 1e-6) & (current_norm > 1e-6),
-            UPGDLearner._tuple_dot(previous, current) / (previous_norm * current_norm + 1e-12),
-            jnp.array(0.0, dtype=jnp.float32),
-        )
+        """Cosine alignment of two gradient tuples, zero for empty or non-finite gradients."""
+        unit_prev, valid_prev = UPGDLearner._scale_free_unit_tuple(previous)
+        unit_curr, valid_curr = UPGDLearner._scale_free_unit_tuple(current)
+        dot = UPGDLearner._tuple_dot(unit_prev, unit_curr)
+        valid = valid_prev & valid_curr & jnp.isfinite(dot)
+        return jnp.where(valid, jnp.clip(dot, -1.0, 1.0), 0.0)
 
     @functools.partial(jax.jit, static_argnums=(0,))
     def predict(self, state: UPGDState, observation: Array) -> Array:
