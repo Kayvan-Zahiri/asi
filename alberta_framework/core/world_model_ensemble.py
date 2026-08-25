@@ -258,6 +258,23 @@ def _saturating_int32_sum(values: Array) -> Array:
     )
 
 
+def _skip_zero_scale(scale: Array, value: Array) -> Array:
+    """Skip ``0 * inf`` so a disabled residual EMA does not poison the proxy."""
+    return jnp.where(scale == 0.0, jnp.zeros_like(value), scale * value)
+
+
+def _residual_variances_for_finite_guard(
+    decay: float,
+    residual_variances: Array,
+    *,
+    floor: float,
+) -> Array:
+    """Treat residual-proxy history as discarded when decay zeroes it."""
+    if decay != 0.0:
+        return residual_variances
+    return jnp.full_like(residual_variances, floor)
+
+
 @dataclasses.dataclass(frozen=True)
 class WorldModelEnsembleConfig:
     """Static ensemble, bootstrap, and residual-proxy contract.
@@ -1208,7 +1225,17 @@ class WorldModelEnsemble:
             & jnp.where(step_count == 0, pristine_bounds, learned_bounds)
         )
 
-    def _state_valid(self, state: WorldModelEnsembleState) -> Array:
+    def _state_valid(
+        self,
+        state: WorldModelEnsembleState,
+        *,
+        residual_variances: Array | None = None,
+    ) -> Array:
+        checked_residuals = (
+            state.residual_variances
+            if residual_variances is None
+            else residual_variances
+        )
         member_valid = []
         member_counts_match = []
         for index, member_state in enumerate(state.member_states):
@@ -1245,9 +1272,9 @@ class WorldModelEnsemble:
             )
             & jnp.all(jnp.stack(member_valid))
             & jnp.all(jnp.stack(member_counts_match))
-            & jnp.all(jnp.isfinite(state.residual_variances))
-            & jnp.all(state.residual_variances >= self._config.residual_variance_floor)
-            & jnp.all(state.residual_variances <= signal_cfg.max_predicted_variance)
+            & jnp.all(jnp.isfinite(checked_residuals))
+            & jnp.all(checked_residuals >= self._config.residual_variance_floor)
+            & jnp.all(checked_residuals <= signal_cfg.max_predicted_variance)
             & self._signal_state_valid(signal_state)
             & signal_bounds_valid
             & (signal_state.step_count == state.event_count)
@@ -1548,7 +1575,12 @@ class WorldModelEnsemble:
             & jnp.all(jnp.isfinite(next_obs))
             & jnp.all(jnp.abs(next_obs) <= magnitude_bound)
         )
-        state_valid = self._state_valid(state)
+        checked_residuals = _residual_variances_for_finite_guard(
+            self._config.residual_variance_decay,
+            state.residual_variances,
+            floor=self._config.residual_variance_floor,
+        )
+        state_valid = self._state_valid(state, residual_variances=checked_residuals)
         capacity_available = (state.replay_event_count < _INT32_MAX) & jnp.all(
             state.member_update_counts + state.replay_member_update_counts < _INT32_MAX
         )
@@ -1720,7 +1752,12 @@ class WorldModelEnsemble:
             & jnp.all(jnp.isfinite(next_obs))
             & jnp.all(jnp.abs(next_obs) <= magnitude_bound)
         )
-        state_valid = self._state_valid(state)
+        checked_residuals = _residual_variances_for_finite_guard(
+            self._config.residual_variance_decay,
+            state.residual_variances,
+            floor=self._config.residual_variance_floor,
+        )
+        state_valid = self._state_valid(state, residual_variances=checked_residuals)
         capacity_available = (state.event_count < _INT32_MAX) & jnp.all(
             state.member_update_counts + state.replay_member_update_counts < _INT32_MAX
         )
@@ -1770,7 +1807,7 @@ class WorldModelEnsemble:
             candidate_signal_state, raw_signals = self._signals.observe(
                 state.signal_state,
                 prediction.member_raw_predictions,
-                state.residual_variances,
+                checked_residuals,
                 targets,
                 observed_loss,
             )
@@ -1782,7 +1819,8 @@ class WorldModelEnsemble:
                 state.event_count == 0,
                 jnp.maximum(squared_residuals, residual_floor),
                 jnp.maximum(
-                    decay * state.residual_variances + (1.0 - decay) * squared_residuals,
+                    _skip_zero_scale(decay, state.residual_variances)
+                    + (1.0 - decay) * squared_residuals,
                     residual_floor,
                 ),
             )

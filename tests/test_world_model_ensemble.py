@@ -582,6 +582,24 @@ def test_invalid_dynamic_input_is_an_exact_atomic_noop(
     _assert_tree_equal(result.state, state)
 
 
+def test_zero_residual_variance_decay_does_not_multiply_inf_variances() -> None:
+    """residual_variance_decay=0 replaces the proxy; 0 * inf must not freeze."""
+    config = dataclasses.replace(_config(), residual_variance_decay=0.0)
+    ensemble = WorldModelEnsemble(config)
+    state = ensemble.init(jr.key(29))
+    warmed = ensemble.update(state, *_event(0))
+    assert bool(warmed.diagnostics.applied)
+    poisoned = warmed.state.replace(
+        residual_variances=jnp.full_like(warmed.state.residual_variances, jnp.inf)
+    )
+    raw = jnp.asarray(0.0, dtype=jnp.float32) * jnp.asarray(jnp.inf, dtype=jnp.float32)
+    assert not bool(jnp.isfinite(raw))
+
+    result = ensemble.update(poisoned, *_event(1))
+    assert bool(result.diagnostics.applied)
+    chex.assert_tree_all_finite(result.state.residual_variances)
+
+
 def test_corrupt_dynamic_state_is_an_exact_atomic_noop() -> None:
     ensemble = WorldModelEnsemble(_config())
     state = ensemble.init(jr.key(2))
