@@ -2235,6 +2235,17 @@ class TestGradientAlignmentScaleFreedom:
         align_opp = UPGDLearner._gradient_alignment(g, g_opp)
         chex.assert_trees_all_close(align_opp, jnp.asarray(-1.0, dtype=jnp.float32), atol=1e-5)
 
+    def test_gradient_alignment_finite_near_limit_components(self) -> None:
+        """Components near the float32 max retain exact cosine alignment."""
+        v = (jnp.array([3.0e38, -1.5e38, 7.5e37], dtype=jnp.float32),)
+        neg_v = (jnp.array([-3.0e38, 1.5e38, -7.5e37], dtype=jnp.float32),)
+
+        align_same = UPGDLearner._gradient_alignment(v, v)
+        chex.assert_trees_all_close(align_same, jnp.asarray(1.0, dtype=jnp.float32), atol=1e-5)
+
+        align_opp = UPGDLearner._gradient_alignment(v, neg_v)
+        chex.assert_trees_all_close(align_opp, jnp.asarray(-1.0, dtype=jnp.float32), atol=1e-5)
+
     def test_gradient_alignment_handles_zero_and_nonfinite(self) -> None:
         g_zero = (jnp.zeros(3, dtype=jnp.float32),)
         g_norm = (jnp.ones(3, dtype=jnp.float32),)

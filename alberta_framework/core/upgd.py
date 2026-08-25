@@ -1941,11 +1941,13 @@ class UPGDLearner:
         return total
 
     @staticmethod
-    def _rescaled_tuple_norm(xs: tuple[Array, ...]) -> tuple[Array, tuple[Array, ...], Array]:
+    def _rescaled_tuple_norm(xs: tuple[Array, ...]) -> tuple[Array, Array, tuple[Array, ...], Array]:
         """Compute exact power-of-two rescaled tuple, unscaled norm, and rescaled norm."""
         max_abs = jnp.array(0.0, dtype=jnp.float32)
+        is_finite = jnp.array(True, dtype=jnp.bool_)
         for x in xs:
             if x.size > 0:
+                is_finite = is_finite & jnp.all(jnp.isfinite(x))
                 max_abs = jnp.maximum(max_abs, jnp.max(jnp.abs(x)))
         _, exponent = jnp.frexp(max_abs)
         rescaled = tuple(jnp.ldexp(x, -exponent) for x in xs)
@@ -1954,12 +1956,12 @@ class UPGDLearner:
             rescaled_sum_sq = rescaled_sum_sq + jnp.sum(jnp.square(rx))
         rescaled_norm = jnp.sqrt(rescaled_sum_sq)
         norm = jnp.ldexp(rescaled_norm, exponent)
-        return norm, rescaled, rescaled_norm
+        return is_finite, norm, rescaled, rescaled_norm
 
     @staticmethod
     def _tuple_norm(xs: tuple[Array, ...]) -> Array:
         """L2 norm over a static tuple of arrays, robust to underflow/overflow."""
-        norm, _, _ = UPGDLearner._rescaled_tuple_norm(xs)
+        _, norm, _, _ = UPGDLearner._rescaled_tuple_norm(xs)
         return norm
 
     @staticmethod
@@ -1968,14 +1970,16 @@ class UPGDLearner:
         current: tuple[Array, ...],
     ) -> Array:
         """Cosine alignment of two gradient tuples, zero for empty/nonfinite gradients."""
-        prev_norm, prev_rescaled, prev_rn = UPGDLearner._rescaled_tuple_norm(previous)
-        curr_norm, curr_rescaled, curr_rn = UPGDLearner._rescaled_tuple_norm(current)
+        prev_finite, _, prev_rescaled, prev_rn = UPGDLearner._rescaled_tuple_norm(previous)
+        curr_finite, _, curr_rescaled, curr_rn = UPGDLearner._rescaled_tuple_norm(current)
         dot = jnp.array(0.0, dtype=jnp.float32)
         for rx, ry in zip(prev_rescaled, curr_rescaled):
             dot = dot + jnp.sum(rx * ry)
         valid = (
-            jnp.isfinite(prev_norm)
-            & jnp.isfinite(curr_norm)
+            prev_finite
+            & curr_finite
+            & jnp.isfinite(prev_rn)
+            & jnp.isfinite(curr_rn)
             & (prev_rn > 0.0)
             & (curr_rn > 0.0)
         )
