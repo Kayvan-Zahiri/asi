@@ -340,3 +340,21 @@ def test_geometry_runner_rejects_invalid_transactions(monkeypatch: pytest.Monkey
     )
     with pytest.raises(ValueError, match="transaction"):
         run_streaming_matrix_evaluation()
+
+def test_flad_noise_component_underflow_scale_preserves_projection() -> None:
+    delta = jnp.array([1.0, -2.0, 0.5, 3.0], dtype=jnp.float32)
+    grad = jnp.array([2.0, 1.0, -1.0, 0.5], dtype=jnp.float32)
+
+    def ref(d_arr: np.ndarray, g_arr: np.ndarray) -> np.ndarray:
+        d = np.asarray(d_arr, dtype=np.float64)
+        g = np.asarray(g_arr, dtype=np.float64)
+        denom = float(g @ g)
+        return d if denom == 0.0 else d - g * (float(g @ d) / denom)
+
+    for scale in (1.0, 1e-10, 1e-20, 1e-25, 1e-30, 1e20, 1e30):
+        scaled_grad = grad * np.float32(scale)
+        safe, valid = jax.jit(flad_noise_component_transaction)(delta, scaled_grad)
+        assert bool(valid)
+        expected = ref(np.array(delta), np.array(scaled_grad))
+        np.testing.assert_allclose(safe, expected, rtol=1e-5, atol=1e-6)
+

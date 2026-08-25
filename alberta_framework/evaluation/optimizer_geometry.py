@@ -203,16 +203,20 @@ def flad_noise_component_transaction(perturbation: Array, gradient: Array) -> tu
     direction = _trusted_array(gradient, name="gradient")
     if delta.shape != direction.shape or delta.ndim != 1 or delta.size < 1:
         raise ValueError("perturbation and gradient must be non-empty equal-width vectors")
-    squared_norm = jnp.vdot(direction, direction).real
-    numerator = jnp.vdot(direction, delta).real
-    active = squared_norm > 0.0
+    max_mag = jnp.max(jnp.abs(direction))
+    _, exponent = jnp.frexp(max_mag)
+    scaled_direction = jnp.ldexp(direction, -exponent)
+    squared_norm = jnp.vdot(scaled_direction, scaled_direction).real
+    numerator = jnp.vdot(scaled_direction, delta).real
+    active = (squared_norm > 0.0) & (max_mag > 0.0)
     denominator = jnp.where(active, squared_norm, jnp.ones_like(squared_norm))
     coefficient = numerator / denominator
-    projection = direction * coefficient * active.astype(delta.dtype)
+    projection = scaled_direction * coefficient * active.astype(delta.dtype)
     candidate = delta - projection
     valid = (
         jnp.all(jnp.isfinite(delta))
         & jnp.all(jnp.isfinite(direction))
+        & jnp.isfinite(max_mag)
         & jnp.isfinite(squared_norm)
         & jnp.isfinite(numerator)
         & jnp.isfinite(coefficient)
