@@ -293,3 +293,16 @@ def test_smoke_preflights_all_live_arrays_before_allocation(
     monkeypatch.setattr(jr, "normal", unexpected_allocation)
     with pytest.raises(ValueError, match="smoke resources"):
         run_step7_smoke(steps=50_000_000)
+
+
+def test_step7_planning_bounds() -> None:
+    # 10_000 is accepted
+    cfg = Step7DynaConfig(planning_steps=10_000, planning_rollout_depth=10_000)
+    assert cfg.planning_steps == 10_000
+    assert cfg.planning_rollout_depth == 10_000
+
+    # > 10_000 is rejected
+    with pytest.raises(ValueError, match="planning_steps must be <= 10000"):
+        Step7DynaConfig(planning_steps=10_001)
+    with pytest.raises(ValueError, match="planning_rollout_depth must be <= 10000"):
+        Step7DynaConfig(planning_rollout_depth=10_001)

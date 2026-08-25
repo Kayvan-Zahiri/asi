@@ -409,3 +409,23 @@ def test_run_step9_scan_accepts_a_small_in_bounds_sequence() -> None:
     cfg, agent, model, buffer, state, rewards, next_observations = _step9_scan_components(4)
     result = run_step9_scan(cfg, agent, model, buffer, state, rewards, next_observations)
     assert result.real_td_errors.shape == (4,)
+
+
+def test_step9_dreaming_bounds() -> None:
+    # 10_000 is accepted when total dream work is within aggregate limit
+    cfg = Step9DreamingConfig(
+        planning_budget=0,
+        dream_rollout_horizon=10_000,
+        dream_candidate_count=10_000,
+    )
+    assert cfg.planning_budget == 0
+    assert cfg.dream_rollout_horizon == 10_000
+    assert cfg.dream_candidate_count == 10_000
+
+    # > 10_000 is rejected
+    with pytest.raises(ValueError, match="planning_budget must be <= 10000"):
+        Step9DreamingConfig(planning_budget=10_001)
+    with pytest.raises(ValueError, match="dream_rollout_horizon must be <= 10000"):
+        Step9DreamingConfig(dream_rollout_horizon=10_001)
+    with pytest.raises(ValueError, match="dream_candidate_count must be <= 10000"):
+        Step9DreamingConfig(dream_candidate_count=10_001)
