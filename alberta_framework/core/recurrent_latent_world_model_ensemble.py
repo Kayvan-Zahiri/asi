@@ -227,6 +227,11 @@ def _saturating_increment(value: Array, maximum: int) -> Array:
     return jnp.minimum(jnp.maximum(value, 0), bound - 1) + 1
 
 
+def _skip_zero_scale(scale: Array, value: Array) -> Array:
+    """Skip ``0 * inf`` so a closed GRU gate does not poison hidden state."""
+    return jnp.where(scale == 0.0, jnp.zeros_like(value), scale * value)
+
+
 def _static_signature(tree: Any) -> tuple[Any, tuple[tuple[tuple[int, ...], Any], ...]]:
     leaves, structure = jax.tree_util.tree_flatten(tree)
     return structure, tuple((jnp.asarray(leaf).shape, jnp.asarray(leaf).dtype) for leaf in leaves)
@@ -1112,16 +1117,22 @@ class RecurrentLatentWorldModelEnsemble:
         cfg = self._config
         action_one_hot = jax.nn.one_hot(action, cfg.n_actions, dtype=jnp.float32)
         recurrent_input = jnp.concatenate((observation, action_one_hot), axis=0)
-        gate_input = jnp.concatenate((recurrent_input, hidden), axis=0)
+        safe_hidden = jnp.where(jnp.isfinite(hidden), hidden, jnp.zeros_like(hidden))
+        gate_input = jnp.concatenate((recurrent_input, safe_hidden), axis=0)
         reset_and_update = jax.nn.sigmoid(
             parameters.gate_kernel @ gate_input + parameters.gate_bias
         )
         reset_gate, update_gate = jnp.split(reset_and_update, 2, axis=0)
-        candidate_input = jnp.concatenate((recurrent_input, reset_gate * hidden), axis=0)
+        candidate_input = jnp.concatenate(
+            (recurrent_input, _skip_zero_scale(reset_gate, safe_hidden)),
+            axis=0,
+        )
         candidate = jnp.tanh(
             parameters.candidate_kernel @ candidate_input + parameters.candidate_bias
         )
-        next_hidden = (1.0 - update_gate) * hidden + update_gate * candidate
+        next_hidden = _skip_zero_scale(1.0 - update_gate, hidden) + _skip_zero_scale(
+            update_gate, candidate
+        )
 
         mean_logits = parameters.mean_kernel @ next_hidden + parameters.mean_bias
         variance_logits = parameters.variance_kernel @ next_hidden + parameters.variance_bias

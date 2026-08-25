@@ -21,6 +21,7 @@ from alberta_framework.core.recurrent_latent_world_model_ensemble import (
     EVIDENCE_LEVEL,
     SCIENTIFIC_PROMOTION_ALLOWED,
     RecurrentLatentDecisionCache,
+    RecurrentLatentMemberParameters,
     RecurrentLatentTransitionRecord,
     RecurrentLatentWorldModelEnsemble,
     RecurrentLatentWorldModelEnsembleConfig,
@@ -307,6 +308,38 @@ def test_start_and_decide_are_read_only_predict_before_update_caches() -> None:
     assert not bool(prediction.availability.epistemic)
     assert not bool(prediction.availability.aleatoric)
     assert float(prediction.aleatoric_uncertainty) > 0.0
+
+
+def test_member_predict_saturated_update_gate_does_not_multiply_inf_hidden() -> None:
+    """Saturated update/reset gates must not turn poisoned hidden state into NaN."""
+    model = RecurrentLatentWorldModelEnsemble(_config(latent_dim=2))
+    cfg = model.config
+    latent = cfg.latent_dim
+    joined = cfg.recurrent_input_dim + latent
+    target = cfg.target_dim
+    params = RecurrentLatentMemberParameters(
+        gate_kernel=jnp.zeros((2 * latent, joined), dtype=jnp.float32),
+        gate_bias=jnp.concatenate(
+            (
+                jnp.full((latent,), -90.0, dtype=jnp.float32),
+                jnp.full((latent,), 90.0, dtype=jnp.float32),
+            )
+        ),
+        candidate_kernel=jnp.zeros((latent, joined), dtype=jnp.float32),
+        candidate_bias=jnp.asarray((0.25, -0.25), dtype=jnp.float32),
+        mean_kernel=jnp.zeros((target, latent), dtype=jnp.float32),
+        mean_bias=jnp.zeros((target,), dtype=jnp.float32),
+        variance_kernel=jnp.zeros((target, latent), dtype=jnp.float32),
+        variance_bias=jnp.full((target,), cfg.initial_variance_bias_magnitude, dtype=jnp.float32),
+    )
+    hidden = jnp.full((latent,), jnp.inf, dtype=jnp.float32)
+    observation = jnp.zeros((cfg.observation_dim,), dtype=jnp.float32)
+    action = jnp.asarray(0, dtype=jnp.int32)
+
+    next_hidden, _, _, _ = model._member_predict(params, hidden, observation, action)
+
+    assert jnp.all(jnp.isfinite(next_hidden))
+    np.testing.assert_allclose(next_hidden, jnp.tanh(params.candidate_bias), rtol=1.0e-6, atol=1.0e-6)
 
 
 def test_nonboundary_update_commits_one_recurrent_advance_and_masked_nll_updates() -> None:
