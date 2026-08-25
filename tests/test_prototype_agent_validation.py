@@ -303,3 +303,20 @@ def test_prototype_valid_construction() -> None:
     assert restored == cfg
     gru = GRUPerceptionConfig(observation_dim=4, hidden_dim=4)
     assert gru.augmented_dim() == 8
+
+
+def test_prototype_agent_config_n_dreams_per_step_bounds() -> None:
+    wm = _world_model(4)
+    # Accepts 0 to 10_000
+    cfg = _cfg(oak=_oak(obs_dim=4), world_model=wm, n_dreams_per_step=10_000)
+    assert cfg.n_dreams_per_step == 10_000
+
+    # Rejects > 10_000
+    with pytest.raises(ValueError, match="n_dreams_per_step must be <= 10000"):
+        _cfg(oak=_oak(obs_dim=4), world_model=wm, n_dreams_per_step=10_001)
+
+    # Rejects deserialization with > 10_000
+    payload = cfg.to_config()
+    payload["n_dreams_per_step"] = 10_001
+    with pytest.raises(ValueError, match="n_dreams_per_step must be <= 10000"):
+        PrototypeAgentConfig.from_config(payload)
