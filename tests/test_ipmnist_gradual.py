@@ -315,3 +315,10 @@ def test_gradual_pair_preflights_parameter_allocation_before_initialization() ->
             config=config,
             transition_steps=1,
         )
+
+
+def test_ipmnist_gradual_accepts_all_numpy_integer_types() -> None:
+    for code in ("b", "B", "h", "H", "i", "I", "l", "L", "q", "Q"):
+        int_t = np.dtype(code).type
+        cfg = GradualTransitionConfig(mode='input_interpolation', transition_steps=int_t(10))
+        assert cfg.transition_steps == 10
