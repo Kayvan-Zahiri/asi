@@ -490,6 +490,18 @@ def _validate_config(config: ExperientialMemoryConfig) -> None:
         "recency_scale",
         _validated_config_float("recency_scale", config.recency_scale, positive=True),
     )
+def _skip_zero_scale(scale: Array, value: Array) -> Array:
+    """Skip ``0 * inf`` so a disabled utility decay does not poison eviction."""
+    return jnp.where(scale == 0.0, jnp.zeros_like(value), scale * value)
+
+
+def _utilities_for_finite_guard(decay: float, utilities: Array) -> Array:
+    """Treat poisoned eviction utility as discarded when decay zeroes it."""
+    if decay != 0.0:
+        return utilities
+    return jnp.where(jnp.isfinite(utilities), utilities, jnp.zeros_like(utilities))
+
+
 def _saturating_increment(value: Array) -> Array:
     maximum_minus_one = jnp.asarray(_INT32_MAX - 1, dtype=jnp.int32)
     return jnp.minimum(value, maximum_minus_one) + jnp.asarray(1, dtype=jnp.int32)
@@ -701,6 +713,10 @@ class ExperientialMemory:
         """Return the global dynamic invariant for one structurally valid state."""
         entries = state.entries
         valid = entries.valid
+        utilities_for_check = _utilities_for_finite_guard(
+            self._config.utility_decay,
+            entries.utilities,
+        )
         all_float_payload_finite = (
             jnp.all(jnp.isfinite(entries.observations))
             & jnp.all(jnp.isfinite(entries.keys))
@@ -710,13 +726,13 @@ class ExperientialMemory:
             & jnp.all(jnp.isfinite(entries.uncertainties))
             & jnp.all(jnp.isfinite(entries.safety_costs))
             & jnp.all(jnp.isfinite(entries.reliabilities))
-            & jnp.all(jnp.isfinite(entries.utilities))
+            & jnp.all(jnp.isfinite(utilities_for_check))
         )
         scalar_ranges_valid = (
             jnp.all(entries.uncertainties >= 0.0)
             & jnp.all(entries.safety_costs >= 0.0)
             & jnp.all((entries.reliabilities >= 0.0) & (entries.reliabilities <= 1.0))
-            & jnp.all(entries.utilities >= 0.0)
+            & jnp.all(utilities_for_check >= 0.0)
             & jnp.all(entries.ages >= 0)
             & jnp.all(entries.recency_ages >= 0)
             & jnp.all(entries.retrieval_counts >= 0)
@@ -724,7 +740,7 @@ class ExperientialMemory:
         availability_honest = (
             jnp.all(entries.uncertainty_available | (entries.uncertainties == 0.0))
             & jnp.all(entries.safety_cost_available | (entries.safety_costs == 0.0))
-            & jnp.all(entries.utility_available | (entries.utilities == 0.0))
+            & jnp.all(entries.utility_available | (utilities_for_check == 0.0))
         )
         active_metadata_valid = jnp.all(
             (~valid)
@@ -935,6 +951,7 @@ class ExperientialMemory:
         """Compiled query after the public structural contract is established."""
         cfg = self._config
         entries = state.entries
+        utilities_for_check = _utilities_for_finite_guard(cfg.utility_decay, entries.utilities)
         query_key = jnp.asarray(key, dtype=jnp.float32)
         query_version = jnp.asarray(representation_version, dtype=jnp.int32)
         query_uncertainty_value = jnp.asarray(query_uncertainty, dtype=jnp.float32)
@@ -960,7 +977,7 @@ class ExperientialMemory:
             & jnp.isfinite(entries.uncertainties)
             & jnp.isfinite(entries.safety_costs)
             & jnp.isfinite(entries.reliabilities)
-            & jnp.isfinite(entries.utilities)
+            & jnp.isfinite(utilities_for_check)
         )
         sane_rows = (
             entries.valid
@@ -969,7 +986,7 @@ class ExperientialMemory:
             & (entries.safety_costs >= 0.0)
             & (entries.reliabilities >= 0.0)
             & (entries.reliabilities <= 1.0)
-            & (entries.utilities >= 0.0)
+            & (utilities_for_check >= 0.0)
             & (entries.representation_versions >= 0)
             & (entries.ages >= 0)
             & (entries.recency_ages >= 0)
@@ -1138,12 +1155,15 @@ class ExperientialMemory:
             _saturating_increment(entries.recency_ages),
             entries.recency_ages,
         )
-        utilities = jnp.where(
-            valid,
-            entries.utilities
-            * jnp.asarray(self._config.utility_decay, dtype=jnp.float32),
-            entries.utilities,
-        )
+        decay = jnp.asarray(self._config.utility_decay, dtype=jnp.float32)
+        if self._config.utility_decay == 0.0:
+            utilities = _skip_zero_scale(decay, entries.utilities)
+        else:
+            utilities = jnp.where(
+                valid,
+                _skip_zero_scale(decay, entries.utilities),
+                entries.utilities,
+            )
         return ExperientialMemoryState(
             entries=ExperientialMemoryEntries(
                 observations=entries.observations,

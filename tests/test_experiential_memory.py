@@ -796,6 +796,24 @@ def test_same_size_wrong_shapes_and_dtype_aliases_are_rejected_before_tracing() 
         )
 
 
+def test_zero_utility_decay_does_not_multiply_inf_utilities() -> None:
+    """utility_decay=0 drops leftover eviction utility; 0 * inf must not freeze."""
+    memory = ExperientialMemory(_config(utility_decay=0.0))
+    state = _write(memory, memory.init(), _entry(1, utility=2.0))
+    poisoned = state.replace(
+        entries=state.entries.replace(
+            utilities=jnp.full_like(state.entries.utilities, jnp.inf)
+        )
+    )
+    raw = jnp.asarray(0.0, dtype=jnp.float32) * jnp.asarray(jnp.inf, dtype=jnp.float32)
+    assert not bool(jnp.isfinite(raw))
+
+    result = memory.write(poisoned, _entry(2, utility=0.5))
+    assert bool(result.wrote)
+    chex.assert_tree_all_finite(result.state.entries.utilities)
+    assert bool(jnp.all(result.state.entries.utilities >= 0.0))
+
+
 def test_dynamic_state_corruption_makes_query_abstain_and_mutations_exact_noops() -> None:
     memory = ExperientialMemory(_config())
     original = memory.init()
