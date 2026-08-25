@@ -594,8 +594,15 @@ class LearnedResourceManager:
         adjusted = jnp.where(valid_actions, safe_losses + cost_terms, 0.0)
 
         weights = self._weights_jit(state, context)
-        finite_weight_sum = jnp.maximum(jnp.sum(jnp.where(valid_actions, weights, 0.0)), 1e-12)
-        masked_weights = jnp.where(valid_actions, weights / finite_weight_sum, 0.0)
+        masked_raw = jnp.where(valid_actions, weights, 0.0)
+        mass = jnp.sum(masked_raw)
+        valid_count = jnp.maximum(jnp.sum(valid_actions), 1)
+        uniform_fallback = jnp.where(valid_actions, 1.0 / valid_count, 0.0)
+        masked_weights = jnp.where(
+            mass > 0.0,
+            masked_raw / jnp.where(mass > 0.0, mass, 1.0),
+            uniform_fallback,
+        )
         baseline = jnp.sum(masked_weights * adjusted)
         advantages = jnp.where(valid_actions, baseline - adjusted, 0.0)
         advantages = jnp.clip(
@@ -1191,8 +1198,15 @@ class GeneratorMetaResourceManager:
         adjusted = jnp.where(finite, safe_rewards - cost_terms, 0.0)
 
         weights = self._weights_jit(state, context)
-        finite_weight_sum = jnp.maximum(jnp.sum(jnp.where(finite, weights, 0.0)), 1e-12)
-        masked_weights = jnp.where(finite, weights / finite_weight_sum, 0.0)
+        masked_raw = jnp.where(finite, weights, 0.0)
+        mass = jnp.sum(masked_raw)
+        valid_count = jnp.maximum(jnp.sum(finite), 1)
+        uniform_fallback = jnp.where(finite, 1.0 / valid_count, 0.0)
+        masked_weights = jnp.where(
+            mass > 0.0,
+            masked_raw / jnp.where(mass > 0.0, mass, 1.0),
+            uniform_fallback,
+        )
         baseline = jnp.sum(masked_weights * adjusted)
         selection_input_valid = jnp.asarray(True, dtype=jnp.bool_)
         if self._update_rule == "exp3":

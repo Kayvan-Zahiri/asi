@@ -859,3 +859,18 @@ def test_resource_manager_serialized_schemas_are_exact() -> None:
         invalid.update(mutation)
         with pytest.raises(ValueError, match=match):
             GeneratorMetaResourceManager.from_config(invalid)
+
+
+def test_resource_manager_masked_baseline_centering_below_floor() -> None:
+    # Action 0 has large log_weight (concentrated mass).
+    # Update passes nan for action 0, leaving action 1 (loss 1.0) and action 2 (loss 3.0).
+    manager = LearnedResourceManager(n_actions=3, n_contexts=1, exploration=0.0)
+    state = manager.init().replace(log_weights=jnp.asarray([[40.0, 0.0, 0.0]], dtype=jnp.float32))
+    losses = jnp.asarray([float("nan"), 1.0, 3.0], dtype=jnp.float32)
+    result = manager.update(state, losses, context_id=0)
+    assert bool(result.update_applied)
+    # Baseline of {1.0, 3.0} is 2.0 (uniform over remaining valid actions).
+    # Centered advantages are (2.0 - 1.0) = +1.0 and (2.0 - 3.0) = -1.0.
+    adv = result.advantages
+    assert jnp.isclose(adv[1], 1.0, atol=1e-5)
+    assert jnp.isclose(adv[2], -1.0, atol=1e-5)
