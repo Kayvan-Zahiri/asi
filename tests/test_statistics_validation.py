@@ -575,6 +575,24 @@ def _paired_replication_rates(
 
 
 class TestPairedTests:
+
+    def test_paired_ttest_and_wilcoxon_use_dz_effect_size(self) -> None:
+        # Paired samples with large shared between-seed variance but consistent shift
+        a = [101.0, 202.0, 303.0, 404.0]
+        b = [100.0, 200.0, 300.0, 400.0]
+        diff = np.array(a) - np.array(b)
+        expected_dz = float(np.mean(diff) / np.std(diff, ddof=1))
+
+        res_ttest = ttest_comparison(a, b, paired=True)
+        assert res_ttest.effect_size == pytest.approx(expected_dz)
+
+        res_wilcoxon = wilcoxon_comparison(a, b)
+        assert res_wilcoxon.effect_size == pytest.approx(expected_dz)
+
+        # Unpaired t-test continues to use pooled Cohen's d
+        res_unpaired = ttest_comparison(a, b, paired=False)
+        assert res_unpaired.effect_size != pytest.approx(expected_dz)
+
     def test_paired_ttest_null_and_power(self) -> None:
         """Null rejection ~alpha (measured 0.0575), power ~1.0 (measured 1.000)."""
         null_rate, power = _paired_replication_rates(
@@ -668,7 +686,7 @@ class TestIdenticalWilcoxonRejection:
         assert result.test_name == "Wilcoxon signed-rank"
         assert result.statistic == pytest.approx(0.0)
         assert result.p_value < 1.0
-        assert result.effect_size == cohens_d([1.0, 2.0, 3.0], [0.5, 1.5, 2.5])
+        assert np.isposinf(result.effect_size)
 
 
 class TestOneSampleRejection:

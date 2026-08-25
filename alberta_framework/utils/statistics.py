@@ -428,6 +428,50 @@ def cohens_d(
     return float((mean_a - mean_b) / pooled_std)
 
 
+def _paired_cohens_d(
+    values_a: NDArray[np.float64] | list[float],
+    values_b: NDArray[np.float64] | list[float],
+) -> float:
+    """Compute paired Cohen's d_z effect size.
+
+    Args:
+        values_a: Values for first group
+        values_b: Values for second group
+
+    Returns:
+        Cohen's d_z (positive means a > b). Pairs with zero variance in their
+        differences have a signed-infinite standardized difference.
+
+    Raises:
+        ValueError: If samples differ in length, are empty, or hold fewer than
+            2 pairs.
+    """
+    a = _require_sample_vector(values_a, name="values_a")
+    b = _require_sample_vector(values_b, name="values_b")
+    _require_finite_values(a, name="values_a")
+    _require_finite_values(b, name="values_b")
+
+    if len(a) != len(b):
+        raise ValueError(
+            f"paired cohens_d requires equal-length samples (got {len(a)} and {len(b)})"
+        )
+    if len(a) < 2:
+        raise ValueError(
+            f"paired cohens_d requires at least 2 pairs (got {len(a)})"
+        )
+
+    diff = a - b
+    mean_diff = np.mean(diff)
+    std_diff = np.std(diff, ddof=1)
+
+    if std_diff == 0:
+        if mean_diff == 0:
+            return 0.0
+        return float(np.copysign(np.inf, mean_diff))
+
+    return float(mean_diff / std_diff)
+
+
 def ttest_comparison(
     values_a: NDArray[np.float64] | list[float],
     values_b: NDArray[np.float64] | list[float],
@@ -503,7 +547,10 @@ def ttest_comparison(
     except ImportError:
         raise ImportError("scipy is required for t-test. Install with: pip install scipy")
 
-    effect = cohens_d(a, b)
+    if paired:
+        effect = _paired_cohens_d(a, b)
+    else:
+        effect = cohens_d(a, b)
 
     return SignificanceResult(
         test_name=test_name,
@@ -657,7 +704,7 @@ def wilcoxon_comparison(
     except ImportError:
         raise ImportError("scipy is required for Wilcoxon test. Install with: pip install scipy")
 
-    effect = cohens_d(a, b)
+    effect = _paired_cohens_d(a, b)
 
     return SignificanceResult(
         test_name="Wilcoxon signed-rank",
