@@ -464,7 +464,7 @@ class _FloatSpoof:
         ({"max_delta_scale": 1e100}, "max_delta_scale must remain finite once narrowed"),
         ({"reward_scale": 1e-100}, "reward_scale must remain positive once narrowed"),
         ({"max_delta_scale": 1e-100}, "max_delta_scale must remain positive once narrowed"),
-        ({"observation_scale": (1e-100, 1.0)}, "must remain positive once narrowed"),
+        ({"observation_scale": (1e-100, 1.0)}, r"observation_scale.*must be >= 1\.1754943508222875e-38"),
         (
             {"utility_decay": 1.0 - 1e-10},
             r"utility_decay must remain in \[0.0, 1.0\) once narrowed",
@@ -955,3 +955,30 @@ def test_action_world_model_rolls_back_reduction_overflow() -> None:
     assert not bool(result.update_applied)
     assert float(result.observation_mse) == 0.0
     assert int(result.state.step_count) == 0
+
+
+def test_world_model_observation_scale_targets_pairing() -> None:
+    # Verifies targets() normalizes by the exact observation_scale without 1e-6 floor
+    for scale in (1.0, 1e-6, 1e-9, 1e-20):
+        config = ActionConditionedWorldModelConfig(
+            observation_dim=1,
+            n_actions=2,
+            observation_scale=(scale,),
+            predict_delta=True,
+        )
+        model = ActionConditionedWorldModel(config)
+        obs = jnp.asarray([1.0 * scale], dtype=jnp.float32)
+        next_obs = jnp.asarray([3.0 * scale], dtype=jnp.float32)
+        target = model.targets(obs, 1.0, 0.9, next_obs)
+        # Normalized delta = (3.0 * scale - 1.0 * scale) / scale = 2.0
+        assert jnp.isclose(target[0], 2.0, atol=1e-4)
+
+
+def test_world_model_config_rejects_subnormal_scale() -> None:
+    subnormal = float(np.finfo(np.float32).smallest_subnormal)
+    with pytest.raises(ValueError, match="observation_scale"):
+        ActionConditionedWorldModelConfig(
+            observation_dim=1,
+            n_actions=2,
+            observation_scale=(subnormal,),
+        )
