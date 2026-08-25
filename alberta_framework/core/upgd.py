@@ -1996,13 +1996,44 @@ class UPGDLearner:
         current: tuple[Array, ...],
     ) -> Array:
         """Cosine alignment of two gradient tuples, zero for empty gradients."""
-        previous_norm = UPGDLearner._tuple_norm(previous)
-        current_norm = UPGDLearner._tuple_norm(current)
-        return jnp.where(
-            (previous_norm > 1e-6) & (current_norm > 1e-6),
-            UPGDLearner._tuple_dot(previous, current) / (previous_norm * current_norm + 1e-12),
-            jnp.array(0.0, dtype=jnp.float32),
+        max_prev = jnp.array(0.0, dtype=jnp.float32)
+        for p in previous:
+            max_prev = jnp.maximum(max_prev, jnp.max(jnp.abs(p)))
+        max_curr = jnp.array(0.0, dtype=jnp.float32)
+        for c in current:
+            max_curr = jnp.maximum(max_curr, jnp.max(jnp.abs(c)))
+
+        _, exp_prev = jnp.frexp(max_prev)
+        _, exp_curr = jnp.frexp(max_curr)
+
+        scaled_prev = tuple(jnp.ldexp(p, -exp_prev) for p in previous)
+        scaled_curr = tuple(jnp.ldexp(c, -exp_curr) for c in current)
+
+        sq_prev = jnp.array(0.0, dtype=jnp.float32)
+        for p_s in scaled_prev:
+            sq_prev = sq_prev + jnp.sum(jnp.square(p_s))
+        norm_prev = jnp.sqrt(sq_prev)
+
+        sq_curr = jnp.array(0.0, dtype=jnp.float32)
+        for c_s in scaled_curr:
+            sq_curr = sq_curr + jnp.sum(jnp.square(c_s))
+        norm_curr = jnp.sqrt(sq_curr)
+
+        dot = jnp.array(0.0, dtype=jnp.float32)
+        for p_s, c_s in zip(scaled_prev, scaled_curr):
+            dot = dot + jnp.sum(p_s * c_s)
+
+        cos = jnp.clip(dot / (norm_prev * norm_curr), -1.0, 1.0)
+        valid = (
+            (max_prev > 0.0)
+            & (max_curr > 0.0)
+            & jnp.isfinite(dot)
+            & jnp.isfinite(norm_prev)
+            & jnp.isfinite(norm_curr)
+            & (norm_prev > 0.0)
+            & (norm_curr > 0.0)
         )
+        return jnp.where(valid, cos, jnp.array(0.0, dtype=jnp.float32))
 
     @functools.partial(jax.jit, static_argnums=(0,))
     def predict(self, state: UPGDState, observation: Array) -> Array:

@@ -2219,3 +2219,21 @@ class TestLoops:
         stream = RandomWalkStream(feature_dim=4, drift_rate=0.0, noise_std=0.05)
         result = run_upgd_loop(learner, stream, num_steps=50, key=jr.key(0))
         chex.assert_shape(result.metrics, (50, 4))
+
+def test_upgd_gradient_alignment_is_scale_free() -> None:
+    for exponent in (20, 10, 0, -10, -20, -30):
+        scale = 10.0**exponent
+        g = (jnp.array([1.0, -0.5, 0.25], dtype=jnp.float32) * scale,)
+        same_cos = UPGDLearner._gradient_alignment(g, g)
+        chex.assert_trees_all_close(same_cos, jnp.float32(1.0), atol=1e-5)
+
+        opp_cos = UPGDLearner._gradient_alignment(g, tuple(-x for x in g))
+        chex.assert_trees_all_close(opp_cos, jnp.float32(-1.0), atol=1e-5)
+
+    zeros = (jnp.zeros((3,), dtype=jnp.float32),)
+    g = (jnp.array([1.0, -0.5, 0.25], dtype=jnp.float32),)
+    zero_align = UPGDLearner._gradient_alignment(zeros, g)
+    chex.assert_trees_all_close(zero_align, jnp.float32(0.0), atol=1e-5)
+    zero_align_rev = UPGDLearner._gradient_alignment(g, zeros)
+    chex.assert_trees_all_close(zero_align_rev, jnp.float32(0.0), atol=1e-5)
+
