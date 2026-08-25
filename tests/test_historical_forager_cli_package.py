@@ -240,6 +240,10 @@ def test_historical_cli_reports_provenance_and_validates_strict_pairing(
 
 
 @pytest.mark.package
+@pytest.mark.skipif(
+    not hasattr(os, "O_TMPFILE"),
+    reason="wheel-install smoke drives write_new_json which requires Linux O_TMPFILE support",
+)
 def test_wheel_and_sdist_are_complete_and_hard_link_safe(tmp_path: Path) -> None:
     uv = shutil.which("uv")
     if uv is None:
