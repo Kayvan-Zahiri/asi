@@ -955,3 +955,18 @@ def test_action_world_model_rolls_back_reduction_overflow() -> None:
     assert not bool(result.update_applied)
     assert float(result.observation_mse) == 0.0
     assert int(result.state.step_count) == 0
+
+def test_action_world_model_targets_are_scale_free_across_normal_range() -> None:
+    for scale in (1e-6, 1e-9, 1e-12, 1e-20, 1e-30):
+        config = ActionConditionedWorldModelConfig(
+            observation_dim=1, n_actions=2, hidden_sizes=(), observation_scale=(scale,)
+        )
+        model = ActionConditionedWorldModel(config)
+        obs = jnp.array([1.0 * scale], dtype=jnp.float32)
+        next_obs = jnp.array([3.0 * scale], dtype=jnp.float32)
+        target = model.targets(obs, jnp.array(0.0), jnp.array(1.0), next_obs)
+        np.testing.assert_allclose(float(target[0]), 2.0, rtol=1e-5)
+
+
+
+
