@@ -131,6 +131,18 @@ def _saturating_int32_increment(value: Array) -> Array:
     return jnp.where(value < maximum, value + jnp.asarray(1, dtype=jnp.int32), maximum)
 
 
+def _skip_zero_scale(scale: Array, value: Array) -> Array:
+    """Skip ``0 * inf`` so a disabled EMA decay does not poison diagnostics."""
+    return jnp.where(scale == 0.0, jnp.zeros_like(value), scale * value)
+
+
+def _recover_nonfinite_at_zero_scale(scale: float, value: Array) -> Array:
+    """Repair only non-finite history that a zero scale is configured to forget."""
+    if scale != 0.0:
+        return value
+    return jnp.where(jnp.isfinite(value), value, jnp.zeros_like(value))
+
+
 def _latent_direct_state_scalars(
     *,
     observation_dim: int,
@@ -949,17 +961,39 @@ class LatentWorldModel:
 
         collapse_decay = jnp.asarray(self._config.collapse_decay, dtype=jnp.float32)
         surprise_decay = jnp.asarray(self._config.surprise_decay, dtype=jnp.float32)
+        checked_state = state
+        if self._config.collapse_decay == 0.0:
+            checked_state = dataclasses.replace(
+                checked_state,
+                latent_mean_ema=_recover_nonfinite_at_zero_scale(
+                    0.0, state.latent_mean_ema
+                ),
+                latent_var_ema=_recover_nonfinite_at_zero_scale(0.0, state.latent_var_ema),
+                collapse_score_ema=_recover_nonfinite_at_zero_scale(
+                    0.0, state.collapse_score_ema
+                ),
+            )
+        if self._config.surprise_decay == 0.0:
+            checked_state = dataclasses.replace(
+                checked_state,
+                surprise_ema=_recover_nonfinite_at_zero_scale(0.0, state.surprise_ema),
+                prediction_error_ema=_recover_nonfinite_at_zero_scale(
+                    0.0, state.prediction_error_ema
+                ),
+            )
         first = state.step_count == 0
         next_mean = jnp.where(
             first,
             target_next_latent,
-            collapse_decay * state.latent_mean_ema + (1.0 - collapse_decay) * target_next_latent,
+            _skip_zero_scale(collapse_decay, state.latent_mean_ema)
+            + (1.0 - collapse_decay) * target_next_latent,
         )
         centered = target_next_latent - next_mean
         next_var = jnp.where(
             first,
             centered**2,
-            collapse_decay * state.latent_var_ema + (1.0 - collapse_decay) * centered**2,
+            _skip_zero_scale(collapse_decay, state.latent_var_ema)
+            + (1.0 - collapse_decay) * centered**2,
         )
         latent_std = jnp.sqrt(jnp.maximum(next_var, jnp.asarray(1e-8, dtype=jnp.float32)))
         latent_std_mean = jnp.mean(latent_std)
@@ -971,17 +1005,20 @@ class LatentWorldModel:
         next_surprise_ema = jnp.where(
             first,
             surprise,
-            surprise_decay * state.surprise_ema + (1.0 - surprise_decay) * surprise,
+            _skip_zero_scale(surprise_decay, state.surprise_ema)
+            + (1.0 - surprise_decay) * surprise,
         )
         next_prediction_error_ema = jnp.where(
             first,
             prediction_error,
-            surprise_decay * state.prediction_error_ema + (1.0 - surprise_decay) * prediction_error,
+            _skip_zero_scale(surprise_decay, state.prediction_error_ema)
+            + (1.0 - surprise_decay) * prediction_error,
         )
         next_collapse_score_ema = jnp.where(
             first,
             collapse_score,
-            collapse_decay * state.collapse_score_ema + (1.0 - collapse_decay) * collapse_score,
+            _skip_zero_scale(collapse_decay, state.collapse_score_ema)
+            + (1.0 - collapse_decay) * collapse_score,
         )
 
         if self._config.encoder_learning:
@@ -1033,7 +1070,7 @@ class LatentWorldModel:
         update_applied = (
             inputs_valid
             & learner_result.update_applied
-            & floating_tree_is_finite(state)
+            & floating_tree_is_finite(checked_state)
             & floating_tree_is_finite(candidate_state)
             & diagnostics_finite
         )

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import math
 import warnings
 from types import MappingProxyType
@@ -97,6 +98,53 @@ def test_latent_world_model_update_and_prediction_shapes() -> None:
     chex.assert_shape(result.targets, (7,))
     chex.assert_tree_all_finite(result.surprise)
     chex.assert_tree_all_finite(result.latent_std_mean)
+
+
+def test_zero_surprise_decay_does_not_multiply_inf_diagnostic_emas() -> None:
+    """surprise_decay=0 replaces diagnostic EMAs; 0 * inf must not freeze updates."""
+    config = LatentWorldModelConfig(
+        observation_dim=2,
+        n_actions=2,
+        latent_dim=3,
+        hidden_sizes=(),
+        step_size=0.05,
+        sparsity=0.0,
+        surprise_decay=0.0,
+        collapse_decay=0.0,
+    )
+    model = LatentWorldModel(config)
+    state = model.init(jr.key(21))
+    warmed = model.update(
+        state,
+        jnp.array([0.1, -0.2], dtype=jnp.float32),
+        jnp.array(1, dtype=jnp.int32),
+        jnp.array(0.5, dtype=jnp.float32),
+        jnp.array(0.95, dtype=jnp.float32),
+        jnp.array([0.2, 0.1], dtype=jnp.float32),
+    )
+    assert bool(warmed.update_applied)
+    poisoned = dataclasses.replace(
+        warmed.state,
+        surprise_ema=jnp.full_like(warmed.state.surprise_ema, jnp.inf),
+        prediction_error_ema=jnp.full_like(warmed.state.prediction_error_ema, jnp.inf),
+        latent_mean_ema=jnp.full_like(warmed.state.latent_mean_ema, jnp.inf),
+        latent_var_ema=jnp.full_like(warmed.state.latent_var_ema, jnp.inf),
+        collapse_score_ema=jnp.full_like(warmed.state.collapse_score_ema, jnp.inf),
+    )
+    raw = jnp.asarray(0.0, dtype=jnp.float32) * jnp.asarray(jnp.inf, dtype=jnp.float32)
+    assert not bool(jnp.isfinite(raw))
+
+    result = model.update(
+        poisoned,
+        jnp.array([0.0, 0.0], dtype=jnp.float32),
+        jnp.array(0, dtype=jnp.int32),
+        jnp.array(0.25, dtype=jnp.float32),
+        jnp.array(0.99, dtype=jnp.float32),
+        jnp.array([0.1, 0.0], dtype=jnp.float32),
+    )
+
+    assert bool(result.update_applied)
+    chex.assert_tree_all_finite(result.state)
 
 
 def test_latent_default_discounts_do_not_inherit_the_reward_dtype() -> None:
