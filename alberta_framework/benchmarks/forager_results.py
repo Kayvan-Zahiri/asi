@@ -241,7 +241,7 @@ def _json_without_duplicate_keys(payload: bytes, *, path: Path) -> Mapping[str, 
         )
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise ValueError(f"{path} is not valid UTF-8 JSON") from exc
-    if not isinstance(parsed, Mapping):
+    if type(parsed) is not dict:
         raise ValueError(f"{path} must contain a JSON object")
     return parsed
 
@@ -400,7 +400,7 @@ def _legacy_fov_config(
             f"{config_path} must use total_steps={LEGACY_FOV_STEPS} and episode_cutoff=-1"
         )
     meta_parameters = config["metaParameters"]
-    if not isinstance(meta_parameters, Mapping):
+    if type(meta_parameters) is not dict:
         raise ValueError(f"{config_path} metaParameters must be an object")
     flattened = _flatten_json(meta_parameters)
     aperture = flattened.get("environment.aperture")
@@ -791,18 +791,18 @@ def _validated_environment_provenance(
                 "the official interpreter"
             )
         return None
-    if not isinstance(value, Mapping):
+    if type(value) is not dict:
         raise ValueError("environment_provenance must be a mapping")
     provenance = _json_mapping_copy(value, name="environment_provenance")
     if set(provenance) != {"semantic", "implementation"}:
         raise ValueError("environment_provenance must contain exactly semantic and implementation")
     semantic = provenance["semantic"]
-    if not isinstance(semantic, dict) or semantic != expected_semantic:
+    if type(semantic) is not dict or semantic != expected_semantic:
         raise ValueError(
             "manifest environment semantics do not match the requested ForagerEnvConfig"
         )
     implementation = provenance["implementation"]
-    if not isinstance(implementation, dict) or set(implementation) != {
+    if type(implementation) is not dict or set(implementation) != {
         "distribution",
         "package",
         "version",
@@ -819,7 +819,7 @@ def _validated_environment_provenance(
     if type(version) is not str or not version.strip():
         raise ValueError("environment implementation version must be non-empty")
     direct_url = implementation["direct_url"]
-    if direct_url is not None and not isinstance(direct_url, dict):
+    if direct_url is not None and type(direct_url) is not dict:
         raise ValueError("environment implementation direct_url must be an object or null")
     if implementation["install_tree_hash_scheme"] != FORAGAX_INSTALL_TREE_HASH_SCHEME:
         raise ValueError("environment implementation uses an unsupported install-tree hash scheme")

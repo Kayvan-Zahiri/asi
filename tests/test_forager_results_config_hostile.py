@@ -100,3 +100,32 @@ def test_flatten_json_error_does_not_invoke_hostile_string_hooks() -> None:
         _flatten_json(hostile, prefix="p")  # type: ignore[arg-type]
     assert "!r" not in str(error.value)
     assert _HostileStr.calls == 0
+
+
+def test_json_without_duplicate_keys_rejects_non_object_root() -> None:
+    from pathlib import Path
+
+    from alberta_framework.benchmarks import forager_results as mod
+
+    with pytest.raises(ValueError, match="must contain a JSON object"):
+        mod._json_without_duplicate_keys(b"[1, 2]", path=Path("x.json"))
+
+
+def test_environment_provenance_rejects_mapping_subclass() -> None:
+    from alberta_framework.benchmarks import forager_results as mod
+
+    class HostileDict(dict):
+        calls = 0
+
+        def __iter__(self):  # type: ignore[override]
+            type(self).calls += 1
+            raise AssertionError("HostileDict.__iter__ must not run")
+
+    HostileDict.calls = 0
+    with pytest.raises(ValueError, match="must be a mapping"):
+        mod._validated_environment_provenance(
+            HostileDict({"semantic": {}, "implementation": {}}),
+            expected_semantic={},
+            required=True,
+        )
+    assert HostileDict.calls == 0
