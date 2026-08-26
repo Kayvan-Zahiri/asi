@@ -22,8 +22,8 @@ from __future__ import annotations
 import dataclasses
 import functools
 import operator
-from collections.abc import Mapping
 from fractions import Fraction
+from types import MappingProxyType
 from typing import Any, Literal, Protocol, SupportsIndex, cast
 
 import chex
@@ -132,7 +132,7 @@ def _require_float32_resource(
 
 
 def _copy_mapping(payload: object, *, name: str) -> dict[str, object]:
-    if not isinstance(payload, Mapping):
+    if type(payload) is not dict and type(payload) is not MappingProxyType:
         raise ValueError(f"{name} payload must be a mapping")
     try:
         data = dict(payload)
@@ -434,7 +434,7 @@ class GuardedDreamer:
         if set(data) != {"config"}:
             raise ValueError("GuardedDreamer payload has unknown fields")
         raw = data["config"]
-        if not isinstance(raw, Mapping):
+        if type(raw) is not dict and type(raw) is not MappingProxyType:
             raise ValueError("GuardedDreamer config must be a mapping")
         return cls(DreamingConfig.from_config(raw))
 

@@ -295,9 +295,9 @@ def test_dreaming_mapping_loaders_preserve_markers_and_exact_keys() -> None:
     bad = {StringSubclass("type"): "DreamingConfig", "warmup_steps": 1}
     with pytest.raises(ValueError, match="exact strings"):
         DreamingConfig.from_config(bad)  # type: ignore[arg-type]
-    # Hostile mapping should be rejected
+    # Hostile mapping should be rejected without running container hooks.
     hostile = _HostileMapping({"type": "DreamingConfig", "warmup_steps": 1})
-    with pytest.raises(ValueError, match="payload could not be read"):
+    with pytest.raises(ValueError, match="must be a mapping|payload could not be read"):
         DreamingConfig.from_config(hostile)  # type: ignore[arg-type]
 
     # DreamSelectionConfig
