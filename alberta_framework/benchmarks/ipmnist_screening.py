@@ -496,7 +496,7 @@ def _sorted_flat_noise(
 
 
 def _skip_zero_scale(scale: Array | float, value: Array) -> Array:
-    """Skip ``0 * inf`` so a closed utility decay does not poison EMA state."""
+    """Skip ``0 * inf`` so a closed EMA/momentum decay does not poison state."""
     return jnp.where(scale == 0.0, jnp.zeros_like(value), scale * value)
 
 
@@ -4027,8 +4027,10 @@ def _make_muon_gate_learner(
             keep = 1.0 - gate[name]
             g = grads[name]
             if params[name].ndim == 2:
-                momentum = mu * state.momentum[name] + g
-                direction = _newton_schulz_orthogonalize(g + mu * momentum, ns_steps)
+                momentum = _skip_zero_scale(mu, state.momentum[name]) + g
+                direction = _newton_schulz_orthogonalize(
+                    g + _skip_zero_scale(mu, momentum), ns_steps
+                )
                 m_dim, n_dim = params[name].shape
                 scale = math.sqrt(max(m_dim, n_dim) / min(m_dim, n_dim))
                 new_params[name] = params[name] * param_decay - step_size * (
@@ -4106,11 +4108,15 @@ def _make_lion_gate_learner(
         new_momentum: dict[str, Array] = {}
         for name in params:
             g = grads[name]
-            interpolated = beta1 * state.momentum[name] + (1.0 - beta1) * g
+            interpolated = _skip_zero_scale(beta1, state.momentum[name]) + (
+                1.0 - beta1
+            ) * g
             new_params[name] = params[name] * param_decay - step_size * (
                 (1.0 - gate[name]) * jnp.sign(interpolated)
             )
-            new_momentum[name] = beta2 * state.momentum[name] + (1.0 - beta2) * g
+            new_momentum[name] = _skip_zero_scale(beta2, state.momentum[name]) + (
+                1.0 - beta2
+            ) * g
         metrics = _step_metrics(new_params, x_norm, y, loss, logits)
         return new_params, LionGateState(  # type: ignore[call-arg]
             utility=utility, step=count, momentum=new_momentum, norm=new_norm
@@ -5470,7 +5476,7 @@ def _make_norm_rmsprop_gate_learner(
         new_v: dict[str, Array] = {}
         for name in params:
             g = grads[name]
-            v = rho * state.v[name] + (1.0 - rho) * g * g
+            v = _skip_zero_scale(rho, state.v[name]) + (1.0 - rho) * g * g
             direction = g / (jnp.sqrt(v) + rms_epsilon)
             new_params[name] = params[name] * param_decay - step_size * (
                 direction * (1.0 - gate[name])
@@ -5588,10 +5594,10 @@ def _make_norm_apollo_gate_learner(
             g = grads[name]
             if params[name].ndim == 2:
                 stat = jnp.mean(g * g, axis=0)
-                v = rho * state.vchan[name] + (1.0 - rho) * stat
+                v = _skip_zero_scale(rho, state.vchan[name]) + (1.0 - rho) * stat
                 denom = jnp.sqrt(v)[None, :] + apollo_epsilon
             else:
-                v = rho * state.vchan[name] + (1.0 - rho) * (g * g)
+                v = _skip_zero_scale(rho, state.vchan[name]) + (1.0 - rho) * (g * g)
                 denom = jnp.sqrt(v) + apollo_epsilon
             new_params[name] = params[name] * param_decay - step_size * (
                 (g / denom) * (1.0 - gate[name])
@@ -5667,7 +5673,9 @@ def _make_sgd_momentum_gate_learner(
         new_params: dict[str, Array] = {}
         new_momentum: dict[str, Array] = {}
         for name in params:
-            momentum = mu * state.momentum[name] + (1.0 - mu) * grads[name]
+            momentum = _skip_zero_scale(mu, state.momentum[name]) + (
+                1.0 - mu
+            ) * grads[name]
             m_hat = momentum / correction
             new_params[name] = params[name] * param_decay - step_size * (
                 m_hat * (1.0 - gate[name])
