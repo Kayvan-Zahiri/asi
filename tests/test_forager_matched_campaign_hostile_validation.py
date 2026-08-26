@@ -197,3 +197,34 @@ def test_cell_scan_rejects_bool_attempt_and_byte_identities(
 def test_cell_scan_rejects_incoherent_state(overrides: dict[str, object], message: str) -> None:
     with pytest.raises(ForagerMatchedCampaignError, match=message):
         _legal_cell_scan(**overrides)
+
+
+def test_completion_summary_gate_rejects_mapping_subclass() -> None:
+    from types import MappingProxyType
+
+    from alberta_framework.benchmarks.forager_matched_campaign import (
+        _is_exact_mapping,
+        _validate_completion_summary_common,
+    )
+
+    class HostileDict(dict):
+        calls = 0
+
+        def keys(self):  # type: ignore[override]
+            type(self).calls += 1
+            raise AssertionError("HostileDict.keys must not run")
+
+    assert _is_exact_mapping({}) is True
+    assert _is_exact_mapping(MappingProxyType({})) is True
+    assert _is_exact_mapping(HostileDict()) is False
+
+    HostileDict.calls = 0
+    with pytest.raises(ForagerMatchedCampaignError, match="non-mapping"):
+        _validate_completion_summary_common(
+            None,  # type: ignore[arg-type]
+            None,  # type: ignore[arg-type]
+            None,  # type: ignore[arg-type]
+            None,  # type: ignore[arg-type]
+            HostileDict({"status": "x"}),
+        )
+    assert HostileDict.calls == 0

@@ -45,6 +45,10 @@ from alberta_framework.benchmarks import forager_matched_qualification as qualif
 from alberta_framework.benchmarks.forager_matched_evidence import MatchedScoreEvidence
 from alberta_framework.benchmarks.forager_matched_protocol import ForagerMatchedProtocol
 
+
+def _is_exact_mapping(value: object) -> bool:
+    return type(value) is dict or type(value) is MappingProxyType
+
 MATCHED_OPEN_CAMPAIGN_SCHEMA_VERSION: Final = (
     "alberta.forager_matched_open_tuning_campaign.v2"
 )
@@ -226,9 +230,9 @@ class CompletedCampaignBundle:
             raise ForagerMatchedCampaignError(
                 "active_seeds must be a tuple of non-negative ints"
             )
-        if not isinstance(self.schedule, Mapping):
+        if not _is_exact_mapping(self.schedule):
             raise ForagerMatchedCampaignError("schedule must be a Mapping")
-        if not isinstance(self.seed_artifacts, Mapping):
+        if not _is_exact_mapping(self.seed_artifacts):
             raise ForagerMatchedCampaignError("seed_artifacts must be a Mapping")
         if not isinstance(
             self.execution_receipt_index, executor.MatchedExecutionReceiptIndex
@@ -242,9 +246,9 @@ class CompletedCampaignBundle:
             raise ForagerMatchedCampaignError(
                 "verification_request must be a VerificationRequest"
             )
-        if not isinstance(self.completion_summary, Mapping):
+        if not _is_exact_mapping(self.completion_summary):
             raise ForagerMatchedCampaignError("completion_summary must be a Mapping")
-        if not isinstance(self.final_file_sha256, Mapping):
+        if not _is_exact_mapping(self.final_file_sha256):
             raise ForagerMatchedCampaignError("final_file_sha256 must be a Mapping")
 
 
@@ -2096,7 +2100,7 @@ def _validate_completion_summary_common(
     request: executor.VerificationRequest,
     summary: Mapping[str, Any],
 ) -> None:
-    if not isinstance(summary, Mapping):
+    if not _is_exact_mapping(summary):
         raise ForagerMatchedCampaignError("completion summary builder returned a non-mapping")
     required: dict[str, Any] = {
         "classification": "content_only_unendorsed_nonpromoting",
