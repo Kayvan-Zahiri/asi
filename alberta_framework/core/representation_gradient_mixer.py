@@ -533,6 +533,12 @@ def _prepare_source(
     return _clip_l2(normalized, clip_norm)
 
 
+def _skip_zero_scale(scale: Array, value: Array) -> Array:
+    """Keep finite multiplication exact while repairing zero-scaled poison."""
+
+    return jnp.where(scale == 0.0, jnp.zeros_like(value), scale * value)
+
+
 def _safe_cosine(first: Array, second: Array) -> Array:
     """Return finite cosine similarity, with exact zero for either zero vector."""
 
@@ -653,8 +659,11 @@ def mix_representation_gradients(
     zeros = jnp.zeros((config.representation_dim,), dtype=jnp.float32)
     behavior_for_use = jnp.where(behavior_source_valid, prepared_behavior, zeros)
     world_for_use = jnp.where(world_source_valid, prepared_world, zeros)
-    behavior_contribution = behavior_effective_weight * behavior_for_use
-    world_contribution = world_effective_weight * world_for_use
+    # Mechanism-off is weight=0 exact zero contribution. ``weight * vector`` still
+    # evaluates ``0 * inf`` under JAX when a prepared source overflows, so skip
+    # the zero-scale product first.
+    behavior_contribution = _skip_zero_scale(behavior_effective_weight, behavior_for_use)
+    world_contribution = _skip_zero_scale(world_effective_weight, world_for_use)
     behavior_contribution_finite = jnp.all(jnp.isfinite(behavior_contribution))
     world_contribution_finite = jnp.all(jnp.isfinite(world_contribution))
     safe_behavior_contribution = jnp.where(

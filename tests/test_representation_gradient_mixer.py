@@ -344,6 +344,55 @@ def test_masked_or_zero_weight_invalid_source_is_recorded_without_poisoning_outp
         assert np.isinf(np.asarray(result.diagnostics.grounded_world_raw_norm)).all()
 
 
+def test_zero_weight_skips_infinite_prepared_contribution_product(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Mechanism-off is weight=0 exact zero contribution.
+
+    ``weight * vector`` still evaluates ``0 * inf`` under JAX when a prepared
+    source overflows, so the product must be skipped before it can poison.
+    """
+    assert bool(jnp.isnan(jnp.float32(0.0) * jnp.float32(jnp.inf)))
+
+    def prepare(
+        value: jnp.ndarray,
+        *,
+        normalization: str,
+        epsilon: float,
+        clip_norm: float | None,
+    ) -> jnp.ndarray:
+        del normalization, epsilon, clip_norm
+        # Overflow only the inactive (zero-weight) behavior path.
+        if bool(jnp.all(value == jnp.asarray([1.0, -2.0], dtype=jnp.float32))):
+            return jnp.full_like(value, jnp.inf)
+        return value
+
+    monkeypatch.setattr(
+        "alberta_framework.core.representation_gradient_mixer._prepare_source",
+        prepare,
+    )
+    config = RepresentationGradientMixerConfig(
+        representation_dim=2,
+        mode="full",
+        behavior_weight=0.0,
+        grounded_world_weight=1.0,
+        behavior_normalization="none",
+        grounded_world_normalization="none",
+    )
+    behavior = jnp.asarray([1.0, -2.0], dtype=jnp.float32)
+    world = jnp.asarray([3.0, -4.0], dtype=jnp.float32)
+    result = mix_representation_gradients(config, behavior, world)
+    np.testing.assert_array_equal(result.gradient, world)
+    assert bool(result.valid)
+    assert bool(result.applied)
+    assert not bool(result.rejected)
+    assert not bool(result.diagnostics.behavior_active)
+    assert bool(result.diagnostics.grounded_world_active)
+    # Zero-scale skip keeps the inactive contribution exactly finite-zero;
+    # ``0 * inf`` would mark the contribution non-finite and report used_norm=inf.
+    np.testing.assert_allclose(result.diagnostics.behavior_used_norm, 0.0)
+
+
 def test_wrong_gradient_shape_or_dynamic_validity_predicate_fails_closed() -> None:
     config = RepresentationGradientMixerConfig(representation_dim=2)
     with pytest.raises(ValueError, match="shape"):
