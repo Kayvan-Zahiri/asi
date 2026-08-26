@@ -619,3 +619,21 @@ def test_cli_exposes_no_seed_bootstrap_or_threshold_tuning_options(
             ["--maximum-sparse-after-b-normalized-regret", "1"],
             report=accepted_report,
         )
+
+
+def test_mapping_helper_rejects_dict_subclass_without_iter_hooks() -> None:
+    from alberta_framework.evaluation import ftl_decision_artifact as artifact
+
+    class HostileDict(dict):
+        calls = 0
+
+        def __iter__(self):  # type: ignore[override]
+            type(self).calls += 1
+            raise AssertionError("HostileDict.__iter__ must not run")
+
+    HostileDict.calls = 0
+    errors: list[str] = []
+    result = artifact._mapping({"nested": HostileDict({"a": 1})}, "nested", "root", errors)
+    assert result is None
+    assert errors == ["root.nested must be an object"]
+    assert HostileDict.calls == 0

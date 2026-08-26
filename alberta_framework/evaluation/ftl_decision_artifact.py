@@ -31,6 +31,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from types import MappingProxyType
 from typing import NoReturn
 
 import jax
@@ -517,13 +518,13 @@ def _interval_metric(
     statistic: str,
 ) -> float | None:
     conditions = aggregate.get("conditions")
-    if not isinstance(conditions, Mapping):
+    if (type(conditions) is not dict and type(conditions) is not MappingProxyType):
         return None
     condition_payload = conditions.get(condition)
-    if not isinstance(condition_payload, Mapping):
+    if (type(condition_payload) is not dict and type(condition_payload) is not MappingProxyType):
         return None
     interval = condition_payload.get(field)
-    if not isinstance(interval, Mapping):
+    if (type(interval) is not dict and type(interval) is not MappingProxyType):
         return None
     return _finite_number(interval.get(statistic))
 
@@ -534,10 +535,10 @@ def _comparison_metric(
     statistic: str,
 ) -> float | None:
     comparison = comparisons.get(name)
-    if not isinstance(comparison, Mapping):
+    if (type(comparison) is not dict and type(comparison) is not MappingProxyType):
         return None
     interval = comparison.get("interval")
-    if not isinstance(interval, Mapping):
+    if (type(interval) is not dict and type(interval) is not MappingProxyType):
         return None
     return _finite_number(interval.get(statistic))
 
@@ -912,7 +913,7 @@ def load_ftl_decision_artifact(path: Path) -> dict[str, object]:
         parse_float=_parse_finite_json_float,
         object_pairs_hook=_reject_duplicate_keys,
     )
-    if not isinstance(parsed, dict):
+    if type(parsed) is not dict:
         raise ValueError("evidence artifact must be a JSON object")
     return parsed
 
@@ -924,7 +925,7 @@ def _mapping(
     errors: list[str],
 ) -> Mapping[str, object] | None:
     value = parent.get(key)
-    if not isinstance(value, Mapping):
+    if type(value) is not dict and type(value) is not MappingProxyType:
         errors.append(f"{location}.{key} must be an object")
         return None
     return value
@@ -944,8 +945,8 @@ def _compare_structure(
 ) -> None:
     """Compare exact schemas and finite values after a JSON float round trip."""
 
-    if isinstance(expected, Mapping):
-        if not isinstance(actual, Mapping):
+    if type(expected) is dict or type(expected) is MappingProxyType:
+        if type(actual) is not dict and type(actual) is not MappingProxyType:
             errors.append(f"{location} must be an object")
             return
         if set(actual) != set(expected):
@@ -958,8 +959,8 @@ def _compare_structure(
                 errors,
             )
         return
-    if isinstance(expected, list):
-        if not isinstance(actual, list):
+    if type(expected) is list:
+        if type(actual) is not list:
             errors.append(f"{location} must be an array")
             return
         if len(actual) != len(expected):
@@ -972,7 +973,7 @@ def _compare_structure(
                 errors,
             )
         return
-    if isinstance(expected, bool) or expected is None or isinstance(expected, str):
+    if type(expected) is bool or expected is None or type(expected) is str:
         if type(actual) is not type(expected) or actual != expected:
             errors.append(f"{location} does not match the v1 value")
         return
@@ -1001,7 +1002,7 @@ def _validate_source_provenance(
     """
 
     location = "scientific_payload.source_provenance"
-    if not isinstance(value, Mapping):
+    if (type(value) is not dict and type(value) is not MappingProxyType):
         errors.append(f"{location} must be an object")
         return
     try:
@@ -1030,7 +1031,7 @@ def _validate_and_extract_seed_vectors(
     summaries: object,
     errors: list[str],
 ) -> dict[str, dict[str, NDArray[np.float64]]] | None:
-    if not isinstance(summaries, list):
+    if type(summaries) is not list:
         errors.append("scientific_payload.seed_summaries must be an array")
         return None
     if len(summaries) != len(_EXPECTED_EVIDENCE_SEEDS):
@@ -1043,7 +1044,7 @@ def _validate_and_extract_seed_vectors(
     }
     for index, summary in enumerate(summaries):
         location = f"scientific_payload.seed_summaries[{index}]"
-        if not isinstance(summary, Mapping):
+        if (type(summary) is not dict and type(summary) is not MappingProxyType):
             errors.append(f"{location} must be an object")
             continue
         if set(summary) != {"seed", "conditions"}:
@@ -1055,7 +1056,7 @@ def _validate_and_extract_seed_vectors(
             observed_seeds.append(seed)
 
         conditions = summary.get("conditions")
-        if not isinstance(conditions, Mapping):
+        if (type(conditions) is not dict and type(conditions) is not MappingProxyType):
             errors.append(f"{location}.conditions must be an object")
             continue
         if set(conditions) != set(_EXPECTED_CONDITION_NAMES):
@@ -1063,7 +1064,7 @@ def _validate_and_extract_seed_vectors(
         for condition in _EXPECTED_CONDITION_NAMES:
             metric_payload = conditions.get(condition)
             metric_location = f"{location}.conditions.{condition}"
-            if not isinstance(metric_payload, Mapping):
+            if (type(metric_payload) is not dict and type(metric_payload) is not MappingProxyType):
                 errors.append(f"{metric_location} must be an object")
                 continue
             if set(metric_payload) != set(_METRIC_FIELDS):
@@ -1181,14 +1182,14 @@ def _validate_operational(
         errors.append("operational_metadata.evaluation_wall_seconds must be non-negative")
 
     runtime = operational.get("runtime")
-    if not isinstance(runtime, Mapping):
+    if (type(runtime) is not dict and type(runtime) is not MappingProxyType):
         errors.append("operational_metadata.runtime must be an object")
     else:
         if set(runtime) != {"python", "platform", "packages", "jax"}:
             errors.append("operational_metadata.runtime keys do not match the v1 schema")
         python_runtime = runtime.get("python")
         if (
-            not isinstance(python_runtime, Mapping)
+            (type(python_runtime) is not dict and type(python_runtime) is not MappingProxyType)
             or set(python_runtime) != {"implementation", "version"}
             or not all(
                 isinstance(python_runtime.get(key), str) and bool(python_runtime.get(key))
@@ -1198,7 +1199,7 @@ def _validate_operational(
             errors.append("operational_metadata.runtime.python is invalid")
         platform_runtime = runtime.get("platform")
         if (
-            not isinstance(platform_runtime, Mapping)
+            (type(platform_runtime) is not dict and type(platform_runtime) is not MappingProxyType)
             or set(platform_runtime) != {"system", "release", "machine"}
             or not all(
                 isinstance(platform_runtime.get(key), str)
@@ -1208,7 +1209,7 @@ def _validate_operational(
             errors.append("operational_metadata.runtime.platform is invalid")
         packages = runtime.get("packages")
         if (
-            not isinstance(packages, Mapping)
+            (type(packages) is not dict and type(packages) is not MappingProxyType)
             or set(packages) != {"alberta-framework", "jax", "jaxlib", "numpy"}
             or not all(
                 isinstance(packages.get(key), str) and bool(packages.get(key))
@@ -1217,7 +1218,8 @@ def _validate_operational(
         ):
             errors.append("operational_metadata.runtime.packages is invalid")
         jax_runtime = runtime.get("jax")
-        if not isinstance(jax_runtime, Mapping) or set(jax_runtime) != {
+        jax_ok = type(jax_runtime) is dict or type(jax_runtime) is MappingProxyType
+        if not jax_ok or set(jax_runtime) != {
             "default_backend",
             "devices",
         }:
@@ -1228,10 +1230,10 @@ def _validate_operational(
             if not isinstance(backend, str) or not backend:
                 errors.append("operational_metadata.runtime.jax.default_backend is invalid")
             if (
-                not isinstance(devices, list)
+                type(devices) is not list
                 or not devices
                 or not all(
-                    isinstance(device, Mapping)
+                    (type(device) is dict or type(device) is MappingProxyType)
                     and set(device) == {"platform", "device_kind"}
                     and isinstance(device.get("platform"), str)
                     and bool(device.get("platform"))
@@ -1243,7 +1245,7 @@ def _validate_operational(
                 errors.append("operational_metadata.runtime.jax.devices is invalid")
 
     git_worktree = operational.get("git_worktree")
-    if not isinstance(git_worktree, Mapping):
+    if (type(git_worktree) is not dict and type(git_worktree) is not MappingProxyType):
         errors.append("operational_metadata.git_worktree must be an object")
     else:
         if set(git_worktree) != {"head", "dirty"}:
@@ -1260,7 +1262,7 @@ def _validate_operational(
         provenance_head: object = None
         if scientific is not None:
             provenance = scientific.get("source_provenance")
-            if isinstance(provenance, Mapping):
+            if (type(provenance) is dict or type(provenance) is MappingProxyType):
                 provenance_head = provenance.get("git_head")
         if recorded_head != provenance_head:
             errors.append(
