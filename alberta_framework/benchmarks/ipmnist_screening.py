@@ -495,6 +495,11 @@ def _sorted_flat_noise(
     }
 
 
+def _skip_zero_scale(scale: Array | float, value: Array) -> Array:
+    """Skip ``0 * inf`` so a closed utility decay does not poison EMA state."""
+    return jnp.where(scale == 0.0, jnp.zeros_like(value), scale * value)
+
+
 def _upgd_utility_and_gate(
     params: dict[str, Array],
     grads: dict[str, Array],
@@ -505,7 +510,8 @@ def _upgd_utility_and_gate(
     """UPGD utility EMA update + global-max sigmoid gate (lean-step equations)."""
     beta = utility_decay
     new_utility = {
-        name: beta * utility[name] + (1.0 - beta) * (-grads[name] * params[name])
+        name: _skip_zero_scale(beta, utility[name])
+        + (1.0 - beta) * (-grads[name] * params[name])
         for name in params
     }
     global_max = jnp.max(jnp.stack([jnp.max(new_utility[name]) for name in sorted(params)]))
@@ -2151,7 +2157,7 @@ def _make_upgd_ema_norm_ext_learner(
         noise = _sorted_flat_noise(key, params, noise_std)
         count = state.step + jnp.array(1, dtype=jnp.int32)
         utility = {
-            name: utility_decay * state.utility[name]
+            name: _skip_zero_scale(utility_decay, state.utility[name])
             + (1.0 - utility_decay) * (-grads[name] * params[name])
             for name in params
         }
@@ -2355,7 +2361,7 @@ def _make_adaptive_norm_sigma0_learner(
         )
         count = state.step + jnp.array(1, dtype=jnp.int32)
         utility = {
-            name: utility_decay * state.utility[name]
+            name: _skip_zero_scale(utility_decay, state.utility[name])
             + (1.0 - utility_decay) * (-grads[name] * params[name])
             for name in params
         }
@@ -2769,7 +2775,7 @@ def _make_discovered_rule_learner(
                 1.0 - shifted[:, None].astype(jnp.float32)
             )
         utility = {
-            name: utility_decay * prev_utility[name]
+            name: _skip_zero_scale(utility_decay, prev_utility[name])
             + (1.0 - utility_decay) * (-grads[name] * params[name])
             for name in params
         }
@@ -3066,7 +3072,8 @@ def upgd_w_localgate_update(
     decay = 1.0 - step_size * hp["weight_decay"]
     count = state.step + jnp.array(1, dtype=jnp.int32)
     utility = {
-        name: beta * state.utility[name] + (1.0 - beta) * (-grads[name] * params[name])
+        name: _skip_zero_scale(beta, state.utility[name])
+        + (1.0 - beta) * (-grads[name] * params[name])
         for name in params
     }
     bias_correction = 1.0 - jnp.power(
@@ -4741,7 +4748,7 @@ def _make_rls_head_learner(
         over ``names``; other tensors pass through with untouched utility."""
         new_utility = dict(utility)
         for name in names:
-            new_utility[name] = utility_decay * utility[name] + (
+            new_utility[name] = _skip_zero_scale(utility_decay, utility[name]) + (
                 1.0 - utility_decay
             ) * (-grads[name] * params[name])
         bias_correction = 1.0 - jnp.power(
@@ -6178,7 +6185,8 @@ def _make_sigma0_gated_l2init_learner(
         decay_factor = 1.0 - step_size * hp["weight_decay"]
         count = state.step + jnp.array(1, dtype=jnp.int32)
         utility = {
-            name: beta * state.utility[name] + (1.0 - beta) * (-grads[name] * params[name])
+            name: _skip_zero_scale(beta, state.utility[name])
+            + (1.0 - beta) * (-grads[name] * params[name])
             for name in params
         }
         global_max = jnp.max(
@@ -6269,9 +6277,9 @@ def _make_cpr_ipmnist_learner(
         for name in params:
             magnitude = jnp.abs(grads[name])
             score = magnitude / (jnp.mean(magnitude) + norm_epsilon)
-            utility[name] = (
-                utility_decay * state.utility[name] + (1.0 - utility_decay) * score
-            )
+            utility[name] = _skip_zero_scale(utility_decay, state.utility[name]) + (
+                1.0 - utility_decay
+            ) * score
         sgd_params = {
             name: params[name] - step_size * grads[name] for name in params
         }

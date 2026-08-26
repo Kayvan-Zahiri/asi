@@ -109,6 +109,34 @@ SMALL = IPMNISTConfig(
 )
 
 
+def test_zero_utility_decay_does_not_multiply_inf_utility() -> None:
+    """utility_decay=0 times poisoned utility EMA is 0*inf = NaN without a skip."""
+    params = {
+        "w": jnp.asarray([[1.0, -0.5], [0.25, 0.5]], dtype=jnp.float32),
+        "b": jnp.asarray([0.1, -0.2], dtype=jnp.float32),
+    }
+    poisoned = {name: jnp.full_like(value, jnp.inf) for name, value in params.items()}
+    grads = {name: jnp.ones_like(value) for name, value in params.items()}
+    raw = jnp.asarray(0.0, dtype=jnp.float32) * jnp.asarray(jnp.inf, dtype=jnp.float32)
+    assert not bool(jnp.isfinite(raw))
+
+    new_utility, gate = _upgd_utility_and_gate(
+        params,
+        grads,
+        poisoned,
+        jnp.asarray(3, dtype=jnp.int32),
+        0.0,
+    )
+    for name in params:
+        assert bool(jnp.all(jnp.isfinite(new_utility[name])))
+        assert bool(jnp.all(jnp.isfinite(gate[name])))
+        np.testing.assert_allclose(
+            np.asarray(new_utility[name]),
+            np.asarray(-grads[name] * params[name]),
+            atol=1e-6,
+        )
+
+
 def _test_source_provenance(
     *, source_sha256: str = "3" * 64,
 ) -> dict[str, object]:
