@@ -80,6 +80,20 @@ def test_canonical_json_rejects_hostile_container_subclasses_without_hooks() -> 
             qualification._plain_json(value)  # noqa: SLF001
 
 
+def test_bounded_process_rejects_environment_mapping_subclasses() -> None:
+    class HostileDict(dict[str, str]):
+        pass
+
+    with pytest.raises(TypeError, match="environment must be a mapping"):
+        qualification._run_bounded_process(  # noqa: SLF001
+            ("true",),
+            timeout=1.0,
+            maximum_stdout_bytes=1024,
+            maximum_stderr_bytes=1024,
+            environment=HostileDict({"SAFE": "1"}),
+        )
+
+
 def test_replace_integer_literals_keeps_finite_configuration_copy() -> None:
     raw = b'{"total_steps": 1}'
     transform = SimpleNamespace(

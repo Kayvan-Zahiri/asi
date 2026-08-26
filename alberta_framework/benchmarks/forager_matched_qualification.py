@@ -3033,7 +3033,7 @@ def _run_bounded_process(
         raise ValueError("bounded process output limits must be nonnegative integers")
     materialized_environment: dict[str, str] | None = None
     if environment is not None:
-        if not isinstance(environment, Mapping):
+        if type(environment) is not dict:
             raise TypeError("bounded process environment must be a mapping")
         materialized_environment = {}
         for env_key, value in environment.items():
