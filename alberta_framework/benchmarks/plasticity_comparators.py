@@ -176,6 +176,11 @@ def _probability(name: str, value: object, *, include_one: bool = True) -> float
     return scalar
 
 
+def _skip_zero_scale(scale: Array, value: Array) -> Array:
+    """Skip ``0 * inf`` so a closed Adam beta does not poison moment state."""
+    return jnp.where(scale == 0.0, jnp.zeros_like(value), scale * value)
+
+
 def _array(name: str, value: object) -> Array:
     actual_type = type(value)
     if actual_type is not np.ndarray and not issubclass(actual_type, (Array, core.Tracer)):
@@ -372,8 +377,12 @@ def adamo_update(
         or second_moment.shape != weights.shape
     ):
         raise ValueError("AdamO weights, gradients, and moments must be matching matrices")
-    moment = beta1 * first_moment + (1.0 - beta1) * gradient
-    variance = beta2 * second_moment + (1.0 - beta2) * jnp.square(gradient)
+    moment = _skip_zero_scale(jnp.asarray(beta1, dtype=weights.dtype), first_moment) + (
+        1.0 - beta1
+    ) * gradient
+    variance = _skip_zero_scale(jnp.asarray(beta2, dtype=weights.dtype), second_moment) + (
+        1.0 - beta2
+    ) * jnp.square(gradient)
     corrected_moment = moment / (1.0 - beta1**step)
     corrected_variance = variance / (1.0 - beta2**step)
     task_delta = learning_rate * corrected_moment / (jnp.sqrt(corrected_variance) + epsilon)

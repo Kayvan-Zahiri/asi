@@ -73,6 +73,40 @@ def test_adamo_moments_exclude_isometry_and_off_matches_adam() -> None:
     assert float(isometry_penalty(jnp.eye(2))) == 0
 
 
+def test_adamo_zero_beta_does_not_multiply_inf_moments() -> None:
+    """beta=0 times poisoned moment history is 0*inf = NaN without a skip."""
+    weights = jnp.asarray([[1.0, 0.0], [0.0, 1.0]], dtype=jnp.float32)
+    gradient = jnp.ones_like(weights)
+    poisoned = jnp.full_like(weights, jnp.inf)
+    raw = jnp.asarray(0.0, dtype=jnp.float32) * poisoned
+    assert not bool(jnp.all(jnp.isfinite(raw)))
+
+    def update(
+        w: jax.Array,
+        g: jax.Array,
+        first: jax.Array,
+        second: jax.Array,
+    ) -> tuple[jax.Array, jax.Array, jax.Array]:
+        return adamo_update(
+            w,
+            g,
+            first,
+            second,
+            step=1,
+            learning_rate=0.01,
+            isometry_strength=0.0,
+            beta1=0.0,
+            beta2=0.0,
+        )
+
+    candidate, moment, variance = jax.jit(update)(weights, gradient, poisoned, poisoned)
+    assert bool(jnp.all(jnp.isfinite(candidate)))
+    assert bool(jnp.all(jnp.isfinite(moment)))
+    assert bool(jnp.all(jnp.isfinite(variance)))
+    assert jnp.allclose(moment, gradient)
+    assert jnp.allclose(variance, jnp.square(gradient))
+
+
 def test_intentional_update_equations_and_trace_reduction() -> None:
     gradient = jnp.asarray([3.0, 4.0])
     assert np.isclose(float(intentional_td_step_size(gradient, intended_fraction=0.5)), 0.02)
