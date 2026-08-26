@@ -1300,3 +1300,33 @@ def test_expected_candidate_ids_fail_closed_on_malformed_values(
             authenticated_bindings=sealed_bindings,
             expected_candidate_ids=candidate_ids,
         )
+
+
+def test_parse_score_evidence_rejects_mapping_subclass_without_iter_hooks() -> None:
+    class HostileDict(dict):
+        calls = 0
+
+        def __iter__(self):  # type: ignore[override]
+            type(self).calls += 1
+            raise AssertionError("HostileDict.__iter__ must not run")
+
+    HostileDict.calls = 0
+    with pytest.raises(TypeError, match="score evidence must be a mapping, bytes, or str"):
+        evidence.parse_matched_score_evidence(HostileDict({"schema_version": "x"}))
+    assert HostileDict.calls == 0
+
+
+def test_validate_json_complexity_rejects_dict_subclass_without_iter_hooks() -> None:
+    class HostileDict(dict):
+        calls = 0
+
+        def __iter__(self):  # type: ignore[override]
+            type(self).calls += 1
+            raise AssertionError("HostileDict.__iter__ must not run")
+
+    HostileDict.calls = 0
+    with pytest.raises(
+        evidence.ForagerMatchedEvidenceError, match="non-JSON value"
+    ):
+        evidence._validate_json_complexity(HostileDict({"a": 1}))
+    assert HostileDict.calls == 0

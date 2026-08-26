@@ -209,10 +209,14 @@ def _validate_json_complexity(value: Any) -> None:
             raise ForagerMatchedEvidenceError("score evidence exceeds the JSON node bound")
         if depth > _MAX_JSON_DEPTH:
             raise ForagerMatchedEvidenceError("score evidence exceeds the JSON nesting bound")
-        if isinstance(current, dict):
+        if type(current) is dict:
             stack.extend((item, depth + 1) for item in current.values())
-        elif isinstance(current, list):
+        elif type(current) is list:
             stack.extend((item, depth + 1) for item in current)
+        elif current is not None and type(current) not in (bool, int, float, str):
+            raise ForagerMatchedEvidenceError(
+                f"score evidence contains a non-JSON value of type {type(current).__name__}"
+            )
 
 
 def decode_strict_json(raw: bytes | str) -> Any:
@@ -854,7 +858,7 @@ def _parse_matched_selection_report_structure(
                     "selection report contains invalid Unicode"
                 ) from exc
         canonical_input = True
-    elif isinstance(value, Mapping):
+    elif type(value) is dict or type(value) is MappingProxyType:
         try:
             thawed = cast(dict[str, Any], _thaw_json(value))
         except ForagerMatchedEvidenceError:
@@ -1182,7 +1186,7 @@ def parse_matched_score_evidence(
         decoded = decode_strict_json(cast(bytes | str, raw))
         input_bytes = raw if type(raw) is bytes else cast(str, raw).encode("utf-8")
         canonical_input = True
-    elif isinstance(value, Mapping):
+    elif type(value) is dict or type(value) is MappingProxyType:
         decoded = decode_strict_json(_canonical_json_bytes(dict(value)))
         canonical_input = False
         input_bytes = b""
