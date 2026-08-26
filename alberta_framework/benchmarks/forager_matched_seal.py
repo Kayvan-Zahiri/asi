@@ -109,8 +109,8 @@ class ContentVerifiedSealBundle:
     def __post_init__(self) -> None:
         if not isinstance(self.output_root, Path):
             raise ForagerMatchedSealError("output_root must be a Path")
-        if not isinstance(self.manifest, Mapping):
-            raise ForagerMatchedSealError("manifest must be a Mapping")
+        if type(self.manifest) is not dict and type(self.manifest) is not MappingProxyType:
+            raise ForagerMatchedSealError("manifest must be an exact dict or MappingProxyType")
         if not isinstance(self.open_protocol, protocol.ForagerMatchedProtocol):
             raise ForagerMatchedSealError("open_protocol must be a ForagerMatchedProtocol")
         if not isinstance(self.open_score_evidence, evidence.MatchedScoreEvidence):
@@ -119,18 +119,33 @@ class ContentVerifiedSealBundle:
             raise ForagerMatchedSealError(
                 "open_verification_request must be a VerificationRequest"
             )
-        if not isinstance(self.recorded_bindings_cache, Mapping):
-            raise ForagerMatchedSealError("recorded_bindings_cache must be a Mapping")
+        if (
+            type(self.recorded_bindings_cache) is not dict
+            and type(self.recorded_bindings_cache) is not MappingProxyType
+        ):
+            raise ForagerMatchedSealError(
+                "recorded_bindings_cache must be an exact dict or MappingProxyType"
+            )
         if not isinstance(self.selection_result, protocol.ForagerMatchedSelectionResult):
             raise ForagerMatchedSealError(
                 "selection_result must be a ForagerMatchedSelectionResult"
             )
-        if not isinstance(self.selection_report, Mapping):
-            raise ForagerMatchedSealError("selection_report must be a Mapping")
+        if (
+            type(self.selection_report) is not dict
+            and type(self.selection_report) is not MappingProxyType
+        ):
+            raise ForagerMatchedSealError(
+                "selection_report must be an exact dict or MappingProxyType"
+            )
         if not isinstance(self.sealed_protocol, protocol.ForagerMatchedProtocol):
             raise ForagerMatchedSealError("sealed_protocol must be a ForagerMatchedProtocol")
-        if not isinstance(self.sealed_transition, Mapping):
-            raise ForagerMatchedSealError("sealed_transition must be a Mapping")
+        if (
+            type(self.sealed_transition) is not dict
+            and type(self.sealed_transition) is not MappingProxyType
+        ):
+            raise ForagerMatchedSealError(
+                "sealed_transition must be an exact dict or MappingProxyType"
+            )
         _require_sha256(self.sealed_transition_sha256, "sealed_transition_sha256")
 
 

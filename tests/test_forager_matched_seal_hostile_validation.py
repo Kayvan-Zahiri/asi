@@ -69,3 +69,31 @@ def test_open_directory_validation() -> None:
             descriptor=3,
             inode_identity=(1, True, 3),
         )
+
+
+def test_content_verified_seal_bundle_rejects_mapping_subclass_without_iter_hooks() -> None:
+    class HostileDict(dict):
+        calls = 0
+
+        def __iter__(self):  # type: ignore[override]
+            type(self).calls += 1
+            raise AssertionError("HostileDict.__iter__ must not run")
+
+    HostileDict.calls = 0
+    with pytest.raises(
+        ForagerMatchedSealError, match="manifest must be an exact dict or MappingProxyType"
+    ):
+        ContentVerifiedSealBundle(
+            output_root=Path("output/seal"),
+            manifest=HostileDict(),
+            open_protocol=None,  # type: ignore[arg-type]
+            open_score_evidence=None,  # type: ignore[arg-type]
+            open_verification_request=None,  # type: ignore[arg-type]
+            recorded_bindings_cache={},
+            selection_result=None,  # type: ignore[arg-type]
+            selection_report={},
+            sealed_protocol=None,  # type: ignore[arg-type]
+            sealed_transition={},
+            sealed_transition_sha256="a" * 64,
+        )
+    assert HostileDict.calls == 0
