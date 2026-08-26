@@ -208,6 +208,15 @@ def reconstruct_v6_family_control(seed: object) -> dict[str, object]:
     distinct_by_family: dict[str, int] = {}
     for family in V6_FAMILIES:
         config = micro.MicroStreamConfig(family=family)
+        # Reconstruct only the frozen V6 control schedules. MicroStreamConfig still
+        # admits large ``n_regimes`` / ``recurrence_pool`` for other callers; binding
+        # the literal frozen sizes here keeps ``jnp.arange`` from tracing an
+        # unbounded regime axis during audit reconstruction.
+        if config.n_regimes != 100 or config.recurrence_pool != 5:
+            raise ValueError(
+                "V6 control reconstruction requires frozen n_regimes=100 and "
+                "recurrence_pool=5"
+            )
         *_, key_regime = micro._stream_keys(config, exact_seed)
         key_perm, _, _, key_pool, key_pool_schedule = jr.split(key_regime, 5)
         if family == "input_permutation":

@@ -339,3 +339,19 @@ def test_maintained_audit_cli_is_packaged() -> None:
     assert project["project"]["scripts"]["asi-new-directions-audit"] == (
         "alberta_framework.benchmarks.new_directions_v5_v6_audit:main"
     )
+
+
+def test_v6_control_reconstruction_rejects_unfrozen_regime_counts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import alberta_framework.benchmarks.micro_continual as micro
+
+    class HostileConfig:
+        family = "input_permutation"
+        dim = 16
+        n_regimes = 200_000
+        recurrence_pool = 5
+
+    monkeypatch.setattr(micro, "MicroStreamConfig", lambda **_kwargs: HostileConfig())
+    with pytest.raises(ValueError, match="frozen n_regimes=100"):
+        reconstruct_v6_family_control(V6_SEEDS[0])
