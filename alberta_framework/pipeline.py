@@ -117,6 +117,7 @@ _ACTUAL_INT_TYPES: tuple[type, ...] = (
     np.ulonglong,
 )
 
+
 def _require_exact_str(name: str, value: object) -> str:
     if type(value) is not str:
         raise ValueError(f"{name} must be an exact string")
@@ -217,9 +218,7 @@ def _require_bool(name: object, value: object) -> bool:
     return value  # type: ignore[return-value]
 
 
-def _require_str_choice(
-    name: object, value: object, choices: tuple[str, ...]
-) -> str:
+def _require_str_choice(name: object, value: object, choices: tuple[str, ...]) -> str:
     """Require an actual builtin str drawn from ``choices``."""
     _require_exact_str("name", name)
     host_name = cast(str, name)
@@ -238,9 +237,7 @@ def _require_real(name: object, value: object) -> float:
 def _require_unit_interval(name: object, value: object) -> float:
     _require_exact_str("name", name)
     host_name = cast(str, name)
-    real, numerator, denominator, narrowed = finite_real_and_float32(
-        host_name, value
-    )
+    real, numerator, denominator, narrowed = finite_real_and_float32(host_name, value)
     if (
         real < 0.0
         or not real <= 1.0
@@ -256,9 +253,7 @@ def _require_unit_interval(name: object, value: object) -> float:
 def _require_half_open_unit_interval(name: object, value: object) -> float:
     _require_exact_str("name", name)
     host_name = cast(str, name)
-    real, numerator, denominator, narrowed = finite_real_and_float32(
-        host_name, value
-    )
+    real, numerator, denominator, narrowed = finite_real_and_float32(host_name, value)
     if (
         real <= 0.0
         or not real <= 1.0
@@ -274,9 +269,7 @@ def _require_half_open_unit_interval(name: object, value: object) -> float:
 def _require_half_open_zero_one_interval(name: object, value: object) -> float:
     _require_exact_str("name", name)
     host_name = cast(str, name)
-    real, numerator, denominator, narrowed = finite_real_and_float32(
-        host_name, value
-    )
+    real, numerator, denominator, narrowed = finite_real_and_float32(host_name, value)
     if (
         real < 0.0
         or not real < 1.0
@@ -402,9 +395,7 @@ class Step2FeatureConfig:
             raise ValueError(msg)
         ema_decay = _require_half_open_zero_one_interval("ema_decay", self.ema_decay)
         periods = _require_bounded_tuple("periods", self.periods, nonempty=False)
-        canonical_periods = tuple(
-            _require_positive_real("period", p) for p in periods
-        )
+        canonical_periods = tuple(_require_positive_real("period", p) for p in periods)
         copies = int(include_raw) + int(include_ema) + int(include_delta)
         phase_dim = 2 * len(canonical_periods)
         output_dim = copies * observation_dim + phase_dim
@@ -486,9 +477,7 @@ class Step2UPGDConfig:
     sparsity: float = 0.5
     use_layer_norm: bool = True
     learner_preset: Step2UPGDPreset = "default"
-    loss_normalization: Literal["target_structure", "target_density"] = (
-        "target_structure"
-    )
+    loss_normalization: Literal["target_structure", "target_density"] = "target_structure"
     readout_mode: Step2UPGDReadoutMode = "linear_mse"
 
     def __post_init__(self) -> None:
@@ -536,8 +525,7 @@ class Step2UPGDConfig:
             ),
         )
         if learner_preset == "strict_digit_readout" and (
-            loss_normalization != "target_structure"
-            or readout_mode != "two_timescale_simplex"
+            loss_normalization != "target_structure" or readout_mode != "two_timescale_simplex"
         ):
             msg = (
                 "strict_digit_readout preset requires "
@@ -545,9 +533,7 @@ class Step2UPGDConfig:
                 "readout_mode='two_timescale_simplex'"
             )
             raise ValueError(msg)
-        if learner_preset == "strict_digit_readout" and (
-            sparsity != 0.5 or not use_layer_norm
-        ):
+        if learner_preset == "strict_digit_readout" and (sparsity != 0.5 or not use_layer_norm):
             msg = (
                 "strict_digit_readout preset owns sparsity/use_layer_norm; "
                 "use sparsity=0.5 and use_layer_norm=True"
@@ -872,14 +858,10 @@ class AlbertaPipelineConfig:
         return {
             "features": self.features.to_dict(),
             "upgd": self.upgd.to_dict() if self.upgd is not None else None,
-            "associative": (
-                self.associative.to_dict() if self.associative is not None else None
-            ),
+            "associative": (self.associative.to_dict() if self.associative is not None else None),
             "horde": self.horde.to_dict(),
             "control": self.control.to_dict(),
-            "horde_ac": (
-                self.horde_ac.to_dict() if self.horde_ac is not None else None
-            ),
+            "horde_ac": (self.horde_ac.to_dict() if self.horde_ac is not None else None),
             "step2": self.step2,
             "control_mode": self.control_mode,
         }
@@ -910,9 +892,7 @@ class AlbertaPipelineConfig:
         associative_payload = config.get("associative")
         horde_ac_payload = config.get("horde_ac")
         return cls(
-            features=Step2FeatureConfig.from_dict(
-                cast(dict[str, object], config["features"])
-            ),
+            features=Step2FeatureConfig.from_dict(cast(dict[str, object], config["features"])),
             upgd=Step2UPGDConfig.from_dict(cast(dict[str, object], upgd_payload))
             if upgd_payload is not None
             else None,
@@ -921,12 +901,8 @@ class AlbertaPipelineConfig:
             )
             if associative_payload is not None
             else None,
-            horde=Step3HordeConfig.from_dict(
-                cast(dict[str, object], config["horde"])
-            ),
-            control=Step4SARSAConfig.from_dict(
-                cast(dict[str, object], config["control"])
-            ),
+            horde=Step3HordeConfig.from_dict(cast(dict[str, object], config["horde"])),
+            control=Step4SARSAConfig.from_dict(cast(dict[str, object], config["control"])),
             horde_ac=HordeActorCriticPipelineConfig.from_dict(
                 cast(dict[str, object], horde_ac_payload)
             )
@@ -1042,9 +1018,7 @@ class AlbertaPipelineSmokeResult:
         return payload
 
 
-def observation_channel_cumulant_fn(
-    n_demons: int, observation_dim: int
-) -> CumulantFn:
+def observation_channel_cumulant_fn(n_demons: int, observation_dim: int) -> CumulantFn:
     """Return a cumulant function that maps demons to observation channels."""
     n_demons = _require_int("n_demons", n_demons, minimum=1, maximum=_INT32_MAX)
     observation_dim = _require_int(
@@ -1053,9 +1027,7 @@ def observation_channel_cumulant_fn(
 
     indices = jnp.arange(n_demons) % observation_dim
 
-    def cumulant_fn(
-        observation: Array, _reward: Array, _terminated: Array
-    ) -> Array:
+    def cumulant_fn(observation: Array, _reward: Array, _terminated: Array) -> Array:
         obs_1d = jnp.atleast_1d(observation)
         return obs_1d[indices]
 
@@ -1089,10 +1061,8 @@ class AlbertaPipeline:
             raise ValueError("cumulant_fn must be callable or None")
 
         if self._config.step2 == "temporal_context":
-            self._featurizer: TemporalContextFeaturizer | None = (
-                TemporalContextFeaturizer(
-                    self._config.features.to_temporal_context_config()
-                )
+            self._featurizer: TemporalContextFeaturizer | None = TemporalContextFeaturizer(
+                self._config.features.to_temporal_context_config()
             )
         else:
             self._featurizer = None
@@ -1100,12 +1070,10 @@ class AlbertaPipeline:
         if self._config.step2 == "upgd":
             upgd_cfg = cast(Step2UPGDConfig, self._config.upgd)
             if upgd_cfg.learner_preset == "strict_digit_readout":
-                self._upgd: UPGDLearner | None = (
-                    UPGDLearner.step2_strict_digit_readout_default(
-                        n_heads=upgd_cfg.n_heads,
-                        hidden_sizes=upgd_cfg.hidden_sizes,
-                        step_size=upgd_cfg.step_size,
-                    )
+                self._upgd: UPGDLearner | None = UPGDLearner.step2_strict_digit_readout_default(
+                    n_heads=upgd_cfg.n_heads,
+                    hidden_sizes=upgd_cfg.hidden_sizes,
+                    step_size=upgd_cfg.step_size,
                 )
             else:
                 self._upgd = UPGDLearner(
@@ -1130,8 +1098,8 @@ class AlbertaPipeline:
 
         if self._config.step2 == "associative":
             assoc_cfg = cast(Step2AssociativePipelineConfig, self._config.associative)
-            self._associative: AssociativeMemoryLearner | None = (
-                AssociativeMemoryLearner(assoc_cfg.to_core_config())
+            self._associative: AssociativeMemoryLearner | None = AssociativeMemoryLearner(
+                assoc_cfg.to_core_config()
             )
         else:
             self._associative = None
@@ -1326,9 +1294,7 @@ class AlbertaPipeline:
     def init(self, key: Array, initial_observation: Array) -> AlbertaPipelineState:
         """Initialize learner state and prime control with the first observation."""
         key = _require_typed_key("key", key)
-        initial_observation = self._observation_operand(
-            "initial_observation", initial_observation
-        )
+        initial_observation = self._observation_operand("initial_observation", initial_observation)
         upgd_key, horde_key, control_key = jr.split(key, 3)
 
         feature_state: TemporalContextState | None = None
@@ -1457,9 +1423,7 @@ class AlbertaPipeline:
         state = self._state_contract(state)
         observation = self._observation_operand("observation", observation)
         reward = _trusted_array_metadata("reward", reward, shape=(), dtype=jnp.float32)
-        terminated = _trusted_array_metadata(
-            "terminated", terminated, shape=(), dtype=jnp.float32
-        )
+        terminated = _trusted_array_metadata("terminated", terminated, shape=(), dtype=jnp.float32)
         if upgd_targets is not None and self._config.step2 != "upgd":
             raise ValueError("upgd_targets require step2='upgd'")
         if associative_label is not None and self._config.step2 != "associative":
@@ -1490,16 +1454,10 @@ class AlbertaPipeline:
             state.associative_state,
             observation,
         )
-        if (
-            self._config.step2 == "upgd"
-            and upgd_targets is not None
-            and new_upgd_state is not None
-        ):
+        if self._config.step2 == "upgd" and upgd_targets is not None and new_upgd_state is not None:
             upgd = cast(UPGDLearner, self._upgd)
             assert checked_upgd_targets is not None
-            upgd_result = upgd.update(
-                new_upgd_state, observation, checked_upgd_targets
-            )
+            upgd_result = upgd.update(new_upgd_state, observation, checked_upgd_targets)
             new_upgd_state = upgd_result.state
             step2_update_applied = floating_tree_is_finite(new_upgd_state)
             features = upgd._trunk_forward(  # noqa: SLF001
@@ -1548,9 +1506,7 @@ class AlbertaPipeline:
                 jnp.isfinite(checked_upgd_targets) | jnp.isnan(checked_upgd_targets)
             )
         if self._config.step2 == "associative":
-            associative_cfg = cast(
-                Step2AssociativePipelineConfig, self._config.associative
-            )
+            associative_cfg = cast(Step2AssociativePipelineConfig, self._config.associative)
             inputs_valid = inputs_valid & jnp.all(
                 (observation >= 0) & (observation < associative_cfg.vocab_size)
             )
@@ -1573,11 +1529,18 @@ class AlbertaPipeline:
                 dtype=jnp.int32,
             )
             auxiliary_cumulants = horde_cumulants[aux_indices] if aux_indices.size else None
+            value_gamma = self._horde.horde_spec.gammas[value_index]
+            control_discount = jnp.where(
+                terminated == 0.0,
+                value_gamma,
+                jnp.zeros_like(value_gamma),
+            )
             ac_result = ac.update(
                 ac_state,
                 reward,
                 features,
                 auxiliary_cumulants=auxiliary_cumulants,
+                discount=control_discount,
             )
             new_control_state: SARSAState | HordeActorCriticState = ac_result.state
             q_values_or_policy = ac_result.policy
@@ -1708,9 +1671,7 @@ class AlbertaPipeline:
             raise ValueError(
                 f"observations must contain between 1 and {_PIPELINE_SCAN_MAX} steps"
             ) from None
-        rewards = _trusted_array_metadata(
-            "rewards", rewards, shape=(steps,), dtype=jnp.float32
-        )
+        rewards = _trusted_array_metadata("rewards", rewards, shape=(steps,), dtype=jnp.float32)
         terminated = _trusted_array_metadata(
             "terminated", terminated, shape=(steps,), dtype=jnp.float32
         )
@@ -1762,12 +1723,7 @@ class AlbertaPipeline:
             + int(upgd_targets_array.shape[1])
             + 1
         )
-        output_scalars_per_step = (
-            self.feature_dim
-            + 2 * self._config.horde.n_demons
-            + n_actions
-            + 2
-        )
+        output_scalars_per_step = self.feature_dim + 2 * self._config.horde.n_demons + n_actions + 2
         _require_float32_resource(
             "pipeline array input/output",
             steps * (input_scalars_per_step + output_scalars_per_step),
@@ -1898,8 +1854,7 @@ def run_pipeline_smoke(
     result.q_values.block_until_ready()
 
     finite_actions = (
-        jnp.all(result.actions >= 0)
-        & jnp.all(result.actions < cfg.horde_ac.n_actions)
+        jnp.all(result.actions >= 0) & jnp.all(result.actions < cfg.horde_ac.n_actions)
         if cfg.control_mode == "horde_ac" and cfg.horde_ac is not None
         else jnp.all(result.actions >= 0) & jnp.all(result.actions < cfg.control.n_actions)
     )
@@ -1916,9 +1871,7 @@ def run_pipeline_smoke(
         steps=steps,
         seed=seed,
         feature_shape=tuple(int(dim) for dim in result.features.shape),
-        horde_predictions_shape=tuple(
-            int(dim) for dim in result.horde_predictions.shape
-        ),
+        horde_predictions_shape=tuple(int(dim) for dim in result.horde_predictions.shape),
         q_values_shape=tuple(int(dim) for dim in result.q_values.shape),
         actions_shape=tuple(int(dim) for dim in result.actions.shape),
         finite=finite,
