@@ -147,8 +147,8 @@ def _canonical_json(value: Mapping[str, Any]) -> str:
     except (TypeError, ValueError) as exc:
         raise ValueError("reference-life configuration must be canonical finite JSON") from exc
     decoded = json.loads(encoded)
-    if not isinstance(decoded, dict):
-        raise ValueError("reference-life configuration must be a JSON object")
+    if type(decoded) is not dict:
+        raise ValueError("reference-life configuration must be an exact JSON object")
     return encoded
 
 
