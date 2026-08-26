@@ -765,3 +765,42 @@ def test_independent_horde_loop_preflights_shapes_and_output_budget() -> None:
     _require_loop_output_resources(119_304_647, 1)
     with pytest.raises(ValueError, match="learning-loop outputs"):
         _require_loop_output_resources(119_304_648, 1)
+
+
+def test_independent_horde_documented_sequence_scan_ceiling() -> None:
+    from alberta_framework.core.independent_demon_horde import (
+        _INDEPENDENT_HORDE_SEQUENCE_MAX_STEPS,
+    )
+
+    assert _INDEPENDENT_HORDE_SEQUENCE_MAX_STEPS == 10_000
+
+
+def test_independent_horde_rejects_overflow_sequence_length_before_scan(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from alberta_framework.core import independent_demon_horde as mod
+
+    seen: list[int] = []
+
+    def spy(fn, init, xs, **kwargs):  # type: ignore[no-untyped-def]
+        first = xs[0] if isinstance(xs, tuple) else xs
+        seen.append(int(first.shape[0]))
+        raise AssertionError(f"jax.lax.scan must not run: T={first.shape[0]}")
+
+    monkeypatch.setattr(mod.jax.lax, "scan", spy)
+    spec = create_horde_spec(_make_all_gamma0_spec(1))
+    horde = IndependentDemonHorde(horde_spec=spec, hidden_sizes=())
+    state = horde.init(1, jr.key(0))
+    steps = mod._INDEPENDENT_HORDE_SEQUENCE_MAX_STEPS + 1
+    with pytest.raises(
+        ValueError,
+        match=r"observations sequence length must be an integer in \[1, 10000\]",
+    ):
+        run_independent_horde_learning_loop(
+            horde,
+            state,
+            jnp.zeros((steps, 1), dtype=jnp.float32),
+            jnp.zeros((steps, 1), dtype=jnp.float32),
+            jnp.zeros((steps, 1), dtype=jnp.float32),
+        )
+    assert seen == []

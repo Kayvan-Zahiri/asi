@@ -76,6 +76,11 @@ from alberta_framework.core.update_safety import (
 
 
 _INT32_MAX = 2**31 - 1
+# Matches the documented learning-loop step ceiling used by sibling Horde and
+# SARSA scan drivers. Origin handed caller-supplied trajectories to
+# ``jax.lax.scan`` with no bound tighter than ``_INT32_MAX``, which still lets a
+# narrow-but-long sequence force JAX to trace/compile up to ~2 billion steps.
+_INDEPENDENT_HORDE_SEQUENCE_MAX_STEPS = 10_000
 _ACTUAL_INT_TYPES = frozenset(
     {int, *(np.dtype(code).type for code in "bBhHiIlLqQpP")}
 )
@@ -201,7 +206,12 @@ def _require_learning_arrays(
     if len(obs_shape) != 2 or obs_shape[0] < 1 or obs_shape[1] < 1:
         raise ValueError("observations must have shape (num_steps, feature_dim)")
     num_steps, feature_dim = obs_shape
-    if not 1 <= num_steps <= _INT32_MAX or not 1 <= feature_dim <= _INT32_MAX:
+    if not 1 <= num_steps <= _INDEPENDENT_HORDE_SEQUENCE_MAX_STEPS:
+        raise ValueError(
+            "observations sequence length must be an integer in "
+            f"[1, {_INDEPENDENT_HORDE_SEQUENCE_MAX_STEPS}]"
+        )
+    if not 1 <= feature_dim <= _INT32_MAX:
         raise ValueError("observations must contain between 1 and signed-int32 dimensions")
 
     obs = _trusted_array("observations", observations, shape=obs_shape, dtype=jnp.float32)
