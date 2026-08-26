@@ -1031,7 +1031,7 @@ def _admit_aggregate_records(
 
 def _reward_sum(record: Mapping[str, Any]) -> float:
     outcome = record.get("outcome")
-    if not isinstance(outcome, Mapping):
+    if type(outcome) is not dict:
         raise ValueError("completed run record lacks an outcome")
     value = outcome.get("reward_sum")
     if type(value) is not int and type(value) is not float:
@@ -1058,7 +1058,7 @@ def _summarize_validated_run_records(
     }
     indexed: dict[tuple[str, str, int], Mapping[str, Any]] = {}
     for record in records:
-        if not isinstance(record, Mapping):
+        if type(record) is not dict:
             raise ValueError("every run record must be an object")
         identity = _record_identity(record)
         if identity in indexed:
@@ -1098,9 +1098,9 @@ def _summarize_validated_run_records(
                 }
             )
         outcome = record.get("outcome")
-        if isinstance(outcome, Mapping):
+        if type(outcome) is dict:
             check = outcome.get("parameter_change_check")
-            if isinstance(check, Mapping) and check.get("passed") is not True:
+            if type(check) is dict and check.get("passed") is not True:
                 parameter_failures.append(
                     {
                         "environment_kind": identity[0],
