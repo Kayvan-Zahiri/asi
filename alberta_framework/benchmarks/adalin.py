@@ -73,6 +73,11 @@ def _trusted_float_array(value: object, *, name: str) -> Array:
     return array
 
 
+def _skip_zero_scale(scale: Array, value: Array) -> Array:
+    """Keep finite multiplication exact while repairing zero-scaled poison."""
+    return jnp.where(scale == 0.0, jnp.zeros_like(value), scale * value)
+
+
 def _adalin_transaction(
     x: Array, alpha: Array, *, activation: Array, derivative: Array
 ) -> tuple[Array, Array]:
@@ -83,9 +88,15 @@ def _adalin_transaction(
     if math.prod(output_shape) > _MAX_ARRAY_ELEMENTS:
         raise ValueError("broadcast output exceeds the 1000000-element limit")
     gate = jax.lax.stop_gradient(jnp.cos(0.5 * jnp.pi * jnp.abs(derivative)))
-    candidate = activation + alpha * x * gate
+    # Mechanism-off is alpha=0 exact base activation. ``alpha * x * gate`` still
+    # evaluates ``0 * inf`` under JAX, so skip the zero-scale product first.
+    correction = _skip_zero_scale(alpha, x * gate)
+    candidate = activation + correction
+    x_required_finite = jnp.where(alpha == 0.0, True, jnp.isfinite(x))
     valid = (
-        jnp.all(jnp.isfinite(x)) & jnp.all(jnp.isfinite(alpha)) & jnp.all(jnp.isfinite(candidate))
+        jnp.all(x_required_finite)
+        & jnp.all(jnp.isfinite(alpha))
+        & jnp.all(jnp.isfinite(candidate))
     )
     safe = jnp.where(valid, candidate, jnp.zeros_like(candidate))
     return safe, valid

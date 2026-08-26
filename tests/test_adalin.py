@@ -19,6 +19,7 @@ from alberta_framework.benchmarks.adalin import (
     adalin_sgd_step,
     adalin_sgd_step_transaction,
     adalin_tanh,
+    adalin_tanh_transaction,
     initialize_adalin_state,
     make_pmnist_schedule,
     run_adalin_development,
@@ -56,6 +57,38 @@ def test_adalin_is_outer_jit_safe() -> None:
     safe, valid = jax.jit(adalin_relu_transaction)(jnp.array([jnp.nan]), jnp.array([0.2]))
     np.testing.assert_array_equal(safe, jnp.zeros(1))
     assert not bool(valid)
+
+
+def test_zero_alpha_returns_exact_base_activation_on_infinite_x() -> None:
+    """Protocol mechanism-off is alpha=0 exact base activation.
+
+    ``alpha * x * gate`` still evaluates ``0 * inf`` under JAX, which used to
+    poison the candidate and reject the transaction even when the base
+    activation was finite (tanh saturates; ReLU of -inf is 0).
+    """
+    x = jnp.array([jnp.inf, -jnp.inf, 0.5], dtype=jnp.float32)
+    alpha = jnp.zeros_like(x)
+    assert bool(jnp.isnan(jnp.float32(0.0) * jnp.float32(jnp.inf)))
+
+    safe, valid = jax.jit(adalin_tanh_transaction)(x, alpha)
+    assert bool(valid)
+    np.testing.assert_allclose(safe, jnp.tanh(x))
+
+    relu_x = jnp.array([-jnp.inf, 2.0], dtype=jnp.float32)
+    relu_safe, relu_valid = jax.jit(adalin_relu_transaction)(
+        relu_x, jnp.zeros_like(relu_x)
+    )
+    assert bool(relu_valid)
+    np.testing.assert_array_equal(relu_safe, jax.nn.relu(relu_x))
+
+
+def test_nonzero_alpha_still_rejects_infinite_x() -> None:
+    """A learning AdaLin coefficient keeps fail-closed rejection of infinite x."""
+    x = jnp.array([jnp.inf], dtype=jnp.float32)
+    alpha = jnp.array([0.25], dtype=jnp.float32)
+    safe, valid = jax.jit(adalin_tanh_transaction)(x, alpha)
+    assert not bool(valid)
+    np.testing.assert_array_equal(safe, jnp.zeros(1))
 
 
 def test_adalin_preflights_cross_broadcast_and_hostile_array() -> None:
