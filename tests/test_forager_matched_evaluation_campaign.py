@@ -273,3 +273,34 @@ def test_builder_rejects_wrong_stage_and_wrong_typed_transition(
         match="selection_result_sha256",
     ):
         evaluation.build_sealed_transition_descriptor(sealed, wrong_result)
+
+
+def test_plain_json_rejects_mapping_subclass_without_iter_hooks() -> None:
+    class HostileDict(dict):
+        calls = 0
+
+        def __iter__(self):  # type: ignore[override]
+            type(self).calls += 1
+            raise AssertionError("HostileDict.__iter__ must not run")
+
+    HostileDict.calls = 0
+    with pytest.raises(
+        evaluation.ForagerMatchedEvaluationCampaignError,
+        match="unsupported HostileDict",
+    ):
+        evaluation._plain_json(HostileDict({"a": 1}))
+    assert HostileDict.calls == 0
+
+
+def test_decode_schedule_rejects_mapping_subclass_without_iter_hooks() -> None:
+    class HostileDict(dict):
+        calls = 0
+
+        def __iter__(self):  # type: ignore[override]
+            type(self).calls += 1
+            raise AssertionError("HostileDict.__iter__ must not run")
+
+    HostileDict.calls = 0
+    with pytest.raises(TypeError, match="schedule must be a mapping, bytes, or string"):
+        evaluation._decode_schedule(HostileDict({"schema_version": "x"}))
+    assert HostileDict.calls == 0
