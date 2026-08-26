@@ -126,6 +126,8 @@ def test_latent_default_discounts_do_not_inherit_the_reward_dtype() -> None:
     )
     chex.assert_trees_all_close(defaulted.discount_errors, explicit.discount_errors)
     chex.assert_trees_all_close(defaulted.discount_predictions, explicit.discount_predictions)
+
+
 class _FloatSpoof:
     @property
     def __class__(self) -> type[float]:  # type: ignore[override]
@@ -225,9 +227,7 @@ def test_latent_update_saturates_step_count_at_int32_max() -> None:
         hidden_sizes=(),
     )
     model = LatentWorldModel(config)
-    state = model.init(jr.key(0)).replace(
-        step_count=jnp.asarray(2**31 - 1, dtype=jnp.int32)
-    )
+    state = model.init(jr.key(0)).replace(step_count=jnp.asarray(2**31 - 1, dtype=jnp.int32))
 
     result = model.update(
         state,
@@ -507,13 +507,9 @@ def test_trainable_encoder_collapse_gate_blocks_all_updates() -> None:
     # A fully gated trainable encoder leaves the whole trajectory bitwise
     # identical to the disabled path.
     chex.assert_trees_all_equal(gated_result.state, disabled_result.state)
-    chex.assert_trees_all_equal(
-        gated_result.latent_predictions, disabled_result.latent_predictions
-    )
+    chex.assert_trees_all_equal(gated_result.latent_predictions, disabled_result.latent_predictions)
     chex.assert_trees_all_equal(gated_result.surprises, disabled_result.surprises)
-    chex.assert_trees_all_equal(
-        gated_result.prediction_errors, disabled_result.prediction_errors
-    )
+    chex.assert_trees_all_equal(gated_result.prediction_errors, disabled_result.prediction_errors)
 
 
 @pytest.mark.unit
@@ -655,8 +651,9 @@ def test_latent_world_model_config_requires_exact_containers_and_schema() -> Non
     model_payload = LatentWorldModel(
         LatentWorldModelConfig(observation_dim=2, n_actions=2, hidden_sizes=())
     ).to_config()
-    assert LatentWorldModel.from_config(MappingProxyType(model_payload)).config.to_config() == (
-        model_payload["config"]
+    assert (
+        LatentWorldModel.from_config(MappingProxyType(model_payload)).config.to_config()
+        == (model_payload["config"])
     )
     malformed_model = dict(model_payload)
     malformed_model["task_id"] = 3
@@ -749,3 +746,52 @@ def test_latent_world_model_init_rejects_nonfinite_encoder_draw() -> None:
 
     with pytest.raises(ValueError, match="encoder initialization"):
         model.init(jr.key(0))
+
+
+def test_encode_is_scale_invariant_across_small_observation_scales() -> None:
+    import jax
+    import jax.numpy as jnp
+    import numpy as np
+
+    from alberta_framework.core.latent_world_model import LatentWorldModel, LatentWorldModelConfig
+
+    # Base reference at unit scale
+    cfg_base = LatentWorldModelConfig(
+        observation_dim=2,
+        latent_dim=4,
+        n_actions=2,
+        observation_scale=(1.0, 1.0),
+    )
+    model_base = LatentWorldModel(cfg_base)
+    state_base = model_base.init(jax.random.PRNGKey(0))
+    obs_base = jnp.asarray([1.5, -0.75], dtype=jnp.float32)
+    expected_latent = np.asarray(model_base.encode(state_base, obs_base))
+
+    for scale in (1e-6, 1e-9, 1e-20, 1e-35):
+        cfg = LatentWorldModelConfig(
+            observation_dim=2,
+            latent_dim=4,
+            n_actions=2,
+            observation_scale=(scale, scale),
+        )
+        model = LatentWorldModel(cfg)
+        state = model.init(jax.random.PRNGKey(0))
+        obs = jnp.asarray([1.5 * scale, -0.75 * scale], dtype=jnp.float32)
+        latent = np.asarray(model.encode(state, obs))
+        np.testing.assert_allclose(latent, expected_latent, rtol=1e-5, atol=1e-5)
+
+
+def test_latent_world_model_config_rejects_subnormal_observation_scale() -> None:
+    import numpy as np
+    import pytest
+
+    from alberta_framework.core.latent_world_model import LatentWorldModelConfig
+
+    subnormal = float(np.finfo(np.float32).smallest_subnormal)
+    with pytest.raises(ValueError, match="observation_scale"):
+        LatentWorldModelConfig(
+            observation_dim=1,
+            latent_dim=2,
+            n_actions=2,
+            observation_scale=(subnormal,),
+        )

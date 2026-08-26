@@ -151,9 +151,7 @@ def _latent_direct_state_scalars(
     n_heads = latent_dim + 2
     head_input = hidden_sizes[-1] if hidden_sizes else input_dim
     head_parameters = n_heads * (head_input + 1)
-    learner_direct_scalars = (
-        2 * (trunk_parameters + head_parameters) + sum(hidden_sizes) + 3
-    )
+    learner_direct_scalars = 2 * (trunk_parameters + head_parameters) + sum(hidden_sizes) + 3
     outer_state_scalars = observation_dim * latent_dim + 3 * latent_dim + 4
     return learner_direct_scalars + outer_state_scalars
 
@@ -206,9 +204,7 @@ def _preflight_latent_update_working_set(
         include_action_interactions=include_action_interactions,
     )
     if working_set_bytes > _INT32_MAX:
-        raise ValueError(
-            "latent world-model update working set byte count must fit signed int32"
-        )
+        raise ValueError("latent world-model update working set byte count must fit signed int32")
 
 
 @dataclasses.dataclass(frozen=True)
@@ -288,10 +284,9 @@ class LatentWorldModelConfig:
                 raise ValueError("observation_scale must be an actual tuple or None")
             if len(observation_scale) != self.observation_dim:
                 raise ValueError("observation_scale length must equal observation_dim")
+            min_normal = float(np.finfo(np.float32).tiny)
             observation_scale = tuple(
-                validated_float32_scalar(
-                    f"observation_scale[{index}]", scale, positive=True
-                )
+                validated_float32_scalar(f"observation_scale[{index}]", scale, lower=min_normal)
                 for index, scale in enumerate(observation_scale)
             )
             object.__setattr__(self, "observation_scale", observation_scale)
@@ -320,9 +315,7 @@ class LatentWorldModelConfig:
                 validated_float32_scalar(name, getattr(self, name), **bounds),
             )
 
-        _require_int32_product(
-            "encoder_matrix_scalars", self.observation_dim, self.latent_dim
-        )
+        _require_int32_product("encoder_matrix_scalars", self.observation_dim, self.latent_dim)
         if self.latent_dim > _INT32_MAX - 2:
             raise ValueError("derived n_heads must fit in signed int32")
         n_heads = self.latent_dim + 2
@@ -337,9 +330,7 @@ class LatentWorldModelConfig:
                 raise ValueError("derived input_dim must fit in signed int32")
             input_dim += interactions
         layer_sizes = (input_dim, *self.hidden_sizes)
-        for index, (fan_in, fan_out) in enumerate(
-            zip(layer_sizes, layer_sizes[1:], strict=False)
-        ):
+        for index, (fan_in, fan_out) in enumerate(zip(layer_sizes, layer_sizes[1:], strict=False)):
             _require_int32_product(f"hidden_layer[{index}]_scalars", fan_in, fan_out)
         head_input = self.hidden_sizes[-1] if self.hidden_sizes else input_dim
         _require_int32_product("head_weight_scalars", n_heads, head_input)
@@ -644,10 +635,7 @@ class LatentWorldModel:
             if self._config.encoder_bias_scale > 0.0
             else jnp.zeros((latent_dim,), dtype=jnp.float32)
         )
-        if not bool(
-            jnp.all(jnp.isfinite(encoder_matrix))
-            & jnp.all(jnp.isfinite(encoder_bias))
-        ):
+        if not bool(jnp.all(jnp.isfinite(encoder_matrix)) & jnp.all(jnp.isfinite(encoder_bias))):
             raise ValueError("encoder initialization produced non-finite parameters")
         return LatentWorldModelState(
             encoder_matrix=encoder_matrix,
@@ -670,7 +658,7 @@ class LatentWorldModel:
         """Encode one observation with explicit (differentiable) encoder params."""
         obs = jnp.asarray(observation, dtype=jnp.float32).reshape((self._config.observation_dim,))
         scale = jnp.asarray(self._observation_scale, dtype=jnp.float32)
-        scaled = obs / jnp.maximum(scale, jnp.asarray(1e-6, dtype=jnp.float32))
+        scaled = obs / scale
         return jnp.tanh(scaled @ encoder_matrix + encoder_bias)
 
     @functools.partial(jax.jit, static_argnums=(0,))
