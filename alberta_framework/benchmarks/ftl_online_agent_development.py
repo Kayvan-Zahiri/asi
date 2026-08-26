@@ -349,9 +349,7 @@ def validate_result(value: object) -> DevelopmentResult:
             negative_results_must_be_retained=value["negative_results_must_be_retained"],
             historical_ftl_claim_reused=value["historical_ftl_claim_reused"],
         )
-    elif isinstance(value, Mapping):
-        raise ValueError("payload must be an exact mapping with the frozen fields")
-    if type(value) is not DevelopmentResult:
+    elif type(value) is not DevelopmentResult:
         raise ValueError("result must be an exact DevelopmentResult")
     DevelopmentResult.__post_init__(value)
     require_current_identity(value.identity, _current_identity())
