@@ -116,3 +116,21 @@ def test_environment_trace_digest_validation() -> None:
                 transitions=(_make_transition_digest(),),
                 trace_sha256=invalid_digest,  # type: ignore[arg-type]
             )
+
+
+class _HostileMappingDict(dict[str, object]):
+    calls = 0
+
+    def __iter__(self):  # type: ignore[no-untyped-def, override]
+        type(self).calls += 1
+        raise AssertionError("hostile mapping hook executed")
+
+
+def test_require_object_rejects_hostile_dict_before_key_walk() -> None:
+    from alberta_framework.benchmarks.forager_rng_parity import _require_object
+
+    hostile = _HostileMappingDict({"a": 1})
+    _HostileMappingDict.calls = 0
+    with pytest.raises(ForagerRngParityError, match="JSON object"):
+        _require_object(hostile, "probe")
+    assert _HostileMappingDict.calls == 0
