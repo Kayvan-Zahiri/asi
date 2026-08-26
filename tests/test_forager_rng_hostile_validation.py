@@ -92,3 +92,22 @@ def test_source_has_no_repr_leak() -> None:
 def test_valid_duplicate_passes() -> None:
     assert _duplicate_free_object([("a", 1), ("b", 2)]) == {"a": 1, "b": 2}
     assert _parse_json_float("1.23") == 1.23
+
+
+def test_require_object_rejects_dict_subclass_without_iter_hooks() -> None:
+    from alberta_framework.benchmarks.forager_rng_parity import (
+        ForagerRngParityError,
+        _require_object,
+    )
+
+    class HostileDict(dict):
+        calls = 0
+
+        def __iter__(self):  # type: ignore[override]
+            type(self).calls += 1
+            raise AssertionError("HostileDict.__iter__ must not run")
+
+    HostileDict.calls = 0
+    with pytest.raises(ForagerRngParityError, match="must be a JSON object"):
+        _require_object(HostileDict({"a": 1}), "path")
+    assert HostileDict.calls == 0

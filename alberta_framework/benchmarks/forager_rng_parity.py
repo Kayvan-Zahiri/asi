@@ -697,7 +697,7 @@ def _require_exact_keys(value: Mapping[str, Any], expected: set[str], path: str)
 
 
 def _require_object(value: Any, path: str) -> Mapping[str, Any]:
-    if not isinstance(value, Mapping) or any(type(key) is not str for key in value):
+    if type(value) is not dict or any(type(key) is not str for key in value):
         raise ForagerRngParityError(f"{path} must be a JSON object")
     return cast(Mapping[str, Any], value)
 
