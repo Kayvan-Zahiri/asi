@@ -102,3 +102,22 @@ def test_continual_ia_digest_non_string_types_rejected() -> None:
         artifact = _artifact_with_digest_hostile(bad)
         validation = validate_ia_evidence_artifact(artifact)
         assert validation.valid is False
+
+
+def test_parse_budget_rejects_mapping_subclass_without_hooks() -> None:
+    """Artifact object gates require exact dict JSON containers."""
+    from alberta_framework.evaluation.continual_ia_artifact import _parse_budget
+
+    class HostileDict(dict):
+        calls = 0
+
+        def keys(self):  # type: ignore[override]
+            type(self).calls += 1
+            raise AssertionError("HostileDict.keys must not run")
+
+    errors: list[str] = []
+    HostileDict.calls = 0
+    result = _parse_budget(HostileDict({"state_scalars": 1}), location="budget", errors=errors)
+    assert result is None
+    assert errors == ["budget must be an object"]
+    assert HostileDict.calls == 0
