@@ -429,7 +429,7 @@ def _validate_source_provenance(value: object, errors: list[str]) -> None:
     """Require exact hashes for every source that defines this evidence."""
 
     location = "content.source_provenance"
-    if not isinstance(value, Mapping):
+    if type(value) is not dict:
         errors.append(f"{location} must be an object")
         return
     try:
@@ -686,7 +686,7 @@ def _required_mapping(
     errors: list[str],
 ) -> Mapping[str, object] | None:
     value = parent.get(key)
-    if not isinstance(value, Mapping):
+    if type(value) is not dict:
         errors.append(f"{key} must be an object")
         return None
     return value
