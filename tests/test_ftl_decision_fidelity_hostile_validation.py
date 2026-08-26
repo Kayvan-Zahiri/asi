@@ -313,3 +313,23 @@ def test_decision_probe_set_rejects_hostile_arrays_and_cross_field_drift() -> No
             true_rewards=np.zeros((2, 2, 1), dtype=np.float64),
             true_returns=np.ones((2, 2), dtype=np.float64),
         )
+
+
+def test_mapping_helper_rejects_dict_subclass_without_hooks() -> None:
+    """FTL artifact object gates require exact dict containers."""
+    from alberta_framework.evaluation.ftl_decision_artifact import _mapping
+
+    class HostileDict(dict):
+        calls = 0
+
+        def keys(self):  # type: ignore[override]
+            type(self).calls += 1
+            raise AssertionError("HostileDict.keys must not run")
+
+    errors: list[str] = []
+    HostileDict.calls = 0
+    parent = {"scientific_payload": HostileDict({"a": 1})}
+    result = _mapping(parent, "scientific_payload", "artifact", errors)
+    assert result is None
+    assert errors == ["artifact.scientific_payload must be an object"]
+    assert HostileDict.calls == 0
