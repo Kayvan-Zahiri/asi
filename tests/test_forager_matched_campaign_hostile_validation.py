@@ -11,6 +11,7 @@ from alberta_framework.benchmarks.forager_matched_campaign import (
     CompletedCampaignBundle,
     ForagerMatchedCampaignError,
     _CellScan,
+    _validate_completion_summary_common,
 )
 from alberta_framework.benchmarks.forager_matched_executor import SeedExecutionArtifacts
 
@@ -197,3 +198,29 @@ def test_cell_scan_rejects_bool_attempt_and_byte_identities(
 def test_cell_scan_rejects_incoherent_state(overrides: dict[str, object], message: str) -> None:
     with pytest.raises(ForagerMatchedCampaignError, match=message):
         _legal_cell_scan(**overrides)
+
+
+
+def test_completion_summary_rejects_mapping_subclass_without_hooks() -> None:
+    """Completion summary identity requires exact dict or MappingProxyType."""
+
+    class HostileDict(dict):
+        calls = 0
+
+        def keys(self):  # type: ignore[override]
+            type(self).calls += 1
+            raise AssertionError("HostileDict.keys must not run")
+
+    HostileDict.calls = 0
+    with pytest.raises(
+        ForagerMatchedCampaignError,
+        match="completion summary builder returned a non-mapping",
+    ):
+        _validate_completion_summary_common(
+            None,  # type: ignore[arg-type]
+            None,  # type: ignore[arg-type]
+            None,  # type: ignore[arg-type]
+            None,  # type: ignore[arg-type]
+            HostileDict({}),
+        )
+    assert HostileDict.calls == 0

@@ -180,6 +180,11 @@ class CampaignStatus:
         }
 
 
+def _is_exact_json_object(value: object) -> bool:
+    """True for exact dict or MappingProxyType JSON object containers."""
+    return type(value) is dict or type(value) is MappingProxyType
+
+
 @dataclass(frozen=True, slots=True)
 class CompletedCampaignBundle:
     """Exact completed content closure, without any authentication or promotion claim.
@@ -226,9 +231,9 @@ class CompletedCampaignBundle:
             raise ForagerMatchedCampaignError(
                 "active_seeds must be a tuple of non-negative ints"
             )
-        if not isinstance(self.schedule, Mapping):
+        if not _is_exact_json_object(self.schedule):
             raise ForagerMatchedCampaignError("schedule must be a Mapping")
-        if not isinstance(self.seed_artifacts, Mapping):
+        if not _is_exact_json_object(self.seed_artifacts):
             raise ForagerMatchedCampaignError("seed_artifacts must be a Mapping")
         if not isinstance(
             self.execution_receipt_index, executor.MatchedExecutionReceiptIndex
@@ -242,9 +247,9 @@ class CompletedCampaignBundle:
             raise ForagerMatchedCampaignError(
                 "verification_request must be a VerificationRequest"
             )
-        if not isinstance(self.completion_summary, Mapping):
+        if not _is_exact_json_object(self.completion_summary):
             raise ForagerMatchedCampaignError("completion_summary must be a Mapping")
-        if not isinstance(self.final_file_sha256, Mapping):
+        if not _is_exact_json_object(self.final_file_sha256):
             raise ForagerMatchedCampaignError("final_file_sha256 must be a Mapping")
 
 
@@ -2096,7 +2101,7 @@ def _validate_completion_summary_common(
     request: executor.VerificationRequest,
     summary: Mapping[str, Any],
 ) -> None:
-    if not isinstance(summary, Mapping):
+    if not _is_exact_json_object(summary):
         raise ForagerMatchedCampaignError("completion summary builder returned a non-mapping")
     required: dict[str, Any] = {
         "classification": "content_only_unendorsed_nonpromoting",
