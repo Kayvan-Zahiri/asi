@@ -29,8 +29,8 @@ import json
 import math
 import operator
 from collections.abc import Mapping
-from types import MappingProxyType
 from numbers import Real
+from types import MappingProxyType
 from typing import Any, SupportsIndex, cast
 
 import chex
