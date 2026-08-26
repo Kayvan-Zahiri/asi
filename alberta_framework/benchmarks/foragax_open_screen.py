@@ -319,7 +319,7 @@ def _load_json_bytes(raw: bytes, label: str) -> dict[str, Any]:
         raise
     except (UnicodeDecodeError, json.JSONDecodeError) as error:
         raise ScreenError(f"{label} is not valid duplicate-free UTF-8 JSON") from error
-    if not isinstance(value, dict):
+    if type(value) is not dict:
         raise ScreenError(f"{label} must contain a JSON object")
     return cast(dict[str, Any], value)
 
@@ -1072,7 +1072,7 @@ def _inspect_image(docker: str, image_id: str) -> dict[str, Any]:
         raise
     except (UnicodeDecodeError, json.JSONDecodeError) as error:
         raise ScreenError("docker image inspect returned invalid JSON") from error
-    if not isinstance(value, list) or len(value) != 1 or not isinstance(value[0], dict):
+    if type(value) is not list or len(value) != 1 or type(value[0]) is not dict:
         raise ScreenError("docker image inspect must resolve exactly one image")
     inspection = cast(dict[str, Any], value[0])
     if inspection.get("Id") != image_id:
@@ -1276,7 +1276,7 @@ def _run_preflight(protocol: FrozenProtocol, docker: str) -> tuple[dict[str, Any
         raise ScreenError("OCI preflight source identity mismatch")
     probe_configs = _require_list(probe.get("configurations"), "preflight.configurations")
     if len(probe_configs) != len(protocol.configurations) or any(
-        not isinstance(item, dict) for item in probe_configs
+        type(item) is not dict for item in probe_configs
     ):
         raise ScreenError("OCI preflight configuration inventory is malformed")
     if [cast(dict[str, Any], item).get("path") for item in probe_configs] != [
@@ -1293,7 +1293,7 @@ def _run_preflight(protocol: FrozenProtocol, docker: str) -> tuple[dict[str, Any
             or item.get("stored_seeds") != list(protocol.seeds)
             or item.get("effective_seeds") != list(protocol.seeds)
             or type(item.get("result_root")) is not str
-            or not isinstance(item.get("metadata_contract"), dict)
+            or type(item.get("metadata_contract")) is not dict
         ):
             raise ScreenError(f"OCI preflight configuration binding drift: {config.path}")
     entrypoints = list(dict.fromkeys(config.entrypoint for config in protocol.configurations))
@@ -2588,7 +2588,7 @@ def _parse_scorer_capture(
         raise ScreenError("pinned-image scorer result contract drift")
     records = _require_list(payload.get("records"), "pinned-image scorer records")
     if len(records) != len(protocol.seeds) or any(
-        not isinstance(record, dict) for record in records
+        type(record) is not dict for record in records
     ):
         raise ScreenError("pinned-image scorer record inventory drift")
     return payload

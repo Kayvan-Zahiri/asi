@@ -88,3 +88,32 @@ def test_frozen_configuration_rejects_string_subclass_before_len_hook() -> None:
             stdout="not bytes",  # type: ignore[arg-type]
             stderr=b"",
         )
+
+
+def test_require_dict_rejects_dict_subclass_without_hooks() -> None:
+    """JSON object helpers require exact dict containers."""
+    from alberta_framework.benchmarks.foragax_open_screen import _require_dict, _require_list
+
+    class HostileDict(dict):
+        calls = 0
+
+        def keys(self):  # type: ignore[override]
+            type(self).calls += 1
+            raise AssertionError("HostileDict.keys must not run")
+
+    class HostileList(list):
+        calls = 0
+
+        def __iter__(self):  # type: ignore[override]
+            type(self).calls += 1
+            raise AssertionError("HostileList.__iter__ must not run")
+
+    HostileDict.calls = 0
+    with pytest.raises(ScreenError, match="must be an object"):
+        _require_dict(HostileDict({"a": 1}), "field")
+    assert HostileDict.calls == 0
+
+    HostileList.calls = 0
+    with pytest.raises(ScreenError, match="must be an array"):
+        _require_list(HostileList([1]), "field")
+    assert HostileList.calls == 0
