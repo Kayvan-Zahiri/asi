@@ -1562,7 +1562,7 @@ def _read_bound_json(
         raise ForagerMatchedCandidateUniverseError(
             f"bound JSON is not strict UTF-8 JSON: {relative_path}"
         ) from exc
-    if not isinstance(value, dict):
+    if type(value) is not dict:
         raise ForagerMatchedCandidateUniverseError(
             f"bound JSON root must be an object: {relative_path}"
         )
@@ -1642,7 +1642,7 @@ def _verify_one_screen(
             f"{binding.screen_id} aggregate protocol identity is not exact"
         )
     plan_protocol = screen_plan.get("protocol")
-    if not isinstance(plan_protocol, dict):
+    if type(plan_protocol) is not dict:
         raise ForagerMatchedCandidateUniverseError(
             f"{binding.screen_id} screen plan protocol is missing"
         )
@@ -1661,9 +1661,9 @@ def _verify_one_screen(
     files = input_snapshot.get("files")
     if (
         input_snapshot.get("schema_version") != "alberta.foragax_open_screen_inputs.v3"
-        or not isinstance(directories, list)
+        or type(directories) is not list
         or any(type(item) is not str for item in directories)
-        or not isinstance(files, list)
+        or type(files) is not list
     ):
         raise ForagerMatchedCandidateUniverseError(
             f"{binding.screen_id} input snapshot inventory is malformed"
@@ -1718,12 +1718,12 @@ def _verify_one_screen(
             f"{binding.screen_id} input snapshot configuration hashes are invalid"
         )
     ranking = aggregate.get("eligible_ranking")
-    if not isinstance(ranking, list) or len(ranking) != binding.candidate_count:
+    if type(ranking) is not list or len(ranking) != binding.candidate_count:
         raise ForagerMatchedCandidateUniverseError(
             f"{binding.screen_id} eligible ranking has the wrong size"
         )
     observed_ranks = [
-        row.get("rank") if isinstance(row, Mapping) else None for row in ranking
+        row.get("rank") if type(row) is dict else None for row in ranking
     ]
     if observed_ranks != list(range(1, binding.candidate_count + 1)):
         raise ForagerMatchedCandidateUniverseError(
@@ -1731,7 +1731,7 @@ def _verify_one_screen(
         )
     by_rank = {arm.open_development_rank: arm for arm in expected_arms}
     for row in ranking:
-        if not isinstance(row, dict) or type(row.get("rank")) is not int:
+        if type(row) is not dict or type(row.get("rank")) is not int:
             raise ForagerMatchedCandidateUniverseError(
                 f"{binding.screen_id} eligible ranking row is malformed"
             )
@@ -1750,7 +1750,7 @@ def _verify_one_screen(
     configuration_order = plan_protocol.get("configuration_order")
     expected_configurations = {arm.configuration for arm in expected_arms}
     if (
-        not isinstance(configuration_order, list)
+        type(configuration_order) is not list
         or len(configuration_order) != binding.candidate_count
         or any(type(item) is not str for item in configuration_order)
         or len(set(configuration_order)) != binding.candidate_count
@@ -1762,7 +1762,7 @@ def _verify_one_screen(
 
 
 def _require_mapping(value: Any, context: str) -> Mapping[str, Any]:
-    if not isinstance(value, Mapping):
+    if type(value) is not dict:
         raise ForagerMatchedCandidateUniverseError(f"{context} must be an object")
     return cast(Mapping[str, Any], value)
 
@@ -1959,12 +1959,12 @@ def _verify_local_execution_pair(
             f"{binding.screen_id} selected variant is invalid"
         )
     ranking = group.get("ranked_variants")
-    if not isinstance(ranking, list) or len(ranking) != binding.candidate_count:
+    if type(ranking) is not list or len(ranking) != binding.candidate_count:
         raise ForagerMatchedCandidateUniverseError(
             f"{binding.screen_id} local ranking has the wrong size"
         )
     observed_ranks = [
-        row.get("rank") if isinstance(row, Mapping) else None for row in ranking
+        row.get("rank") if type(row) is dict else None for row in ranking
     ]
     if observed_ranks != list(range(1, binding.candidate_count + 1)):
         raise ForagerMatchedCandidateUniverseError(
@@ -2275,12 +2275,12 @@ def _verify_rtu_candidate_generation(
         _require_false(conformance, key, "rtu_schema23_screening_v1.protocol_conformance")
 
     protocol_variants_value = protocol.get("variants")
-    if not isinstance(protocol_variants_value, list):
+    if type(protocol_variants_value) is not list:
         raise ForagerMatchedCandidateUniverseError(
             "rtu_schema23_screening_v1 protocol variants must be an array"
         )
     if len(protocol_variants_value) != binding.candidate_count or any(
-        not isinstance(item, Mapping) or type(item.get("id")) is not str
+        type(item) is not dict or type(item.get("id")) is not str
         for item in protocol_variants_value
     ):
         raise ForagerMatchedCandidateUniverseError(
@@ -2364,8 +2364,8 @@ def _verify_rtu_candidate_generation(
             "rtu_schema23_screening_v1 receipt linkage is invalid"
         )
     discarded = receipt.get("discarded_attempts")
-    if not isinstance(discarded, list) or any(
-        not isinstance(item, Mapping)
+    if type(discarded) is not list or any(
+        type(item) is not dict
         or item.get("reward_contents_inspected") is not False
         or item.get("eligible_for_results") is not False
         for item in discarded
