@@ -282,7 +282,7 @@ class ContentVerifiedFinalAnalysisBundle:
     def __post_init__(self) -> None:
         if not isinstance(self.output_root, Path):
             raise ForagerMatchedFinalAnalysisError("output_root must be a Path")
-        if not isinstance(self.manifest, Mapping):
+        if type(self.manifest) is not dict:
             raise ForagerMatchedFinalAnalysisError("manifest must be a Mapping")
         if not isinstance(self.seal_content, seal.ContentVerifiedSealBundle):
             raise ForagerMatchedFinalAnalysisError(
@@ -310,7 +310,7 @@ class ContentVerifiedFinalAnalysisBundle:
             raise ForagerMatchedFinalAnalysisError(
                 "evaluation_bindings_cache must be an AuthenticatedEvidenceBindings"
             )
-        if not isinstance(self.analysis_runtime_source, Mapping):
+        if type(self.analysis_runtime_source) is not dict:
             raise ForagerMatchedFinalAnalysisError(
                 "analysis_runtime_source must be a Mapping"
             )
@@ -809,7 +809,7 @@ def _validate_exact_completed_panel(
         seal_content.selection_result.selection_result_sha256,
     )
     seal_open_campaign = seal_content.manifest.get("open_campaign")
-    if not isinstance(seal_open_campaign, Mapping):
+    if type(seal_open_campaign) is not dict:
         raise ForagerMatchedFinalAnalysisError(
             "seal manifest open-campaign closure must be an object"
         )
@@ -2220,7 +2220,7 @@ def _validate_evaluation_snapshot(
         qualification_manifest_sha256,
     )
     seal_open_campaign = seal_content.manifest.get("open_campaign")
-    if not isinstance(seal_open_campaign, Mapping):
+    if type(seal_open_campaign) is not dict:
         raise ForagerMatchedFinalAnalysisError(
             "seal manifest open-campaign closure must be an object"
         )
@@ -2600,7 +2600,7 @@ def _build_manifest(
     candidate_order = tuple(item.candidate_id for item in evaluation_scores.candidate_scores)
     selected_ids = tuple(method.method_id for method in contract.methods)
     seal_open_campaign = seal_content.manifest.get("open_campaign")
-    if not isinstance(seal_open_campaign, Mapping):
+    if type(seal_open_campaign) is not dict:
         raise ForagerMatchedFinalAnalysisError(
             "seal manifest open-campaign closure must be an object"
         )
