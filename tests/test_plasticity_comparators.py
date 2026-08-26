@@ -321,3 +321,13 @@ def test_jitted_pure_kernel_matches_eager_without_partial_state() -> None:
     assert all(bool(jnp.all(jnp.isnan(value))) for value in updated)
     with pytest.raises(ValueError, match="Threefry"):
         interval_dropout(jnp.ones(1), jnp.asarray([0, 0], dtype=jnp.uint32), relu_probability=1)
+
+
+def test_noise_curvature_fail_open_on_nan_safe_bound() -> None:
+    result = noise_curvature_step_size(
+        0.2,
+        effective_step_size=0.5,
+        safe_bound=float("nan"),
+        early_training=False,
+    )
+    assert result == pytest.approx(0.2)

@@ -672,7 +672,11 @@ def noise_curvature_step_size(
     """One bounded per-layer cooling/warming decision from paper Algorithm 1."""
     base = _finite_scalar("base_step_size", base_step_size)
     effective = _finite_scalar("effective_step_size", effective_step_size)
-    if type(safe_bound) not in (int, float) or math.isnan(safe_bound) or safe_bound < 0:
+    if type(safe_bound) not in (int, float):
+        raise ValueError("safe_bound must be an exact scalar")
+    if math.isnan(safe_bound):
+        return base
+    if safe_bound < 0:
         raise ValueError("safe_bound must be an exact nonnegative scalar")
     bound = float(safe_bound)
     rate = _probability("adjustment", adjustment, include_one=False)
