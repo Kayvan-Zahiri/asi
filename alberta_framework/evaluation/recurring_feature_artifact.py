@@ -883,7 +883,7 @@ def load_recurring_feature_artifact(path: Path) -> dict[str, object]:
         parse_float=_parse_finite_json_float,
         object_pairs_hook=_reject_duplicate_keys,
     )
-    if not isinstance(parsed, dict):
+    if type(parsed) is not dict:
         raise ValueError("evidence artifact must be a JSON object")
     return parsed
 
@@ -895,7 +895,7 @@ def _mapping(
     errors: list[str],
 ) -> Mapping[str, object] | None:
     value = parent.get(key)
-    if not isinstance(value, Mapping):
+    if type(value) is not dict:
         errors.append(f"{location}.{key} must be an object")
         return None
     return value
@@ -996,12 +996,12 @@ def _nmse_values(
 
 
 def _pair_set(value: object) -> set[tuple[int, int]] | None:
-    if not isinstance(value, list):
+    if type(value) is not list:
         return None
     pairs: set[tuple[int, int]] = set()
     for pair in value:
         if (
-            not isinstance(pair, list)
+            type(pair) is not list
             or len(pair) != 2
             or any(isinstance(item, bool) or not isinstance(item, int) for item in pair)
         ):
