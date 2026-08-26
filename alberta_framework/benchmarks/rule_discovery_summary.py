@@ -37,18 +37,30 @@ DISCOVERY_ARMS = (
 CHAMPION = "sigma0_shiftnorm_d099"
 
 
-def _arm(directory: Path, name: str, seeds: Sequence[int]) -> dict[str, Any]:
+def _arm(
+    directory: Path,
+    name: str,
+    seeds: Sequence[int],
+    *,
+    expected_tasks: int | None = None,
+) -> dict[str, Any]:
     values = []
     for seed in seeds:
         path = directory / f"{name}_seed{seed}.json"
         if not path.exists():
             raise ValueError(f"{name} is missing seed {seed} in {directory}")
         payload = load_strict_json_object(path)
-        if (
-            type(payload.get("per_task_accuracy")) is not list
-            or not payload["per_task_accuracy"]
-        ):
+        if "config_name" in payload and payload["config_name"] != name:
+            raise ValueError(
+                f"{path} config_name '{payload['config_name']}' "
+                f"does not match expected arm '{name}'"
+            )
+        if type(payload.get("per_task_accuracy")) is not list or not payload["per_task_accuracy"]:
             raise ValueError(f"{path} lacks per_task_accuracy")
+        if expected_tasks is not None and len(payload["per_task_accuracy"]) != expected_tasks:
+            raise ValueError(
+                f"{path} has {len(payload['per_task_accuracy'])} tasks, expected {expected_tasks}"
+            )
         payload_seed = require_jax_seed(payload.get("seed"), name=f"{path} seed")
         if payload_seed != seed:
             raise ValueError(f"{path} seed does not match requested seed {seed}")
@@ -71,7 +83,7 @@ def build_legacy_rule_discovery_summary(
 ) -> dict[str, Any]:
     """Reconstruct the exact legacy v1 payload for compatibility checks."""
     seeds = require_unique_jax_seeds(seeds)
-    screen = {name: _arm(screen_dir, name, seeds) for name in SCREEN_ARMS}
+    screen = {name: _arm(screen_dir, name, seeds, expected_tasks=60) for name in SCREEN_ARMS}
     confirm_names = ("disc_r1_pscale_norms", CHAMPION)
     present = [
         (confirm_dir / f"{name}_seed{seed}.json").exists()
@@ -81,7 +93,7 @@ def build_legacy_rule_discovery_summary(
     if any(present) and not all(present):
         raise ValueError("rule-discovery confirmation seeds are incomplete")
     full = (
-        {name: _arm(confirm_dir, name, seeds) for name in confirm_names}
+        {name: _arm(confirm_dir, name, seeds, expected_tasks=200) for name in confirm_names}
         if all(present)
         else {}
     )
@@ -129,9 +141,7 @@ def build_rule_discovery_summary(
 ) -> dict[str, Any]:
     """Build the maintained v2 summary with explicit legacy compatibility."""
     seeds = require_unique_jax_seeds(seeds)
-    legacy = build_legacy_rule_discovery_summary(
-        screen_dir, confirm_dir, seeds=seeds
-    )
+    legacy = build_legacy_rule_discovery_summary(screen_dir, confirm_dir, seeds=seeds)
     legacy_canonical = json.dumps(
         legacy, sort_keys=True, separators=(",", ":"), allow_nan=False
     ).encode()
@@ -172,9 +182,7 @@ def _parser() -> argparse.ArgumentParser:
 def main(argv: Sequence[str] | None = None) -> int:
     """Emit a nonpromoting summary to stdout without modifying artifacts."""
     args = _parser().parse_args(argv)
-    result = build_rule_discovery_summary(
-        args.screen_dir, args.confirm_dir, seeds=args.seeds
-    )
+    result = build_rule_discovery_summary(args.screen_dir, args.confirm_dir, seeds=args.seeds)
     print(json.dumps(result, indent=2, sort_keys=True, allow_nan=False))
     return 0
 
