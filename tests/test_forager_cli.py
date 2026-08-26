@@ -155,3 +155,33 @@ def test_main_passes_explicit_final_window_to_config() -> None:
     assert "_explicit_int_or_default(" in source
     assert "args.final_window, protocol.final_window_steps" in source
     assert "args.final_window or protocol.final_window_steps" not in source
+
+
+def test_json_safe_rejects_non_exact_mapping_without_items_hooks() -> None:
+    class HostileDict(dict):
+        calls = 0
+
+        def items(self):  # type: ignore[override]
+            type(self).calls += 1
+            raise AssertionError("HostileDict.items must not run")
+
+    hostile = HostileDict({"a": 1})
+    HostileDict.calls = 0
+    result = forager_cli._json_safe(hostile)
+    assert result is hostile
+    assert HostileDict.calls == 0
+
+
+def test_json_safe_rejects_non_exact_list_without_iter_hooks() -> None:
+    class HostileList(list):
+        calls = 0
+
+        def __iter__(self):  # type: ignore[override]
+            type(self).calls += 1
+            raise AssertionError("HostileList.__iter__ must not run")
+
+    hostile = HostileList([1])
+    HostileList.calls = 0
+    result = forager_cli._json_safe(hostile)
+    assert result is hostile
+    assert HostileList.calls == 0
