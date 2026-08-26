@@ -924,6 +924,11 @@ def _maybe_accept_planning_state(
     )
 
 
+def _skip_zero_scale(scale: Array, value: Array) -> Array:
+    """Skip ``0 * inf`` so a closed importance ratio does not poison planning."""
+    return jnp.where(scale == 0.0, jnp.zeros_like(value), scale * value)
+
+
 def _apply_planning_importance_correction(
     old_state: DifferentialSARSAState,
     planned_state: DifferentialSARSAState,
@@ -935,14 +940,19 @@ def _apply_planning_importance_correction(
         DifferentialSARSAState,
         planned_state.replace(  # type: ignore[attr-defined]
             q_weights=old_state.q_weights
-            + rho * (planned_state.q_weights - old_state.q_weights),
-            q_bias=old_state.q_bias + rho * (planned_state.q_bias - old_state.q_bias),
+            + _skip_zero_scale(rho, planned_state.q_weights - old_state.q_weights),
+            q_bias=old_state.q_bias
+            + _skip_zero_scale(rho, planned_state.q_bias - old_state.q_bias),
             q_trace_weights=old_state.q_trace_weights
-            + rho * (planned_state.q_trace_weights - old_state.q_trace_weights),
+            + _skip_zero_scale(
+                rho, planned_state.q_trace_weights - old_state.q_trace_weights
+            ),
             q_trace_bias=old_state.q_trace_bias
-            + rho * (planned_state.q_trace_bias - old_state.q_trace_bias),
+            + _skip_zero_scale(rho, planned_state.q_trace_bias - old_state.q_trace_bias),
             average_reward=old_state.average_reward
-            + rho * (planned_state.average_reward - old_state.average_reward),
+            + _skip_zero_scale(
+                rho, planned_state.average_reward - old_state.average_reward
+            ),
         ),
     )
 
