@@ -53,6 +53,7 @@ import math
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any, cast
 
 import chex
@@ -979,7 +980,9 @@ def migrate_legacy_lifetime_gauntlet_state(
     stream: LifetimeGauntletStream,
 ) -> LifetimeState:
     """Migrate only an exact unsaturated pre-v2 lifetime clock."""
-    if isinstance(legacy_state, Mapping):
+    if type(legacy_state) is dict:
+        fields = dict(legacy_state)
+    elif type(legacy_state) is MappingProxyType:
         fields = dict(legacy_state)
     elif dataclasses.is_dataclass(legacy_state) and not isinstance(legacy_state, type):
         fields = {
@@ -987,7 +990,7 @@ def migrate_legacy_lifetime_gauntlet_state(
             for field in dataclasses.fields(legacy_state)
         }
     else:
-        raise TypeError("legacy lifetime-gauntlet state must be a mapping or dataclass")
+        raise TypeError("legacy lifetime-gauntlet state must be an exact dict or dataclass")
     expected = {"key", "step_count", "w_fresh", "w_c", "w_d"}
     if set(fields) != expected:
         raise ValueError("legacy lifetime-gauntlet state fields are invalid")
@@ -1047,7 +1050,7 @@ def load_lifetime_gauntlet_checkpoint(
     if schema != LIFETIME_GAUNTLET_CHECKPOINT_SCHEMA:
         raise ValueError("lifetime-gauntlet checkpoint schema is unsupported")
     raw_config = metadata.get("stream_config")
-    if not isinstance(raw_config, Mapping):
+    if type(raw_config) is not dict and type(raw_config) is not MappingProxyType:
         raise ValueError("lifetime-gauntlet checkpoint stream_config is invalid")
     stream = LifetimeGauntletStream.from_config(raw_config)
     restored, restored_metadata = load_checkpoint(stream.init(jr.key(0)), path)
