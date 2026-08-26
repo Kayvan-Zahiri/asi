@@ -20,7 +20,7 @@ import functools
 import math
 import operator
 import time
-from collections.abc import Mapping
+from types import MappingProxyType
 from typing import Any, SupportsIndex, cast
 
 import chex
@@ -1494,14 +1494,16 @@ def measure_multi_head_mlp_state_nbytes(state: MultiHeadMLPState) -> int:
 def _host_field_mapping(legacy_state: Any) -> dict[str, Any]:
     """Return a shallow host mapping for an old state dataclass."""
 
-    if isinstance(legacy_state, Mapping):
+    if type(legacy_state) is dict:
+        return dict(legacy_state)
+    if type(legacy_state) is MappingProxyType:
         return dict(legacy_state)
     if dataclasses.is_dataclass(legacy_state) and not isinstance(legacy_state, type):
         return {
             field.name: getattr(legacy_state, field.name)
             for field in dataclasses.fields(legacy_state)
         }
-    raise TypeError("legacy MultiHeadMLP state must be a mapping or dataclass")
+    raise TypeError("legacy MultiHeadMLP state must be an exact dict or dataclass")
 
 
 def _legacy_normalizer_type(legacy_state: Any) -> str:
