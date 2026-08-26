@@ -358,3 +358,17 @@ def test_flad_noise_component_underflow_scale_preserves_projection() -> None:
         expected = ref(np.array(delta), np.array(scaled_grad))
         np.testing.assert_allclose(safe, expected, rtol=1e-5, atol=1e-6)
 
+def test_flad_noise_component_zero_gradient_returns_delta_exactly() -> None:
+    delta = jnp.array([1.0, -2.0, 0.5, 3.0], dtype=jnp.float32)
+    zero_grad = jnp.zeros_like(delta)
+    safe, valid = jax.jit(flad_noise_component_transaction)(delta, zero_grad)
+    assert bool(valid)
+    assert np.array_equal(np.asarray(safe), np.asarray(delta))
+
+
+def test_flad_noise_component_nonfinite_inputs_invalid() -> None:
+    delta = jnp.array([1.0, -2.0, 0.5, 3.0], dtype=jnp.float32)
+    nan_grad = jnp.array([1.0, np.nan, 0.5, 3.0], dtype=jnp.float32)
+    safe, valid = jax.jit(flad_noise_component_transaction)(delta, nan_grad)
+    assert not bool(valid)
+
