@@ -598,7 +598,7 @@ def _required_mapping(
     owner: str,
 ) -> Mapping[str, object]:
     candidate = value.get(key)
-    if not isinstance(candidate, Mapping) or not candidate:
+    if type(candidate) is not dict or not candidate:
         raise RuntimeError(f"{owner}.{key} must be a non-empty mapping")
     return candidate
 
@@ -940,7 +940,7 @@ def _load_strict_json_object(path: Path) -> dict[str, object]:
         parse_float=_parse_finite_json_float,
         object_pairs_hook=_reject_duplicate_json_keys,
     )
-    if not isinstance(parsed, dict):
+    if type(parsed) is not dict:
         raise ValueError(f"{path} must contain a JSON object")
     return parsed
 
