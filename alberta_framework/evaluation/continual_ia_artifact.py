@@ -21,6 +21,7 @@ import platform
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any, NoReturn, cast
 
 import jax
@@ -98,6 +99,10 @@ class IAArtifactValidation:
 def _finite_float(value: float) -> float | None:
     numeric = float(value)
     return numeric if np.isfinite(numeric) else None
+
+
+def _is_exact_mapping(value: object) -> bool:
+    return type(value) is dict or type(value) is MappingProxyType
 
 
 def _config_payload(config: ContinualIAConfig) -> dict[str, object]:
@@ -501,7 +506,7 @@ def load_ia_evidence_artifact(path: Path) -> dict[str, object]:
         parse_float=_parse_finite_json_float,
         object_pairs_hook=_reject_duplicate_keys,
     )
-    if not isinstance(parsed, dict):
+    if type(parsed) is not dict:
         raise ValueError("IA evidence artifact must be a JSON object")
     return parsed
 
@@ -549,7 +554,7 @@ def _numeric_vector(
     errors: list[str],
 ) -> NDArray[np.float64] | None:
     if (
-        not isinstance(value, list)
+        type(value) is not list
         or len(value) != length
         or any(_number(item) is None for item in value)
     ):
@@ -566,7 +571,7 @@ def _integer_vector(
     allowed: set[int],
     errors: list[str],
 ) -> NDArray[np.int64] | None:
-    if not isinstance(value, list) or len(value) != length:
+    if type(value) is not list or len(value) != length:
         errors.append(f"{location} must contain {length} integers")
         return None
     if any(
@@ -585,7 +590,7 @@ def _boolean_vector(
     errors: list[str],
 ) -> NDArray[np.bool_] | None:
     if (
-        not isinstance(value, list)
+        type(value) is not list
         or len(value) != length
         or any(not isinstance(item, bool) for item in value)
     ):
@@ -612,7 +617,7 @@ def _parse_budget(
     location: str,
     errors: list[str],
 ) -> ControllerBudget | None:
-    if not isinstance(value, Mapping):
+    if not _is_exact_mapping(value):
         errors.append(f"{location} must be an object")
         return None
     expected_fields = {
@@ -664,7 +669,7 @@ def _parse_config(
     value: object,
     errors: list[str],
 ) -> ContinualIAConfig | None:
-    if not isinstance(value, Mapping):
+    if not _is_exact_mapping(value):
         errors.append("content.configuration must be an object")
         return None
     canonical_payload = _config_payload(ContinualIAConfig())
@@ -687,7 +692,7 @@ def _parse_thresholds(
     value: object,
     errors: list[str],
 ) -> IAAcceptanceThresholds | None:
-    if not isinstance(value, Mapping):
+    if not _is_exact_mapping(value):
         errors.append("content.thresholds must be an object")
         return None
     canonical_payload = _threshold_payload(IAAcceptanceThresholds())
@@ -743,14 +748,14 @@ def _parse_condition(
     location: str,
     errors: list[str],
 ) -> IAConditionResult | None:
-    if not isinstance(value, Mapping):
+    if not _is_exact_mapping(value):
         errors.append(f"{location} must be an object")
         return None
     if set(value) != {"primitive_records", "summary"}:
         errors.append(f"{location} keys do not match the v1 schema")
     primitive = value.get("primitive_records")
     summary = value.get("summary")
-    if not isinstance(primitive, Mapping) or not isinstance(summary, Mapping):
+    if not _is_exact_mapping(primitive) or not _is_exact_mapping(summary):
         errors.append(f"{location} requires primitive_records and summary objects")
         return None
     if set(primitive) != {
@@ -914,22 +919,22 @@ def _parse_results(
     config: ContinualIAConfig,
     errors: list[str],
 ) -> tuple[IAConditionResult, ...] | None:
-    if not isinstance(value, list):
+    if type(value) is not list:
         errors.append("content.seed_summaries must be an array")
         return None
     observed_seeds: list[int] = []
     results: list[IAConditionResult] = []
     for index, raw_seed in enumerate(value):
         location = f"content.seed_summaries[{index}]"
-        if not isinstance(raw_seed, Mapping):
+        if not _is_exact_mapping(raw_seed):
             errors.append(f"{location} must be an object")
             continue
         if set(raw_seed) != {"seed", "conditions"}:
             errors.append(f"{location} keys do not match the v1 schema")
         seed = _integer(raw_seed.get("seed"), location=f"{location}.seed", errors=errors)
         conditions = raw_seed.get("conditions")
-        if seed is None or not isinstance(conditions, Mapping):
-            if not isinstance(conditions, Mapping):
+        if seed is None or not _is_exact_mapping(conditions):
+            if not _is_exact_mapping(conditions):
                 errors.append(f"{location}.conditions must be an object")
             continue
         observed_seeds.append(seed)
@@ -970,7 +975,7 @@ def _parse_results(
 
 
 def _validate_provenance(value: object, errors: list[str]) -> None:
-    if not isinstance(value, Mapping):
+    if not _is_exact_mapping(value):
         errors.append("content.source_provenance must be an object")
         return
     try:
@@ -984,7 +989,7 @@ def _validate_provenance(value: object, errors: list[str]) -> None:
 
 def _validate_environment(value: object, errors: list[str]) -> None:
     location = "operational_diagnostics.environment"
-    if not isinstance(value, Mapping):
+    if not _is_exact_mapping(value):
         errors.append(f"{location} must be an object")
         return
     if set(value) != {
@@ -1003,7 +1008,7 @@ def _validate_environment(value: object, errors: list[str]) -> None:
     for field_name, expected_keys in expected_string_mappings.items():
         field = value.get(field_name)
         if (
-            not isinstance(field, Mapping)
+            not _is_exact_mapping(field)
             or set(field) != expected_keys
             or any(
                 not isinstance(field.get(key), str) or not field.get(key) for key in expected_keys
@@ -1014,12 +1019,12 @@ def _validate_environment(value: object, errors: list[str]) -> None:
     if not isinstance(backend, str) or not backend:
         errors.append(f"{location}.jax_default_backend is invalid")
     devices = value.get("jax_devices")
-    if not isinstance(devices, list) or not devices:
+    if type(devices) is not list or not devices:
         errors.append(f"{location}.jax_devices must be a non-empty array")
         return
     for index, device in enumerate(devices):
         if (
-            not isinstance(device, Mapping)
+            not _is_exact_mapping(device)
             or set(device) != {"platform", "device_kind"}
             or not isinstance(device.get("platform"), str)
             or not device.get("platform")
@@ -1036,7 +1041,7 @@ def _validate_operational(
     expected_acceptance: bool,
     errors: list[str],
 ) -> None:
-    if not isinstance(value, Mapping):
+    if not _is_exact_mapping(value):
         errors.append("operational_diagnostics must be an object")
         return
     if set(value) != {
@@ -1052,12 +1057,12 @@ def _validate_operational(
         errors.append("operational_diagnostics digest exclusion reason is invalid")
     _validate_environment(value.get("environment"), errors)
     timings = value.get("condition_timings")
-    if not isinstance(timings, list):
+    if type(timings) is not list:
         errors.append("operational_diagnostics.condition_timings must be an array")
     else:
         observed_pairs: list[tuple[int, str]] = []
         for index, timing in enumerate(timings):
-            if not isinstance(timing, Mapping):
+            if not _is_exact_mapping(timing):
                 errors.append(f"condition_timings[{index}] must be an object")
                 continue
             if set(timing) != {
@@ -1117,10 +1122,10 @@ def _validate_ia_evidence_artifact(
     content = artifact.get("content")
     digest = artifact.get("content_digest")
     operational = artifact.get("operational_diagnostics")
-    if not isinstance(content, Mapping):
+    if not _is_exact_mapping(content):
         errors.append("content must be an object")
         content = None
-    if not isinstance(digest, Mapping):
+    if not _is_exact_mapping(digest):
         errors.append("content_digest must be an object")
         digest = None
 

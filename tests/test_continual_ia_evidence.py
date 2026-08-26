@@ -824,3 +824,21 @@ def test_run_rejects_noncanonical_seed_container_before_iteration() -> None:
 
     with pytest.raises(ValueError, match="actual tuple or list"):
         run_continual_ia_benchmark(seeds=HostileTuple((0,)))
+
+
+def test_parse_budget_rejects_mapping_subclass_without_iter_hooks() -> None:
+    from alberta_framework.evaluation import continual_ia_artifact as artifact
+
+    class HostileDict(dict):
+        calls = 0
+
+        def __iter__(self):  # type: ignore[override]
+            type(self).calls += 1
+            raise AssertionError("HostileDict.__iter__ must not run")
+
+    HostileDict.calls = 0
+    errors: list[str] = []
+    result = artifact._parse_budget(HostileDict({"a": 1}), location="budget", errors=errors)
+    assert result is None
+    assert errors == ["budget must be an object"]
+    assert HostileDict.calls == 0
