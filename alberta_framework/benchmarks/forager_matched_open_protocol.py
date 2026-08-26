@@ -1368,7 +1368,7 @@ def build_forager_matched_open_protocol(
     iteration order is ignored; protocol order comes only from frozen constants.
     """
     _validate_runtime(runtime)
-    if not isinstance(candidate_qualifications, Mapping):
+    if type(candidate_qualifications) is not dict:
         raise ForagerMatchedOpenProtocolBuildError(
             "candidate_qualifications must be a mapping"
         )

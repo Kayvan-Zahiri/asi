@@ -171,3 +171,26 @@ def test_candidate_spec_rejects_cross_field_and_provenance_drift(
 ) -> None:
     with pytest.raises(ForagerMatchedOpenProtocolBuildError):
         replace(_legal_spec(), **updates)
+
+def test_build_rejects_mapping_subclass_candidate_qualifications() -> None:
+    from alberta_framework.benchmarks import forager_matched_open_protocol as mod
+
+    class HostileDict(dict):
+        calls = 0
+
+        def __iter__(self):  # type: ignore[override]
+            type(self).calls += 1
+            raise AssertionError("HostileDict.__iter__ must not run")
+
+    HostileDict.calls = 0
+    # Runtime object is validated only after the mapping gate; pass a dummy object.
+    with pytest.raises(
+        (mod.ForagerMatchedOpenProtocolBuildError, TypeError, ValueError),
+        match="must be a mapping|runtime",
+    ):
+        mod.build_forager_matched_open_protocol(
+            runtime=object(),  # type: ignore[arg-type]
+            candidate_qualifications=HostileDict({"x": object()}),
+        )
+    assert HostileDict.calls == 0
+
