@@ -538,8 +538,9 @@ def _oak_outer_state_validity(
             config.observation_dim,
         )
     )
-    values_finite = jnp.all(jnp.isfinite(state.cumulative_pseudo_rewards)) & jnp.all(
-        jnp.isfinite(state.utility_ema)
+    values_finite = jnp.all(jnp.isfinite(state.cumulative_pseudo_rewards)) & (
+        jnp.all(jnp.isfinite(state.utility_ema))
+        | (config.utility_ema_decay == 0.0)
     )
     counter_ceiling = jnp.where(
         state.step_count < jnp.int32(2_147_483_647),
@@ -1112,6 +1113,11 @@ def _keyboard_state_operand(
     return trusted
 
 
+def _skip_zero_scale(scale: Array, value: Array) -> Array:
+    """Skip ``0 * inf`` so a disabled decay does not poison the next EMA."""
+    return jnp.where(scale == 0.0, jnp.zeros_like(value), scale * value)
+
+
 def init_keyboard_chord_learner(
     config: KeyboardChordLearnerConfig,
 ) -> KeyboardChordLearnerState:
@@ -1531,7 +1537,8 @@ class OaKAgent:
         decay = jnp.asarray(cfg.utility_ema_decay, dtype=jnp.float32)
         new_utility_ema = jnp.where(
             prior_option_mask & prior_active,
-            decay * source_state.utility_ema + (1.0 - decay) * stomp_result.pseudo_reward,
+            _skip_zero_scale(decay, source_state.utility_ema)
+            + (1.0 - decay) * stomp_result.pseudo_reward,
             source_state.utility_ema,
         )
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import chex
 import jax.numpy as jnp
 import jax.random as jr
 import numpy as np
@@ -176,4 +177,42 @@ def test_terminal_pseudo_reward_credits_prior_option_and_counts_restart(
     np.testing.assert_array_equal(
         np.asarray(after.execution_counts),
         expected_counts,
+    )
+
+
+def test_zero_utility_ema_decay_replaces_infinite_prior_without_nan() -> None:
+    """utility_ema_decay=0 must skip 0*inf on a poisoned utility EMA."""
+    config = OaKConfig(
+        utility_ema_decay=0.0,
+        stomp=STOMPConfig(
+            subtask_specs=(
+                SubtaskSpec(
+                    feature_index=0,
+                    threshold=1.0e6,
+                    pseudo_reward_scale=PSEUDO_REWARD,
+                    max_option_steps=1,
+                ),
+            ),
+            observation_dim=2,
+            n_primitive_actions=N_PRIMITIVE,
+            base_step_size=0.05,
+            epsilon_base=0.0,
+            epsilon_option=0.0,
+        ),
+    )
+    agent = OaKAgent(config)
+    state = agent.start(agent.init(jr.key(0)), OBS)
+    state = state.replace(utility_ema=jnp.array([jnp.inf], dtype=jnp.float32))
+    stomp_state = state.stomp_state.replace(
+        executing_option=jnp.array(0, dtype=jnp.int32),
+        option_steps=jnp.array(0, dtype=jnp.int32),
+    )
+    state = state.replace(stomp_state=stomp_state)
+
+    after = agent.update(state, jnp.array(0.0, dtype=jnp.float32), OBS)
+
+    chex.assert_tree_all_finite(after.utility_ema)
+    chex.assert_trees_all_close(
+        after.utility_ema,
+        jnp.array([PSEUDO_REWARD], dtype=jnp.float32),
     )
