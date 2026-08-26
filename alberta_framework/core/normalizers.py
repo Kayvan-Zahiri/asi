@@ -23,8 +23,8 @@ import dataclasses
 import math
 import operator
 from abc import ABC, abstractmethod
-from collections.abc import Mapping
 from numbers import Real
+from types import MappingProxyType
 from typing import Any, SupportsIndex, cast
 
 import chex
@@ -986,14 +986,16 @@ def measure_normalizer_state_nbytes(state: AnyNormalizerState) -> int:
 def _legacy_state_mapping(legacy_state: Any) -> dict[str, Any]:
     """Return a shallow field mapping for one host-side legacy dataclass."""
 
-    if isinstance(legacy_state, Mapping):
+    if type(legacy_state) is dict:
+        return dict(legacy_state)
+    if type(legacy_state) is MappingProxyType:
         return dict(legacy_state)
     if dataclasses.is_dataclass(legacy_state) and not isinstance(legacy_state, type):
         return {
             field.name: getattr(legacy_state, field.name)
             for field in dataclasses.fields(legacy_state)
         }
-    raise TypeError("legacy normalizer state must be a mapping or dataclass instance")
+    raise TypeError("legacy normalizer state must be an exact dict or dataclass instance")
 
 
 def migrate_legacy_normalizer_state(
