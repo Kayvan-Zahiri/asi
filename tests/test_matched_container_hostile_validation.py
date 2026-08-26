@@ -75,3 +75,24 @@ def test_valid_json_passes() -> None:
     raw = b'{"a": 1, "b": 2}'
     data = _strict_json(raw)
     assert data == {"a": 1, "b": 2}
+
+def test_strict_json_rejects_dict_subclass_after_load(monkeypatch: pytest.MonkeyPatch) -> None:
+    from alberta_framework.benchmarks import _forager_matched_container as mod
+
+    class HostileDict(dict):
+        calls = 0
+
+        def keys(self):  # type: ignore[override]
+            type(self).calls += 1
+            raise AssertionError("HostileDict.keys must not run")
+
+    HostileDict.calls = 0
+
+    def fake_loads(*_args: object, **_kwargs: object) -> dict[str, object]:
+        return HostileDict({"schema": "x"})
+
+    monkeypatch.setattr(mod.json, "loads", fake_loads)
+    with pytest.raises(mod.ContainerError, match="must be a JSON object"):
+        mod._strict_json(b"{}")
+    assert HostileDict.calls == 0
+
