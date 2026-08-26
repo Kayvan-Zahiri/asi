@@ -905,6 +905,11 @@ def recommendation_protocol_state_is_valid(
     )
 
 
+def _skip_zero_scale(scale: Array, value: Array) -> Array:
+    """Skip ``0 * inf`` so a disabled decay does not poison the next EMA."""
+    return jnp.where(scale == 0.0, jnp.zeros_like(value), scale * value)
+
+
 def init_recommendation_protocol_state() -> RecommendationProtocolState:
     """Initialize recommendation feedback counters."""
     return RecommendationProtocolState(
@@ -977,12 +982,22 @@ def update_recommendation_protocol(
             raise TypeError("accept_recommendation must be a scalar boolean")
     accepted_f = accepted.astype(jnp.float32)
     decay = jnp.asarray(config.acceptance_ema_decay, dtype=jnp.float32)
-    source_state_valid = recommendation_protocol_state_is_valid(state)
     source_total_words, source_sum_available = _words_sum(
         state.accepted_words,
         state.rejected_words,
     )
     exact_partition_valid = source_sum_available & jnp.all(source_total_words == state.step_words)
+    counters_valid = (
+        _lifetime_counter_valid(state.accepted_words, state.accepted_count)
+        & _lifetime_counter_valid(state.rejected_words, state.rejected_count)
+        & _lifetime_counter_valid(state.step_words, state.step_count)
+    )
+    ema_valid = (
+        jnp.isfinite(state.acceptance_ema)
+        & (state.acceptance_ema >= 0.0)
+        & (state.acceptance_ema <= 1.0)
+    )
+    source_state_valid = counters_valid & exact_partition_valid & (ema_valid | (decay == 0.0))
     next_step_words, lifetime_capacity_available = _checked_lifetime_words_increment(
         state.step_words
     )
@@ -1008,7 +1023,8 @@ def update_recommendation_protocol(
             state.rejected_count,
             _saturating_int32_counter_increment(state.rejected_count),
         ),
-        acceptance_ema=decay * state.acceptance_ema + (1.0 - decay) * accepted_f,
+        acceptance_ema=_skip_zero_scale(decay, state.acceptance_ema)
+        + (1.0 - decay) * accepted_f,
         step_count=_saturating_int32_counter_increment(state.step_count),
         accepted_words=jnp.where(
             accepted,

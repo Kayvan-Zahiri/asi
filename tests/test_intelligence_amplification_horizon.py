@@ -356,6 +356,26 @@ def test_all_ones_cerebellum_ia_and_protocol_are_terminal() -> None:
     chex.assert_trees_all_equal(protocol_result.state, protocol_terminal)
 
 
+def test_zero_acceptance_ema_decay_replaces_infinite_prior_without_nan() -> None:
+    """acceptance_ema_decay=0 times an infinite acceptance EMA is 0*inf = NaN."""
+    config = RecommendationProtocolConfig(acceptance_ema_decay=0.0)
+    state = init_recommendation_protocol_state().replace(
+        acceptance_ema=jnp.array(jnp.inf, dtype=jnp.float32)
+    )
+    result = update_recommendation_protocol(
+        config,
+        state,
+        jnp.asarray(0, dtype=jnp.int32),
+        jnp.asarray(0, dtype=jnp.int32),
+        accept_recommendation=jnp.array(True),
+    )
+    chex.assert_tree_all_finite(result.state.acceptance_ema)
+    chex.assert_trees_all_close(
+        result.state.acceptance_ema,
+        jnp.array(1.0, dtype=jnp.float32),
+    )
+
+
 def test_protocol_exact_partition_crosses_int32_and_low_word_boundaries() -> None:
     config = RecommendationProtocolConfig(acceptance_ema_decay=0.5)
     saturated = _protocol_state(
