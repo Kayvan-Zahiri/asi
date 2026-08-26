@@ -825,15 +825,21 @@ class ETDLinearLearner:
         # 2016, eq. 20): the follow-on trace advances on the PRIOR call's
         # ratio (state.previous_rho), not rho_s -- only e_t below uses rho_s.
         follow_on = (
-            _skip_zero_scale(gamma_s, state.previous_rho * state.follow_on_trace) + interest_s
+            _skip_zero_scale(
+                gamma_s,
+                _skip_zero_scale(state.previous_rho, state.follow_on_trace),
+            )
+            + interest_s
         )
         emphasis = _skip_zero_scale(lam, interest_s) + _skip_zero_scale(1.0 - lam, follow_on)
 
         trace_decay = gamma_s * lam
-        new_e = rho_s * (
+        eligibility_core = (
             _skip_zero_scale(trace_decay, state.eligibility_traces) + emphasis * observation
         )
-        new_e_b = rho_s * (_skip_zero_scale(trace_decay, state.bias_eligibility_trace) + emphasis)
+        bias_core = _skip_zero_scale(trace_decay, state.bias_eligibility_trace) + emphasis
+        new_e = _skip_zero_scale(rho_s, eligibility_core)
+        new_e_b = _skip_zero_scale(rho_s, bias_core)
 
         proposed_state = ETDState(  # type: ignore[call-arg]
             weights=state.weights + alpha * td_error * new_e,
@@ -857,10 +863,22 @@ class ETDLinearLearner:
             & jnp.isfinite(interest_s)
         )
         previous_checked = state.replace(  # type: ignore[attr-defined]
-            eligibility_traces=_zero_if_unused(trace_decay, state.eligibility_traces),
-            bias_eligibility_trace=_zero_if_unused(trace_decay, state.bias_eligibility_trace),
-            follow_on_trace=_zero_if_unused(gamma_s, state.follow_on_trace),
-            previous_rho=_zero_if_unused(gamma_s, state.previous_rho),
+            eligibility_traces=_zero_if_unused(
+                jnp.where((trace_decay == 0.0) | (rho_s == 0.0), 0.0, 1.0),
+                state.eligibility_traces,
+            ),
+            bias_eligibility_trace=_zero_if_unused(
+                jnp.where((trace_decay == 0.0) | (rho_s == 0.0), 0.0, 1.0),
+                state.bias_eligibility_trace,
+            ),
+            follow_on_trace=_zero_if_unused(
+                jnp.where((gamma_s == 0.0) | (state.previous_rho == 0.0), 0.0, 1.0),
+                state.follow_on_trace,
+            ),
+            previous_rho=_zero_if_unused(
+                jnp.where((gamma_s == 0.0) | (state.previous_rho == 0.0), 0.0, 1.0),
+                state.previous_rho,
+            ),
         )
         squared_td = td_error**2
         mean_e = jnp.mean(jnp.abs(proposed_state.eligibility_traces))
@@ -1055,7 +1073,10 @@ class GradientTDLinearLearner:
         next_prediction = jnp.dot(state.weights, next_phi)
         td_error = reward_s + _skip_zero_scale(gamma_s, next_prediction) - prediction
 
-        traces = rho_clipped * (phi + _skip_zero_scale(gamma_s * lam, state.eligibility_traces))
+        traces = _skip_zero_scale(
+            rho_clipped,
+            phi + _skip_zero_scale(gamma_s * lam, state.eligibility_traces),
+        )
         secondary_dot_trace = jnp.dot(state.secondary_weights, traces)
         secondary_dot_phi = jnp.dot(state.secondary_weights, phi)
 
