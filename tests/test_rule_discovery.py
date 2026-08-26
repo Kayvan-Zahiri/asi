@@ -68,6 +68,55 @@ def _tiny_setup(seed: int = 0) -> tuple[dict[str, jnp.ndarray], RuleState]:
     return params, init_rule_state(params)
 
 
+def test_full_rls_precision_reset_does_not_multiply_inf_precision() -> None:
+    """reset_p=1 times a poisoned RLS precision is 0*inf = NaN without a skip."""
+    config = dict(decode_genome(champion_form_genome()))
+    config["rls_head"] = 1.0
+    config["rls_reset_p"] = 1.0
+    genome = jnp.asarray(genome_from_config(config))
+    params, state = _tiny_setup(1)
+    # Force a shift on every feature and poison the precision matrix.
+    state = dataclasses.replace(
+        state,
+        norm_mean=jnp.zeros_like(state.norm_mean),
+        norm_var=jnp.ones_like(state.norm_var) * 1e-6,
+        fast_mean=jnp.full_like(state.fast_mean, 10.0),
+        norm_count=jnp.full_like(state.norm_count, 100.0),
+        rls_p=jnp.full_like(state.rls_p, jnp.inf),
+    )
+    raw_keep = jnp.asarray(0.0, dtype=jnp.float32) * jnp.asarray(jnp.inf, dtype=jnp.float32)
+    assert not bool(jnp.isfinite(raw_keep))
+    x = jnp.zeros(_TINY.input_dim, dtype=jnp.float32)
+    y = jnp.asarray(0, dtype=jnp.int32)
+    _, new_state, _, _ = rule_step(genome, params, state, x, y)
+    assert bool(jnp.all(jnp.isfinite(new_state.rls_p)))
+
+
+def test_zero_utility_decay_does_not_multiply_inf_utility(monkeypatch: pytest.MonkeyPatch) -> None:
+    """utility_decay=0 times poisoned utility EMA is 0*inf = NaN without a skip."""
+    original = rule_discovery._param_values
+
+    def _force_zero_utility_decay(raw: jnp.ndarray) -> jnp.ndarray:
+        values = original(raw)
+        return values.at[5].set(0.0)
+
+    monkeypatch.setattr(rule_discovery, "_param_values", _force_zero_utility_decay)
+    genome = jnp.asarray(champion_form_genome())
+    params, state = _tiny_setup(2)
+    state = dataclasses.replace(
+        state,
+        utility={name: jnp.full_like(value, jnp.inf) for name, value in params.items()},
+    )
+    raw = jnp.asarray(0.0, dtype=jnp.float32) * jnp.asarray(jnp.inf, dtype=jnp.float32)
+    assert not bool(jnp.isfinite(raw))
+    x = jr.normal(jr.key(3), (_TINY.input_dim,))
+    y = jnp.asarray(1, dtype=jnp.int32)
+    new_params, new_state, _, _ = rule_step(genome, params, state, x, y)
+    for name in params:
+        assert bool(jnp.all(jnp.isfinite(new_state.utility[name])))
+        assert bool(jnp.all(jnp.isfinite(new_params[name])))
+
+
 def test_genome_layout() -> None:
     assert GENOME_SIZE == len(FLAG_NAMES) + len(PARAM_NAMES)
     assert len(set(FLAG_NAMES) & set(PARAM_NAMES)) == 0

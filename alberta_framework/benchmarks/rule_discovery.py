@@ -218,6 +218,11 @@ def _param_values(raw: Array) -> Array:
     ).astype(jnp.float32)
 
 
+def _skip_zero_scale(scale: Array | float, value: Array) -> Array:
+    """Skip ``0 * inf`` so a closed decay/reset scale does not poison state."""
+    return jnp.where(scale == 0.0, jnp.zeros_like(value), scale * value)
+
+
 def decode_genome(genome: np.ndarray | Array) -> dict[str, float]:
     """Decode a raw genome into named flags (0/1) and continuous constants."""
     raw = np.asarray(genome, dtype=np.float64)
@@ -453,7 +458,7 @@ def init_rule_state(params: dict[str, Array]) -> RuleState:
 
 def _rms_mix(hidden: Array, f_rms: Array) -> Array:
     rms = jnp.sqrt(jnp.mean(hidden * hidden) + _EPS)
-    return f_rms * (hidden / rms) + (1.0 - f_rms) * hidden
+    return _skip_zero_scale(f_rms, hidden / rms) + _skip_zero_scale(1.0 - f_rms, hidden)
 
 
 def _loss_logits(
@@ -501,7 +506,9 @@ def rule_step(
 
     # --- shift-adaptive per-feature statistics (champion normalizer parity).
     effective_fast = jnp.minimum(p_fast, 1.0 - 1.0 / (state.norm_count + 2.0))
-    new_fast = effective_fast * state.fast_mean + (1.0 - effective_fast) * x
+    new_fast = _skip_zero_scale(effective_fast, state.fast_mean) + (
+        1.0 - effective_fast
+    ) * x
     threshold = p_shift_k * jnp.sqrt(state.norm_var) + SHIFT_DELTA
     shifted = jnp.abs(new_fast - state.norm_mean) > threshold
     shifted_f = shifted.astype(jnp.float32)
@@ -530,14 +537,17 @@ def rule_step(
     kalman_gain = p_pred / (p_pred + r_obs)
     kalman_mean = state.norm_mean + kalman_gain * delta
     new_kalman_p = (1.0 - kalman_gain) * p_pred
-    new_mean = f_kalman * kalman_mean + (1.0 - f_kalman) * ema_mean
+    new_mean = _skip_zero_scale(f_kalman, kalman_mean) + _skip_zero_scale(
+        1.0 - f_kalman, ema_mean
+    )
     delta2 = x - new_mean
     new_var = jnp.maximum(
-        effective_decay * state.norm_var + (1.0 - effective_decay) * delta * delta2,
+        _skip_zero_scale(effective_decay, state.norm_var)
+        + (1.0 - effective_decay) * delta * delta2,
         _EPS,
     )
     x_norm = (x - new_mean) / (jnp.sqrt(new_var) + _EPS)
-    x_used = f_norm * x_norm + (1.0 - f_norm) * x
+    x_used = _skip_zero_scale(f_norm, x_norm) + _skip_zero_scale(1.0 - f_norm, x)
 
     # --- forward + gradients (pre-update prediction = online accuracy).
     (loss, (logits, hidden2)), grads = jax.value_and_grad(_loss_logits, has_aux=True)(
@@ -562,8 +572,8 @@ def rule_step(
     s_rls = jax.nn.log_softmax(_RLS_VOTE_TEMP * rls_scores)
     s_nb = jax.nn.log_softmax(nb_ll / float(input_dim))
     w_net = state.member_acc[0]
-    w_rls = f_rls * state.member_acc[1]
-    w_nb = f_nb * state.member_acc[2]
+    w_rls = _skip_zero_scale(f_rls, state.member_acc[1])
+    w_nb = _skip_zero_scale(f_nb, state.member_acc[2])
     w_sum = w_net + w_rls + w_nb + _EPS
     combined = (w_net * s_net + w_rls * s_rls + w_nb * s_nb) / w_sum
     correct = (jnp.argmax(combined) == y).astype(jnp.float32)
@@ -574,14 +584,17 @@ def rule_step(
             (jnp.argmax(s_nb) == y).astype(jnp.float32),
         ]
     )
-    new_member_acc = p_vote * state.member_acc + (1.0 - p_vote) * member_hits
+    new_member_acc = _skip_zero_scale(p_vote, state.member_acc) + (
+        1.0 - p_vote
+    ) * member_hits
 
     # --- utility gate (champion equations; optional stale-utility cleanup).
     clock = state.step + jnp.array(1, dtype=jnp.int32)
     utility_prev = dict(state.utility)
     utility_prev["w1"] = utility_prev["w1"] * (1.0 - f_ureset * shifted[:, None])
     utility = {
-        name: p_udecay * utility_prev[name] + (1.0 - p_udecay) * (-grads[name] * params[name])
+        name: _skip_zero_scale(p_udecay, utility_prev[name])
+        + (1.0 - p_udecay) * (-grads[name] * params[name])
         for name in params
     }
     bias_correction = 1.0 - jnp.power(p_udecay, clock.astype(jnp.float32))
@@ -634,7 +647,8 @@ def rule_step(
     p_upd = (1.0 - leak) * p_upd + leak * rls_eye
     p_upd = 0.5 * (p_upd + p_upd.T)
     reset_p = f_rls_reset * jnp.max(shifted_f)
-    new_rls_p = (1.0 - reset_p) * p_upd + reset_p * rls_eye
+    keep_p = 1.0 - reset_p
+    new_rls_p = _skip_zero_scale(keep_p, p_upd) + reset_p * rls_eye
 
     # --- streaming naive-Bayes member update (wave-2): count-annealed EMA
     # class-conditional diagonal Gaussians over the conditioned input.
@@ -645,7 +659,7 @@ def rule_step(
     new_nb_mean = state.nb_mean + sel[:, None] * (mean_cand - state.nb_mean)
     delta2_nb = x_used[None, :] - new_nb_mean
     var_cand = jnp.maximum(
-        eff_nb * state.nb_var + (1.0 - eff_nb) * delta_nb * delta2_nb,
+        _skip_zero_scale(eff_nb, state.nb_var) + (1.0 - eff_nb) * delta_nb * delta2_nb,
         _NB_VAR_FLOOR,
     )
     new_nb_var = state.nb_var + sel[:, None] * (var_cand - state.nb_var)
@@ -661,8 +675,8 @@ def rule_step(
         norm_var=new_var,
         norm_count=new_count,
         fast_mean=new_fast,
-        err_fast=p_sfast * state.err_fast + (1.0 - p_sfast) * loss,
-        err_slow=p_sslow * state.err_slow + (1.0 - p_sslow) * loss,
+        err_fast=_skip_zero_scale(p_sfast, state.err_fast) + (1.0 - p_sfast) * loss,
+        err_slow=_skip_zero_scale(p_sslow, state.err_slow) + (1.0 - p_sslow) * loss,
         err_autocorr=_AUTOCORR_DECAY * state.err_autocorr
         + (1.0 - _AUTOCORR_DECAY) * (delta_e * state.err_prev_delta),
         err_var=_AUTOCORR_DECAY * state.err_var
