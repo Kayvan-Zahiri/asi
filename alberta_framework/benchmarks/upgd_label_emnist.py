@@ -1088,7 +1088,7 @@ def _strict_json_object(path: Path) -> dict[str, Any]:
         parse_constant=reject_constant,
         parse_float=parse_float,
     )
-    if not isinstance(payload, dict):
+    if type(payload) is not dict:
         raise ValueError(f"{path}: payload must be one JSON object")
     return payload
 
@@ -1105,7 +1105,7 @@ def _validated_float_hyperparameters(
     ``type(...) is float`` (rejecting bool, the int subclass, and every other
     alias) plus finiteness, before any comparison.
     """
-    if not isinstance(value, dict):
+    if type(value) is not dict:
         raise ValueError(f"{context}: {learner} hyperparameters must be an object")
     invalid = sorted(
         str(name)
@@ -1128,14 +1128,14 @@ def load_plan(path: Path) -> dict[str, Any]:
     if payload.get("evidence_policy") != NONPROMOTING_POLICY:
         raise ValueError(f"{path}: evidence policy must remain permanently nonpromoting")
     body = payload.get("plan")
-    if not isinstance(body, dict):
+    if type(body) is not dict:
         raise ValueError(f"{path}: plan body must be an object")
     if payload.get("plan_sha256") != canonical_json_sha256(body):
         raise ValueError(f"{path}: plan_sha256 does not match the plan body")
     if body.get("benchmark") != BENCHMARK:
         raise ValueError(f"{path}: plan benchmark is not {BENCHMARK}")
     raw_config = body.get("config")
-    if not isinstance(raw_config, Mapping):
+    if type(raw_config) is not dict:
         raise ValueError(f"{path}: plan config must be an object")
     config_payload = dict(raw_config)
     n_steps = config_payload.pop("n_steps", None)
@@ -1158,7 +1158,7 @@ def load_plan(path: Path) -> dict[str, Any]:
                 f"{path}: {learner} hyperparameters must list the complete arm"
             )
     raw_seeds = body.get("seed_ids")
-    if not isinstance(raw_seeds, list):
+    if type(raw_seeds) is not list:
         raise ValueError(f"{path}: plan seed_ids must be a list")
     seeds = require_unique_jax_seeds(raw_seeds, name=f"{path}: plan seed_ids")
     if seeds != tuple(sorted(seeds)):
@@ -1233,7 +1233,7 @@ def _validated_partial(path: Path, plan: dict[str, Any]) -> dict[str, Any]:
         "per_task_plasticity": (0.0, 1.0),
     }.items():
         values = payload.get(field)
-        if not isinstance(values, list) or len(values) != n_tasks:
+        if type(values) is not list or len(values) != n_tasks:
             raise ValueError(f"{path}: {field} must be a list of {n_tasks} numbers")
         array = np.asarray(values, dtype=np.float64)
         if not np.all(np.isfinite(array)) or not np.all(array >= lower):

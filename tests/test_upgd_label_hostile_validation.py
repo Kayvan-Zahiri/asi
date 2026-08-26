@@ -132,3 +132,20 @@ def test_duplicate_key_sanitized() -> None:
 def test_source_has_no_repr_leak() -> None:
     text = pathlib.Path("alberta_framework/benchmarks/upgd_label_emnist.py").read_text()
     assert "!r" not in text
+
+
+def test_hyperparameters_object_rejects_dict_subclass_without_hooks() -> None:
+    """Hyperparameter objects must be exact dicts, not mapping subclasses."""
+    from alberta_framework.benchmarks.upgd_label_emnist import _validated_float_hyperparameters
+
+    class HostileDict(dict):
+        calls = 0
+
+        def items(self):  # type: ignore[override]
+            type(self).calls += 1
+            raise AssertionError("HostileDict.items must not run")
+
+    HostileDict.calls = 0
+    with pytest.raises(ValueError, match="hyperparameters must be an object"):
+        _validated_float_hyperparameters(HostileDict({"step_size": 0.1}), "upgd_w", context="t")
+    assert HostileDict.calls == 0
