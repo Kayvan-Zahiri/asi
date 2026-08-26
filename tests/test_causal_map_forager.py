@@ -237,9 +237,7 @@ def test_config_rejects_finite_terms_whose_combined_scores_can_overflow(
 
 
 def test_config_rejects_respawn_factor_below_float32_one() -> None:
-    below_one = float(
-        np.nextafter(np.float32(1.0), np.float32(0.0), dtype=np.float32)
-    )
+    below_one = float(np.nextafter(np.float32(1.0), np.float32(0.0), dtype=np.float32))
     with pytest.raises(ValueError, match="at least 1.0 after float32 conversion"):
         CausalMapForagerConfig(respawn_safety_factor=below_one)
 
@@ -278,28 +276,21 @@ def test_config_round_trip_fingerprint_and_variant_spec() -> None:
     assert spec["kind"] == CAUSAL_MAP_VARIANT_KIND
     assert spec["privileged"] is False
     assert spec["prng_impl"] == "threefry2x32"
-    assert spec["jax_threefry_partitionable"] is bool(
-        jax.config.jax_threefry_partitionable
-    )
+    assert spec["jax_threefry_partitionable"] is bool(jax.config.jax_threefry_partitionable)
     rng_contract = causal_map_rng_contract()
     assert rng_contract["prng_impl"] == "threefry2x32"
-    assert rng_contract["jax_threefry_partitionable"] is bool(
-        jax.config.jax_threefry_partitionable
-    )
+    assert rng_contract["jax_threefry_partitionable"] is bool(jax.config.jax_threefry_partitionable)
     assert "impl=prng_impl" in rng_contract["root"]
     assert spec["config_sha256"] == config.fingerprint()
     assert config.to_dict()["arrival_aware_readiness"] is True
     assert spec["config"]["arrival_aware_readiness"] is True
     assert (
-        CausalMapForagerConfig(arrival_aware_readiness=False).fingerprint()
-        != config.fingerprint()
+        CausalMapForagerConfig(arrival_aware_readiness=False).fingerprint() != config.fingerprint()
     )
     with pytest.raises(ValueError, match="unknown"):
         CausalMapForagerConfig.from_dict({**config.to_dict(), "object_delay": 300})
     with pytest.raises(ValueError, match="respawn_quantile_z"):
-        CausalMapForagerConfig.from_dict(
-            {**config.to_dict(), "respawn_quantile_z": 999.0}
-        )
+        CausalMapForagerConfig.from_dict({**config.to_dict(), "respawn_quantile_z": 999.0})
     with pytest.raises(ValueError, match="mapping"):
         CausalMapForagerConfig.from_dict([])  # type: ignore[arg-type]
     with pytest.raises(TypeError, match="CausalMapForagerConfig"):
@@ -328,9 +319,7 @@ def test_metadata_declares_arrival_and_exploration_scheduler_semantics() -> None
         dataclasses.replace(config, arrival_aware_readiness=False)
     ).metadata()["world_model"]
     assert decision_world_model["arrival_aware_readiness"] is False
-    assert decision_world_model["arrival_readiness_semantics"] == (
-        "ready_step <= step_count"
-    )
+    assert decision_world_model["arrival_readiness_semantics"] == ("ready_step <= step_count")
 
 
 def test_start_infers_aperture_channels_and_builds_relative_map() -> None:
@@ -378,9 +367,7 @@ def test_pure_start_and_step_reject_invalid_observation_values_eager_and_jit() -
         valid.at[0, 0, :].set(1.0),
     )
     compiled_start = jax.jit(lambda image: causal_map_start(image, config, 0))
-    compiled_step = jax.jit(
-        lambda current, image: causal_map_step(current, 0.0, image, config)
-    )
+    compiled_step = jax.jit(lambda current, image: causal_map_step(current, 0.0, image, config))
     for image in invalid:
         with pytest.raises(Exception, match="observation must be finite"):
             jax.block_until_ready(  # type: ignore[no-untyped-call]
@@ -405,26 +392,22 @@ def test_host_and_pure_paths_reject_complex_observations_before_cast(
     complex_value: complex,
 ) -> None:
     config = CausalMapForagerConfig()
-    complex_observation = jnp.zeros((3, 3, 2), dtype=jnp.complex64).at[0, 0, 0].set(
-        complex_value
-    )
+    complex_observation = jnp.zeros((3, 3, 2), dtype=jnp.complex64).at[0, 0, 0].set(complex_value)
     with pytest.raises(ValueError, match="real numeric dtype"):
         CausalMapForagerAgent(config).start(complex_observation)
     with pytest.raises(ValueError, match="real numeric dtype"):
         causal_map_start(complex_observation, config, 0)
     with pytest.raises(ValueError, match="real numeric dtype"):
-        jax.jit(lambda image: causal_map_start(image, config, 0))(
-            complex_observation
-        )
+        jax.jit(lambda image: causal_map_start(image, config, 0))(complex_observation)
 
     valid = _observation(aperture=3, channels=2)
     state, _ = causal_map_start(valid, config, 0)
     with pytest.raises(ValueError, match="real numeric dtype"):
         causal_map_step(state, 0.0, complex_observation, config)
     with pytest.raises(ValueError, match="real numeric dtype"):
-        jax.jit(
-            lambda current, image: causal_map_step(current, 0.0, image, config)
-        )(state, complex_observation)
+        jax.jit(lambda current, image: causal_map_step(current, 0.0, image, config))(
+            state, complex_observation
+        )
 
 
 @pytest.mark.parametrize(
@@ -443,9 +426,7 @@ def test_pure_start_rejects_invalid_seed_eager_and_jit(seed: Any) -> None:
         jax.block_until_ready(  # type: ignore[no-untyped-call]
             causal_map_start(observation, config, seed)
         )
-    compiled = jax.jit(
-        lambda value: causal_map_start(observation, config, value)
-    )
+    compiled = jax.jit(lambda value: causal_map_start(observation, config, value))
     with pytest.raises(Exception, match="seed must be (?:one non-bool )?uint32-compatible"):
         jax.block_until_ready(compiled(seed))  # type: ignore[no-untyped-call]
 
@@ -455,9 +436,7 @@ def test_pure_start_accepts_full_uint32_seed_range_eager_and_jit() -> None:
     observation = _observation(aperture=3, channels=2)
     seed = jnp.asarray(np.iinfo(np.uint32).max, dtype=jnp.uint32)
     eager_state, _ = causal_map_start(observation, config, seed)
-    compiled_state, _ = jax.jit(
-        lambda value: causal_map_start(observation, config, value)
-    )(seed)
+    compiled_state, _ = jax.jit(lambda value: causal_map_start(observation, config, value))(seed)
     assert int(eager_state.initial_seed) == np.iinfo(np.uint32).max
     chex.assert_trees_all_equal(eager_state, compiled_state)
 
@@ -476,9 +455,7 @@ def test_pure_step_rejects_channel_count_change_and_invalid_reward_eager_and_jit
     with pytest.raises(ValueError, match="channel count changed"):
         causal_map_step(state, 0.0, changed_channels, config)
     with pytest.raises(ValueError, match="channel count changed"):
-        jax.jit(lambda image: causal_map_step(state, 0.0, image, config))(
-            changed_channels
-        )
+        jax.jit(lambda image: causal_map_step(state, 0.0, image, config))(changed_channels)
 
     compiled = jax.jit(
         lambda current, reward: causal_map_step(
@@ -531,9 +508,7 @@ def test_reward_accumulation_overflow_is_rejected_eager_and_jit() -> None:
         jax.block_until_ready(  # type: ignore[no-untyped-call]
             causal_map_step(state, maximum, observation, config)
         )
-    compiled = jax.jit(
-        lambda current: causal_map_step(current, maximum, observation, config)
-    )
+    compiled = jax.jit(lambda current: causal_map_step(current, maximum, observation, config))
     with pytest.raises(Exception, match="reward accumulation must remain finite"):
         jax.block_until_ready(compiled(state))  # type: ignore[no-untyped-call]
 
@@ -590,9 +565,7 @@ def test_nonfinite_candidate_scores_fail_closed_to_finite_target(
         0,
     )
     state = state._replace(
-        reward_sum=(
-            state.reward_sum.at[1].set(corrupt_value).at[2].set(1.0)
-        ),
+        reward_sum=(state.reward_sum.at[1].set(corrupt_value).at[2].set(1.0)),
         reward_count=state.reward_count.at[1].set(1).at[2].set(1),
     )
     planned, action = _choose_action(state, config)
@@ -659,9 +632,7 @@ def _host_cost_aware_route_grid(
                 int(distances[neighbor_y, neighbor_x]),
             )
             if candidate < incumbent:
-                risks[neighbor_y, neighbor_x], distances[neighbor_y, neighbor_x] = (
-                    candidate
-                )
+                risks[neighbor_y, neighbor_x], distances[neighbor_y, neighbor_x] = candidate
                 heapq.heappush(
                     queue,
                     (candidate[0], candidate[1], neighbor_x, neighbor_y),
@@ -698,9 +669,7 @@ def test_cost_aware_route_grid_matches_lexicographic_dijkstra_under_jit_vmap(
                 expected_distances.append(expected_distance)
 
     actual_risks, actual_distances = jax.jit(
-        jax.vmap(
-            lambda source, mask: _cost_aware_route_grid(source, mask, config)
-        )
+        jax.vmap(lambda source, mask: _cost_aware_route_grid(source, mask, config))
     )(
         jnp.asarray(sources, dtype=jnp.int32),
         jnp.asarray(np.stack(masks), dtype=jnp.bool_),
@@ -802,12 +771,7 @@ def _negative_crossing_state(
         cell_last_seen_step=jnp.zeros(config.world_shape, dtype=jnp.int32),
         cell_last_absent_step=last_absent,
         reward_sum=(
-            state.reward_sum.at[0]
-            .set(-1.0)
-            .at[1]
-            .set(remote_reward)
-            .at[2]
-            .set(local_reward)
+            state.reward_sum.at[0].set(-1.0).at[1].set(remote_reward).at[2].set(local_reward)
         ),
         reward_count=jnp.ones((3,), dtype=jnp.int32),
     )
@@ -888,14 +852,10 @@ def _readiness_routing_state(
     active_x = config.width - 1
     return state._replace(
         step_count=jnp.asarray(step_count, dtype=jnp.int32),
-        cell_channel=(
-            state.cell_channel.at[0, pending_x].set(1).at[0, active_x].set(2)
-        ),
+        cell_channel=(state.cell_channel.at[0, pending_x].set(1).at[0, active_x].set(2)),
         cell_active=state.cell_active.at[0, active_x].set(True),
         cell_collection_step=state.cell_collection_step.at[0, pending_x].set(1),
-        cell_ready_step=(
-            state.cell_ready_step.at[0, pending_x].set(pending_ready_step)
-        ),
+        cell_ready_step=(state.cell_ready_step.at[0, pending_x].set(pending_ready_step)),
         # Every cell has genuinely been observed, so exploration_probability
         # cannot mask which exploitation target passed the readiness gate.
         cell_last_seen_step=jnp.full(
@@ -1012,9 +972,7 @@ def test_exploration_probability_never_redirects_after_reachable_map_is_observed
         reward_count=state.reward_count.at[1].set(1),
     )
     eager_state, eager_action = _choose_action(state, config)
-    compiled_state, compiled_action = jax.jit(
-        lambda value: _choose_action(value, config)
-    )(state)
+    compiled_state, compiled_action = jax.jit(lambda value: _choose_action(value, config))(state)
     assert int(eager_action) == 1
     assert int(compiled_action) == 1
     chex.assert_trees_all_equal(eager_state, compiled_state)
@@ -1263,15 +1221,15 @@ def test_reappearance_interval_updates_channel_schedule_without_type_prior() -> 
 def test_censored_interval_estimator_preserves_online_identification_bounds() -> None:
     count, lower_floor, lower_remainder, upper_floor, upper_remainder = (
         _merge_channel_interval_bounds(
-        jnp.zeros((2,), dtype=jnp.int32),
-        jnp.zeros((2,), dtype=jnp.int32),
-        jnp.zeros((2,), dtype=jnp.int32),
-        jnp.zeros((2,), dtype=jnp.int32),
-        jnp.zeros((2,), dtype=jnp.int32),
-        jnp.asarray((1, 1), dtype=jnp.int32),
-        jnp.asarray((2, 101), dtype=jnp.int32),
-        jnp.asarray((300, 300), dtype=jnp.int32),
-        jnp.asarray((True, True)),
+            jnp.zeros((2,), dtype=jnp.int32),
+            jnp.zeros((2,), dtype=jnp.int32),
+            jnp.zeros((2,), dtype=jnp.int32),
+            jnp.zeros((2,), dtype=jnp.int32),
+            jnp.zeros((2,), dtype=jnp.int32),
+            jnp.asarray((1, 1), dtype=jnp.int32),
+            jnp.asarray((2, 101), dtype=jnp.int32),
+            jnp.asarray((300, 300), dtype=jnp.int32),
+            jnp.asarray((True, True)),
         )
     )
     assert int(count[1]) == 2
@@ -1337,9 +1295,9 @@ def test_exact_rational_interval_bound_is_outward_after_65_537_samples() -> None
         respawn_interval_upper_remainder=upper_remainder,
     )
     assert int(_estimated_respawn_delay(state, jnp.asarray(0), config)) == 301
-    compiled_delay = jax.jit(
-        lambda value: _estimated_respawn_delay(value, jnp.asarray(0), config)
-    )(state)
+    compiled_delay = jax.jit(lambda value: _estimated_respawn_delay(value, jnp.asarray(0), config))(
+        state
+    )
     assert int(compiled_delay) == 301
 
 
@@ -1381,12 +1339,8 @@ def test_immediate_recollection_captures_reappearance_before_pending_overwrite()
         cell_channel=state.cell_channel.at[1, 0].set(1),
         cell_collection_step=state.cell_collection_step.at[1, 0].set(1),
         cell_ready_step=state.cell_ready_step.at[1, 0].set(5),
-        cell_last_seen_step=(
-            state.cell_last_seen_step.at[0, 0].set(10).at[1, 0].set(10)
-        ),
-        cell_last_absent_step=(
-            state.cell_last_absent_step.at[0, 0].set(10).at[1, 0].set(10)
-        ),
+        cell_last_seen_step=(state.cell_last_seen_step.at[0, 0].set(10).at[1, 0].set(10)),
+        cell_last_absent_step=(state.cell_last_absent_step.at[0, 0].set(10).at[1, 0].set(10)),
         visit_count=state.visit_count.at[0, 0].set(11),
         reward_sum=state.reward_sum.at[1].set(1.0),
         reward_count=state.reward_count.at[1].set(1),
@@ -1446,9 +1400,7 @@ def test_respawn_delay_clips_before_unsafe_float32_to_int32_conversion() -> None
     state = state._replace(
         respawn_interval_count=state.respawn_interval_count.at[0].set(1),
         respawn_interval_lower_floor=state.respawn_interval_lower_floor.at[0].set(1),
-        respawn_interval_upper_floor=(
-            state.respawn_interval_upper_floor.at[0].set(1_500_000_000)
-        ),
+        respawn_interval_upper_floor=(state.respawn_interval_upper_floor.at[0].set(1_500_000_000)),
     )
     assert int(_estimated_respawn_delay(state, jnp.asarray(0), config)) == maximum
 
@@ -1467,7 +1419,7 @@ def test_exact_respawn_safety_statistics_can_only_raise_interval_schedule() -> N
     assert int(_estimated_respawn_delay(state, jnp.asarray(1), config)) == 20
     state = state._replace(
         respawn_exact_floor=state.respawn_exact_floor.at[1].set(30),
-        respawn_exact_mean=state.respawn_exact_mean.at[1].set(30.0)
+        respawn_exact_mean=state.respawn_exact_mean.at[1].set(30.0),
     )
     assert int(_estimated_respawn_delay(state, jnp.asarray(1), config)) == 30
 
@@ -1479,9 +1431,7 @@ def test_state_serialization_round_trip_and_validation() -> None:
     assert payload["schema"] == CAUSAL_MAP_STATE_SCHEMA
     assert payload["schema"].endswith(".v5")
     assert payload["prng_impl"] == "threefry2x32"
-    assert payload["jax_threefry_partitionable"] is bool(
-        jax.config.jax_threefry_partitionable
-    )
+    assert payload["jax_threefry_partitionable"] is bool(jax.config.jax_threefry_partitionable)
     assert payload["fields"]["initial_seed"] == 19
     restored = causal_map_state_from_dict(payload, config)
     chex.assert_trees_all_equal(state, restored)
@@ -1585,8 +1535,7 @@ def test_checkpoint_rejects_cross_mode_threefry_partitionable_restore() -> None:
             causal_map_state_from_dict(payload, config)
         assert causal_map_rng_contract()["jax_threefry_partitionable"] is not recorded
         assert (
-            CausalMapForagerAgent(config).metadata()["jax_threefry_partitionable"]
-            is not recorded
+            CausalMapForagerAgent(config).metadata()["jax_threefry_partitionable"] is not recorded
         )
 
 
@@ -1612,9 +1561,7 @@ def test_state_bound_threefry_mode_rejects_midrun_drift_eager_and_jit() -> None:
             jax.block_until_ready(  # type: ignore[no-untyped-call]
                 causal_map_step(state, 0.0, observation, config)
             )
-        compiled = jax.jit(
-            lambda current: causal_map_step(current, 0.0, observation, config)
-        )
+        compiled = jax.jit(lambda current: causal_map_step(current, 0.0, observation, config))
         with pytest.raises(Exception, match="mode does not match runtime"):
             jax.block_until_ready(compiled(state))  # type: ignore[no-untyped-call]
 
@@ -1623,9 +1570,7 @@ def test_checkpoint_cross_checks_state_bound_and_top_level_threefry_modes() -> N
     config = CausalMapForagerConfig()
     state, _ = causal_map_start(_observation(), config, 23)
     payload = causal_map_state_to_dict(state, config)
-    payload["fields"]["jax_threefry_partitionable"] = not payload[
-        "jax_threefry_partitionable"
-    ]
+    payload["fields"]["jax_threefry_partitionable"] = not payload["jax_threefry_partitionable"]
     with pytest.raises(ValueError, match="state-bound and top-level"):
         causal_map_state_from_dict(payload, config)
 
@@ -1754,13 +1699,9 @@ def test_state_validation_rejects_dtype_and_cross_field_corruption() -> None:
         reward_count=advanced.reward_count.at[0].set(2),
         respawn_interval_count=advanced.respawn_interval_count.at[0].set(2),
         respawn_interval_lower_floor=advanced.respawn_interval_lower_floor.at[0].set(1),
-        respawn_interval_lower_remainder=(
-            advanced.respawn_interval_lower_remainder.at[0].set(1)
-        ),
+        respawn_interval_lower_remainder=(advanced.respawn_interval_lower_remainder.at[0].set(1)),
         respawn_interval_upper_floor=advanced.respawn_interval_upper_floor.at[0].set(2),
-        respawn_interval_upper_remainder=(
-            advanced.respawn_interval_upper_remainder.at[0].set(0)
-        ),
+        respawn_interval_upper_remainder=(advanced.respawn_interval_upper_remainder.at[0].set(0)),
         respawn_exact_count=advanced.respawn_exact_count.at[0].set(2),
         respawn_exact_floor=advanced.respawn_exact_floor.at[0].set(1),
         respawn_exact_mean=advanced.respawn_exact_mean.at[0].set(1.0),
@@ -1773,13 +1714,9 @@ def test_state_validation_rejects_dtype_and_cross_field_corruption() -> None:
         reward_count=advanced.reward_count.at[0].set(2),
         respawn_interval_count=advanced.respawn_interval_count.at[0].set(2),
         respawn_interval_lower_floor=advanced.respawn_interval_lower_floor.at[0].set(1),
-        respawn_interval_lower_remainder=(
-            advanced.respawn_interval_lower_remainder.at[0].set(1)
-        ),
+        respawn_interval_lower_remainder=(advanced.respawn_interval_lower_remainder.at[0].set(1)),
         respawn_interval_upper_floor=advanced.respawn_interval_upper_floor.at[0].set(1),
-        respawn_interval_upper_remainder=(
-            advanced.respawn_interval_upper_remainder.at[0].set(1)
-        ),
+        respawn_interval_upper_remainder=(advanced.respawn_interval_upper_remainder.at[0].set(1)),
         respawn_exact_count=advanced.respawn_exact_count.at[0].set(2),
         respawn_exact_floor=advanced.respawn_exact_floor.at[0].set(1),
         respawn_exact_mean=advanced.respawn_exact_mean.at[0].set(1.0),
@@ -1792,20 +1729,14 @@ def test_state_validation_rejects_dtype_and_cross_field_corruption() -> None:
         reward_count=advanced.reward_count.at[0].set(2),
         respawn_interval_count=advanced.respawn_interval_count.at[0].set(2),
         respawn_interval_lower_floor=advanced.respawn_interval_lower_floor.at[0].set(1),
-        respawn_interval_lower_remainder=(
-            advanced.respawn_interval_lower_remainder.at[0].set(1)
-        ),
+        respawn_interval_lower_remainder=(advanced.respawn_interval_lower_remainder.at[0].set(1)),
         respawn_interval_upper_floor=advanced.respawn_interval_upper_floor.at[0].set(1),
-        respawn_interval_upper_remainder=(
-            advanced.respawn_interval_upper_remainder.at[0].set(1)
-        ),
+        respawn_interval_upper_remainder=(advanced.respawn_interval_upper_remainder.at[0].set(1)),
         respawn_exact_count=advanced.respawn_exact_count.at[0].set(2),
         respawn_exact_floor=advanced.respawn_exact_floor.at[0].set(1),
         respawn_exact_remainder=advanced.respawn_exact_remainder.at[0].set(1),
         respawn_exact_mean=advanced.respawn_exact_mean.at[0].set(1.5),
-        respawn_exact_m2=(
-            advanced.respawn_exact_m2.at[0].set(-np.finfo(np.float32).tiny)
-        ),
+        respawn_exact_m2=(advanced.respawn_exact_m2.at[0].set(-np.finfo(np.float32).tiny)),
     )
     with pytest.raises(ValueError, match="non-negative"):
         validate_causal_map_state(negative_m2, config)
@@ -1867,15 +1798,9 @@ def test_state_validation_binds_selected_action_target_and_causal_counts() -> No
     )
     validate_causal_map_state(collected, config)
     unaccounted_reappearance = collected._replace(
-        respawn_interval_count=(
-            collected.respawn_interval_count.at[1].set(1)
-        ),
-        respawn_interval_lower_floor=(
-            collected.respawn_interval_lower_floor.at[1].set(1)
-        ),
-        respawn_interval_upper_floor=(
-            collected.respawn_interval_upper_floor.at[1].set(1)
-        ),
+        respawn_interval_count=(collected.respawn_interval_count.at[1].set(1)),
+        respawn_interval_lower_floor=(collected.respawn_interval_lower_floor.at[1].set(1)),
+        respawn_interval_upper_floor=(collected.respawn_interval_upper_floor.at[1].set(1)),
     )
     with pytest.raises(ValueError, match="reappearances plus pending"):
         validate_causal_map_state(unaccounted_reappearance, config)
@@ -2049,18 +1974,10 @@ def test_exact_81_reappearance_production_path_validates_and_continues() -> None
         last_target_position=jnp.asarray((7, 8), dtype=jnp.int32),
         last_target_expected_active=jnp.asarray(True),
         cell_channel=state.cell_channel.at[visible_slice].set(0),
-        cell_collection_step=(
-            state.cell_collection_step.at[visible_slice].set(collection_steps)
-        ),
-        cell_ready_step=(
-            state.cell_ready_step.at[visible_slice].set(collection_steps + 1)
-        ),
-        cell_last_seen_step=(
-            state.cell_last_seen_step.at[visible_slice].set(step_count - 1)
-        ),
-        cell_last_absent_step=(
-            state.cell_last_absent_step.at[visible_slice].set(step_count - 1)
-        ),
+        cell_collection_step=(state.cell_collection_step.at[visible_slice].set(collection_steps)),
+        cell_ready_step=(state.cell_ready_step.at[visible_slice].set(collection_steps + 1)),
+        cell_last_seen_step=(state.cell_last_seen_step.at[visible_slice].set(step_count - 1)),
+        cell_last_absent_step=(state.cell_last_absent_step.at[visible_slice].set(step_count - 1)),
         visit_count=state.visit_count.at[7, 7].set(step_count + 1),
         reward_sum=state.reward_sum.at[0].set(81.0),
         reward_count=state.reward_count.at[0].set(81),
@@ -2212,9 +2129,7 @@ def test_agent_metadata_is_explicitly_nonprivileged_and_context_independent() ->
     assert metadata["privileged"] is False
     assert metadata["state_schema"] == CAUSAL_MAP_STATE_SCHEMA
     assert metadata["prng_impl"] == "threefry2x32"
-    assert metadata["jax_threefry_partitionable"] is bool(
-        jax.config.jax_threefry_partitionable
-    )
+    assert metadata["jax_threefry_partitionable"] is bool(jax.config.jax_threefry_partitionable)
     assert "identification interval" in metadata["world_model"]["respawn_model"]
     assert "maximum delay ceiling" in metadata["world_model"]["respawn_model"]
     assert metadata["world_model"]["maximum_map_cells"] == 4096
@@ -2303,9 +2218,7 @@ def test_scan_host_chunk_and_batch_parity(
         (7, 3),
         mode="vmap",
     )
-    signatures_by_seed = {
-        result.seed: _result_signature(result) for result in batch_vmap
-    }
+    signatures_by_seed = {result.seed: _result_signature(result) for result in batch_vmap}
     for result in reordered:
         assert _result_signature(result) == signatures_by_seed[result.seed]
     assert _result_signature(batch_vmap[0]) == _result_signature(scan_a)
@@ -2500,9 +2413,7 @@ def test_runner_binds_final_state_to_requested_horizon_and_lane_before_finalizat
             next_carry, outputs = scan(carry, active_steps)
             env_state, env_key, agent_state, action = next_carry
             if field == "step_count":
-                agent_state = agent_state._replace(
-                    step_count=jnp.asarray(0, dtype=jnp.int32)
-                )
+                agent_state = agent_state._replace(step_count=jnp.asarray(0, dtype=jnp.int32))
             else:
                 agent_state = agent_state._replace(
                     initial_seed=agent_state.initial_seed + jnp.asarray(1, jnp.uint32)
@@ -2848,12 +2759,8 @@ def test_installed_foragax_batch_modes_and_seed_order_are_invariant() -> None:
         mode="vmap",
     )
     expected = {result.seed: _result_signature(result) for result in batched}
-    assert {
-        result.seed: _result_signature(result) for result in strict
-    } == expected
-    assert {
-        result.seed: _result_signature(result) for result in reordered
-    } == expected
+    assert {result.seed: _result_signature(result) for result in strict} == expected
+    assert {result.seed: _result_signature(result) for result in reordered} == expected
 
 
 def test_seed_batch_validation(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -3086,3 +2993,14 @@ def test_deterministic_inv_cdf_coefficients_are_pinned() -> None:
         if isinstance(node, ast.Constant) and isinstance(node.value, float)
     )
     assert observed == _AS241_SOURCE_CONSTANTS
+
+
+@pytest.mark.parametrize(
+    "scalar_type",
+    [np.dtype(code).type for code in ("b", "B", "h", "H", "i", "I", "l", "L", "q", "Q")],
+)
+def test_causal_map_forager_accepts_all_numpy_integer_scalar_types(scalar_type: type) -> None:
+    from alberta_framework.benchmarks.causal_map_forager import CausalMapForagerConfig
+
+    config = CausalMapForagerConfig(initial_retry_delay=scalar_type(1))
+    assert config.initial_retry_delay == 1

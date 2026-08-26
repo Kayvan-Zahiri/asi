@@ -43,17 +43,8 @@ _MAX_RUN_STEPS = 1_000_000
 _PRNG_IMPLEMENTATION = "threefry2x32"
 _PAIR_RESULT_SCHEMA = "asi.ipmnist.gradual-input-pair.result.v1"
 _ADAMW_IDENTITY = tuple(sorted(ADAMW_PROTOCOL_HYPERPARAMETERS.items()))
-_NUMPY_INTEGER_TYPES = (
-    np.int8,
-    np.int16,
-    np.int32,
-    np.int64,
-    np.longlong,
-    np.uint8,
-    np.uint16,
-    np.uint32,
-    np.uint64,
-    np.ulonglong,
+_NUMPY_INTEGER_TYPES = tuple(
+    np.dtype(code).type for code in ("b", "B", "h", "H", "i", "I", "l", "L", "q", "Q")
 )
 
 GRADUAL_IPMNIST_PROTOCOL = MappingProxyType(
@@ -281,9 +272,7 @@ class GradualInputPairResult:
                 or type(item[1]) is not float
                 or item != expected_identity_item
             ):
-                raise ValueError(
-                    "learner_hyperparameters must identify the frozen AdamW control"
-                )
+                raise ValueError("learner_hyperparameters must identify the frozen AdamW control")
         if (
             type(self.prng_implementation) is not str
             or self.prng_implementation != _PRNG_IMPLEMENTATION
@@ -324,9 +313,7 @@ class GradualInputPairResult:
             snapshots["correct_counts"] > config.task_length
         ):
             raise ValueError("correct_counts must be valid per-task integer numerators")
-        if not np.all(np.isfinite(snapshots["loss_sums"])) or np.any(
-            snapshots["loss_sums"] < 0.0
-        ):
+        if not np.all(np.isfinite(snapshots["loss_sums"])) or np.any(snapshots["loss_sums"] < 0.0):
             raise ValueError("loss_sums must be finite and nonnegative")
         expected_persistent_bytes = (
             config.parameter_count * 16

@@ -213,9 +213,7 @@ def test_gradual_input_pair_runs_one_matched_real_learner_schedule() -> None:
 def test_gradual_pair_rng_is_independent_of_global_default() -> None:
     data_x = np.arange(16, dtype=np.float32).reshape(4, 4)
     data_y = np.asarray([0, 1, 0, 1], dtype=np.int32)
-    config = IPMNISTConfig(
-        n_tasks=2, task_length=4, input_dim=4, hidden1=2, hidden2=2, n_classes=2
-    )
+    config = IPMNISTConfig(n_tasks=2, task_length=4, input_dim=4, hidden1=2, hidden2=2, n_classes=2)
 
     with jax.default_prng_impl("threefry2x32"):
         first = run_gradual_input_pair(
@@ -315,3 +313,14 @@ def test_gradual_pair_preflights_parameter_allocation_before_initialization() ->
             config=config,
             transition_steps=1,
         )
+
+
+@pytest.mark.parametrize(
+    "scalar_type",
+    [np.dtype(code).type for code in ("b", "B", "h", "H", "i", "I", "l", "L", "q", "Q")],
+)
+def test_gradual_ipmnist_accepts_all_numpy_integer_scalar_types(scalar_type: type) -> None:
+    from alberta_framework.benchmarks.ipmnist_gradual import GradualTransitionConfig
+
+    config = GradualTransitionConfig(mode="input_interpolation", transition_steps=scalar_type(100))
+    assert config.transition_steps == 100
