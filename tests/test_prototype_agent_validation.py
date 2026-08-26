@@ -303,3 +303,27 @@ def test_prototype_valid_construction() -> None:
     assert restored == cfg
     gru = GRUPerceptionConfig(observation_dim=4, hidden_dim=4)
     assert gru.augmented_dim() == 8
+
+def test_prototype_agent_rejects_oversized_n_dreams_per_step() -> None:
+    from alberta_framework.core.prototype_agent import (
+        _MAX_PROTOTYPE_DREAMS_PER_STEP,
+        PrototypeAgentConfig,
+    )
+
+    assert _MAX_PROTOTYPE_DREAMS_PER_STEP == 10_000
+
+    oak = _oak(obs_dim=2)
+    wm = _world_model(2)
+    with pytest.raises(ValueError, match="n_dreams_per_step"):
+        PrototypeAgentConfig(oak=oak, world_model=wm, n_dreams_per_step=10_001)
+
+    # Boundary case accepted:
+    cfg = PrototypeAgentConfig(oak=oak, world_model=wm, n_dreams_per_step=10_000)
+    assert cfg.n_dreams_per_step == 10_000
+
+    # Deserialization rejects oversized values:
+    serialized = cfg.to_config()
+    serialized["n_dreams_per_step"] = 10_001
+    with pytest.raises(ValueError, match="n_dreams_per_step"):
+        PrototypeAgentConfig.from_config(serialized)
+
