@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import warnings
 from collections.abc import Callable
 from decimal import Decimal
 from fractions import Fraction
@@ -193,9 +194,7 @@ def test_unique_names_preserve_config_and_seed_order() -> None:
     assert results["second"].seeds == [7, 3]
     assert results["first"].seeds == [7, 3]
     assert all(
-        summary.n_seeds == 2
-        for result in results.values()
-        for summary in result.summary.values()
+        summary.n_seeds == 2 for result in results.values() for summary in result.summary.values()
     )
     for result in results.values():
         for summary in result.summary.values():
@@ -240,9 +239,7 @@ def test_single_seed_surfaces_report_zero_spread() -> None:
 
 
 def test_empty_config_sequence_still_returns_empty_results() -> None:
-    assert (
-        run_multi_seed_experiment([], seeds=[0], parallel=False, show_progress=False) == {}
-    )
+    assert run_multi_seed_experiment([], seeds=[0], parallel=False, show_progress=False) == {}
 
 
 def _two_seed_trace() -> AggregatedResults:
@@ -537,7 +534,8 @@ class _NonfiniteFloatThatConvertsFinite(float):
 
 def _platform_longdouble_1e4000() -> np.longdouble:
     """Parse the cross-platform boundary without leaking an expected warning."""
-    with np.errstate(over="ignore", invalid="ignore"):
+    with warnings.catch_warnings(), np.errstate(over="ignore", invalid="ignore"):
+        warnings.simplefilter("ignore", RuntimeWarning)
         return np.longdouble("1e4000")
 
 
@@ -1029,3 +1027,10 @@ def test_run_multi_seed_experiment_rejects_invalid_seed_sequences(
 def test_get_final_performance_rejects_non_builtin_positive_window(window: object) -> None:
     with pytest.raises(ValueError, match="window"):
         get_final_performance({"candidate": _two_seed_trace()}, window=window)  # type: ignore[arg-type]
+
+
+def test_platform_longdouble_1e4000_helper_emits_no_warnings(
+    recwarn: pytest.WarningsRecorder,
+) -> None:
+    _platform_longdouble_1e4000()
+    assert len(recwarn) == 0
