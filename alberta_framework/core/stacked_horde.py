@@ -132,6 +132,7 @@ def _require_positive_normal_float32_step_size(value: object) -> float:
 
 
 _INT32_MAX = 2**31 - 1
+_MAX_STACKED_HORDE_DEMONS = 1 << 12
 _CONFIG_FIELDS = {
     "type",
     "n_demons",
@@ -174,8 +175,10 @@ def _require_sequence(name: str, value: object) -> tuple[object, ...]:
 
 
 def _decode_sequence(name: str, value: object) -> tuple[object, ...]:
-    if type(value) not in (list, tuple):
+    if type(value) is not list and type(value) is not tuple:
         raise ValueError(f"{name} must be an actual list or tuple")
+    if len(value) > _MAX_STACKED_HORDE_DEMONS:
+        raise ValueError(f"{name} must not exceed {_MAX_STACKED_HORDE_DEMONS} elements")
     return tuple(cast(list[object] | tuple[object, ...], value))
 
 
@@ -216,9 +219,7 @@ def _stacked_horde_update_working_set_bytes(n_demons: int, feature_dim: int) -> 
 def _preflight_stacked_horde_update_working_set(n_demons: int, feature_dim: int) -> None:
     """Reject an update envelope the host cannot name in signed int32."""
     if _stacked_horde_update_working_set_bytes(n_demons, feature_dim) > _INT32_MAX:
-        raise ValueError(
-            "stacked Horde update working set byte count must fit signed int32"
-        )
+        raise ValueError("stacked Horde update working set byte count must fit signed int32")
 
 
 def _require_scan_result_resources(num_updates: int, n_demons: int) -> None:
@@ -257,30 +258,26 @@ class StackedHordeConfig:
 
     def __post_init__(self) -> None:
         """Validate the configuration."""
-        n_demons = _require_int32("n_demons", self.n_demons, minimum=1)
+        n_demons = _require_int32(
+            "n_demons", self.n_demons, minimum=1, maximum=_MAX_STACKED_HORDE_DEMONS
+        )
         feature_dim = _require_int32("feature_dim", self.feature_dim, minimum=1)
 
         raw_sequences = {
             "gammas": _require_sequence("gammas", self.gammas),
             "lamdas": _require_sequence("lamdas", self.lamdas),
-            "cumulant_indices": _require_sequence(
-                "cumulant_indices", self.cumulant_indices
-            ),
+            "cumulant_indices": _require_sequence("cumulant_indices", self.cumulant_indices),
         }
         for name, seq in raw_sequences.items():
             if len(seq) != n_demons:
                 raise ValueError(f"{name} must have length n_demons={n_demons}")
 
         gammas = tuple(
-            validated_float32_scalar(
-                f"gammas[{i}]", value, lower=0.0, upper=1.0
-            )
+            validated_float32_scalar(f"gammas[{i}]", value, lower=0.0, upper=1.0)
             for i, value in enumerate(raw_sequences["gammas"])
         )
         lamdas = tuple(
-            validated_float32_scalar(
-                f"lamdas[{i}]", value, lower=0.0, upper=1.0
-            )
+            validated_float32_scalar(f"lamdas[{i}]", value, lower=0.0, upper=1.0)
             for i, value in enumerate(raw_sequences["lamdas"])
         )
 
@@ -355,6 +352,12 @@ def nexting_spec(
     feature_dim = _require_int32("feature_dim", feature_dim, minimum=1)
     raw_indices = _require_sequence("cumulant_indices", cumulant_indices)
     raw_gammas = _require_sequence("gammas", gammas)
+    total_demons = len(raw_indices) * len(raw_gammas)
+    if total_demons > _MAX_STACKED_HORDE_DEMONS:
+        raise ValueError(
+            f"total nexting demon count ({total_demons}) "
+            f"must not exceed {_MAX_STACKED_HORDE_DEMONS}"
+        )
     canonical_indices = tuple(
         _require_int32(f"cumulant_indices[{i}]", value, minimum=0)
         for i, value in enumerate(raw_indices)
@@ -625,17 +628,14 @@ class StackedLinearHorde:
 
 def _has_trusted_array_type(value: object) -> bool:
     actual_type = type(value)
-    return (
-        actual_type is np.ndarray
-        or issubclass(
-            actual_type,
-            (
-                jax.Array,
-                jax.core.Tracer,
-                jax.ShapeDtypeStruct,
-                jax.core.ShapedArray,
-            ),
-        )
+    return actual_type is np.ndarray or issubclass(
+        actual_type,
+        (
+            jax.Array,
+            jax.core.Tracer,
+            jax.ShapeDtypeStruct,
+            jax.core.ShapedArray,
+        ),
     )
 
 
@@ -733,9 +733,7 @@ def run_stacked_horde_scan(
         checked_rhos = jnp.ones((num_steps,), dtype=jnp.float32)
     else:
         try:
-            checked_rhos = _trusted_array(
-                "rhos", rhos, shape=(num_steps,), dtype=jnp.float32
-            )
+            checked_rhos = _trusted_array("rhos", rhos, shape=(num_steps,), dtype=jnp.float32)
         except ValueError:
             raise ValueError("rhos must have shape (num_steps,)") from None
 

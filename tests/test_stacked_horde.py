@@ -939,3 +939,46 @@ def test_stacked_horde_public_state_shape_rejected_before_dot() -> None:
     state = horde.init().replace(weights=jnp.zeros((1, 3), dtype=jnp.float32))
     with pytest.raises(ValueError, match="weights"):
         horde.predict(state, jnp.ones(2, dtype=jnp.float32))
+
+
+def test_stacked_horde_rejects_oversized_demon_count() -> None:
+    from alberta_framework.core.stacked_horde import _MAX_STACKED_HORDE_DEMONS, StackedHordeConfig
+
+    assert _MAX_STACKED_HORDE_DEMONS == 4096
+
+    with pytest.raises(ValueError, match="n_demons"):
+        StackedHordeConfig(
+            n_demons=4097,
+            feature_dim=2,
+            gammas=(0.5,) * 4097,
+            lamdas=(0.5,) * 4097,
+            cumulant_indices=(0,) * 4097,
+        )
+
+
+def test_stacked_horde_from_config_rejects_oversized_sequences() -> None:
+    from alberta_framework.core.stacked_horde import StackedHordeConfig
+
+    with pytest.raises(ValueError, match="must not exceed 4096 elements"):
+        StackedHordeConfig.from_config(
+            {
+                "type": "StackedHordeConfig",
+                "n_demons": 1,
+                "feature_dim": 2,
+                "gammas": [0.5] * 4097,
+                "lamdas": [0.5],
+                "cumulant_indices": [0],
+                "step_size": 0.05,
+            }
+        )
+
+
+def test_nexting_spec_rejects_oversized_product_cardinality() -> None:
+    from alberta_framework.core.stacked_horde import nexting_spec
+
+    with pytest.raises(ValueError, match="total nexting demon count"):
+        nexting_spec(
+            feature_dim=2,
+            cumulant_indices=tuple(range(100)),
+            gammas=tuple(np.linspace(0.0, 0.99, 42)),
+        )
