@@ -161,10 +161,10 @@ def main(
         return 2
 
     digest = artifact["scientific_digest"]
-    digest_value = digest.get("sha256") if isinstance(digest, dict) else None
+    digest_value = digest.get("sha256") if type(digest) is dict else None
     scientific = artifact["scientific_payload"]
-    aggregate = scientific.get("aggregate") if isinstance(scientific, dict) else None
-    seed_count = aggregate.get("seed_count") if isinstance(aggregate, dict) else None
+    aggregate = scientific.get("aggregate") if type(scientific) is dict else None
+    seed_count = aggregate.get("seed_count") if type(aggregate) is dict else None
     _emit(
         {
             "accepted": validation.accepted,
