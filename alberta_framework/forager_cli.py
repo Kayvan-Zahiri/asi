@@ -145,10 +145,14 @@ def _parse_named_config(value: str) -> tuple[str, str]:
 def _json_safe(value: Any) -> Any:
     if dataclasses.is_dataclass(value) and not isinstance(value, type):
         return _json_safe(dataclasses.asdict(value))
-    if isinstance(value, Mapping):
+    if type(value) is dict:
         return {str(key): _json_safe(item) for key, item in value.items()}
-    if isinstance(value, (list, tuple)):
+    if type(value) is list or type(value) is tuple:
         return [_json_safe(item) for item in value]
+    if isinstance(value, Mapping):
+        raise TypeError("forager CLI payload must use exact dict containers")
+    if isinstance(value, (list, tuple)):
+        raise TypeError("forager CLI payload must use exact list containers")
     if isinstance(value, float) and not math.isfinite(value):
         raise ValueError("forager CLI payload is not finite JSON")
     if isinstance(value, Path):
