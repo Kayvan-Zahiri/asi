@@ -1953,6 +1953,27 @@ def test_paper_specific_dg_delight_equations_match_definition() -> None:
     chex.assert_trees_all_close(result.ordinary_actor_loss, expected_ordinary_loss)
 
 
+def test_zero_advantage_does_not_multiply_infinite_surprisal() -> None:
+    """advantage=0 times -log(0)=+inf is 0*inf=NaN and would poison the loss."""
+    log_probabilities = jnp.array([-jnp.inf, jnp.log(0.25)], dtype=jnp.float32)
+    advantages = jnp.array([0.0, 1.0], dtype=jnp.float32)
+    raw = advantages * (-log_probabilities)
+    assert not bool(jnp.isfinite(raw[0]))
+
+    result = discrete_delightful_policy_gradient(
+        log_probabilities,
+        advantages,
+        DelightfulPolicyGradientConfig(mode="delightful_pg", temperature=1.0),
+    )
+    assert bool(jnp.all(jnp.isfinite(result.delight)))
+    assert bool(jnp.isfinite(result.actor_loss))
+    assert bool(jnp.isfinite(result.ordinary_actor_loss))
+    chex.assert_trees_all_close(result.delight[0], jnp.asarray(0.0, dtype=jnp.float32))
+    chex.assert_trees_all_close(
+        result.actor_coefficients[0], jnp.asarray(0.0, dtype=jnp.float32)
+    )
+
+
 def test_paper_specific_dg_loss_jits_and_stops_gate_and_advantage_gradients() -> None:
     config = DelightfulPolicyGradientConfig(
         mode="delightful_pg",
