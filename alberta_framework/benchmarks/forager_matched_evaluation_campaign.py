@@ -57,7 +57,7 @@ class _ValidatedTransition:
 
 
 def _plain_json(value: Any) -> Any:
-    if isinstance(value, Mapping):
+    if type(value) is dict or type(value) is MappingProxyType:
         result: dict[str, Any] = {}
         for key, item in value.items():
             if type(key) is not str:
@@ -66,7 +66,7 @@ def _plain_json(value: Any) -> Any:
                 )
             result[key] = _plain_json(item)
         return result
-    if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
+    if type(value) is list:
         return [_plain_json(item) for item in value]
     if value is None or type(value) in {str, bool, int}:
         return value
@@ -374,7 +374,7 @@ def _decode_schedule(
                 "schedule is not valid UTF-8 JSON"
             ) from exc
         encoded = value
-    elif isinstance(value, Mapping):
+    elif type(value) is dict or type(value) is MappingProxyType:
         plain = _plain_json(value)
         if type(plain) is not dict:
             raise ForagerMatchedEvaluationCampaignError(

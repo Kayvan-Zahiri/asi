@@ -44,3 +44,64 @@ def test_decode_schedule_rejects_hostile_dispatch() -> None:
     with pytest.raises(TypeError, match="mapping, bytes, or string"):
         _decode_schedule(hostile_s)  # type: ignore[arg-type]
     assert _HostileStr.calls == 0
+
+
+def test_plain_json_rejects_mapping_and_sequence_subclasses() -> None:
+    from alberta_framework.benchmarks.forager_matched_evaluation_campaign import (
+        ForagerMatchedEvaluationCampaignError,
+        _plain_json,
+    )
+
+    class HostileDict(dict):
+        calls = 0
+
+        def items(self):  # type: ignore[override]
+            type(self).calls += 1
+            raise AssertionError("HostileDict.items must not run")
+
+    class HostileList(list):
+        calls = 0
+
+        def __iter__(self):  # type: ignore[override]
+            type(self).calls += 1
+            raise AssertionError("HostileList.__iter__ must not run")
+
+    HostileDict.calls = 0
+    with pytest.raises(
+        ForagerMatchedEvaluationCampaignError,
+        match="unsupported HostileDict",
+    ):
+        _plain_json(HostileDict({"a": 1}))
+    assert HostileDict.calls == 0
+
+    HostileList.calls = 0
+    with pytest.raises(
+        ForagerMatchedEvaluationCampaignError,
+        match="unsupported HostileList",
+    ):
+        _plain_json(HostileList([1, 2]))
+    assert HostileList.calls == 0
+
+
+def test_decode_schedule_rejects_mapping_subclass() -> None:
+    from types import MappingProxyType
+
+    from alberta_framework.benchmarks.forager_matched_evaluation_campaign import (
+        _decode_schedule,
+    )
+
+    class HostileDict(dict):
+        calls = 0
+
+        def items(self):  # type: ignore[override]
+            type(self).calls += 1
+            raise AssertionError("HostileDict.items must not run")
+
+    HostileDict.calls = 0
+    with pytest.raises(TypeError, match="mapping, bytes, or string"):
+        _decode_schedule(HostileDict({"schedule": 1}))  # type: ignore[arg-type]
+    assert HostileDict.calls == 0
+
+    decoded, raw = _decode_schedule(MappingProxyType({"schedule": 1}))
+    assert decoded == {"schedule": 1}
+    assert raw is None
