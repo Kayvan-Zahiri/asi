@@ -486,7 +486,7 @@ class ReferenceLifeDevelopmentPlan:
 
     def to_payload(self) -> dict[str, Any]:
         payload = json.loads(self._canonical_json)
-        assert isinstance(payload, dict)
+        assert type(payload) is dict
         return payload
 
     @property
@@ -512,7 +512,7 @@ class ReferenceLifeDevelopmentPlan:
         if arm not in ARM_ROSTER:
             raise ValueError("unsupported scorecard arm")
         definitions = self.to_payload()["arm_definitions"]
-        assert isinstance(definitions, list)
+        assert type(definitions) is list
         for definition in definitions:
             if definition["arm"] == arm:
                 return cast(dict[str, Any], definition)
@@ -524,7 +524,7 @@ class ReferenceLifeDevelopmentPlan:
         if environment_kind not in ENVIRONMENT_ROSTER:
             raise ValueError("unsupported environment")
         protocol = self.to_payload()["protocols"][environment_kind]
-        assert isinstance(protocol, dict)
+        assert type(protocol) is dict
         return protocol
 
 
@@ -1031,7 +1031,7 @@ def _admit_aggregate_records(
 
 def _reward_sum(record: Mapping[str, Any]) -> float:
     outcome = record.get("outcome")
-    if not isinstance(outcome, Mapping):
+    if type(outcome) is not dict:
         raise ValueError("completed run record lacks an outcome")
     value = outcome.get("reward_sum")
     if type(value) is not int and type(value) is not float:
@@ -1058,7 +1058,7 @@ def _summarize_validated_run_records(
     }
     indexed: dict[tuple[str, str, int], Mapping[str, Any]] = {}
     for record in records:
-        if not isinstance(record, Mapping):
+        if type(record) is not dict:
             raise ValueError("every run record must be an object")
         identity = _record_identity(record)
         if identity in indexed:
@@ -1098,9 +1098,9 @@ def _summarize_validated_run_records(
                 }
             )
         outcome = record.get("outcome")
-        if isinstance(outcome, Mapping):
+        if type(outcome) is dict:
             check = outcome.get("parameter_change_check")
-            if isinstance(check, Mapping) and check.get("passed") is not True:
+            if type(check) is dict and check.get("passed") is not True:
                 parameter_failures.append(
                     {
                         "environment_kind": identity[0],
@@ -1632,7 +1632,7 @@ def _load_json_strict_with_metadata(
     finally:
         if descriptor is not None:
             os.close(descriptor)
-    if not isinstance(payload, dict):
+    if type(payload) is not dict:
         raise ValueError(f"{path}: top-level JSON value must be an object")
     _validate_json_value(payload)
     return payload, final_metadata
@@ -1738,7 +1738,7 @@ def _numerically_equal(left: float, right: float) -> bool:
 
 
 def _validate_agent_manifest_descriptor(value: Any, *, path: str) -> None:
-    if not isinstance(value, Mapping):
+    if type(value) is not dict:
         raise ValueError(f"{path} must be a complete agent manifest")
     required = {
         "api_version",
@@ -1757,7 +1757,7 @@ def _validate_agent_manifest_descriptor(value: Any, *, path: str) -> None:
     if value["api_version"] != REFERENCE_AGENT_API_VERSION:
         raise ValueError(f"{path} API version is unsupported")
     config = value["config"]
-    if not isinstance(config, Mapping):
+    if type(config) is not dict:
         raise ValueError(f"{path}.config must be an object")
     if canonical_config_sha256(config) != value["config_sha256"]:
         raise ValueError(f"{path} config digest mismatch")
@@ -1770,7 +1770,7 @@ def _validate_agent_manifest_descriptor(value: Any, *, path: str) -> None:
         value["action_spec"], path=f"{path}.action_spec"
     )
     capabilities = value["capabilities"]
-    if not isinstance(capabilities, Mapping) or set(capabilities) != {
+    if type(capabilities) is not dict or set(capabilities) != {
         "dispatch_rebinding"
     }:
         raise ValueError(f"{path}.capabilities fields are invalid")
@@ -1790,7 +1790,7 @@ def _validate_agent_manifest_descriptor(value: Any, *, path: str) -> None:
 
 
 def _space_from_descriptor(value: Any, *, path: str) -> SpaceSpec:
-    if not isinstance(value, Mapping) or set(value) != {
+    if type(value) is not dict or set(value) != {
         "kind",
         "shape",
         "dtype",
@@ -1801,7 +1801,7 @@ def _space_from_descriptor(value: Any, *, path: str) -> SpaceSpec:
     }:
         raise ValueError(f"{path} fields do not match a space descriptor")
     shape = value["shape"]
-    if not isinstance(shape, list) or any(type(item) is not int for item in shape):
+    if type(shape) is not list or any(type(item) is not int for item in shape):
         raise ValueError(f"{path}.shape must be an integer list")
     if value["kind"] == "discrete":
         if value["low"] is not None or value["high"] is not None:
@@ -1814,9 +1814,9 @@ def _space_from_descriptor(value: Any, *, path: str) -> SpaceSpec:
     if value["kind"] == "box":
         low = value["low"]
         high = value["high"]
-        if low is not None and not isinstance(low, list):
+        if low is not None and type(low) is not list:
             raise ValueError(f"{path}.low must be null or a list")
-        if high is not None and not isinstance(high, list):
+        if high is not None and type(high) is not list:
             raise ValueError(f"{path}.high must be null or a list")
         return SpaceSpec.box(
             shape=tuple(shape),
@@ -1829,7 +1829,7 @@ def _space_from_descriptor(value: Any, *, path: str) -> SpaceSpec:
 
 
 def _validate_environment_manifest_descriptor(value: Any, *, path: str) -> None:
-    if not isinstance(value, Mapping) or set(value) != {
+    if type(value) is not dict or set(value) != {
         "schema",
         "implementation_id",
         "state_schema",
@@ -1842,7 +1842,7 @@ def _validate_environment_manifest_descriptor(value: Any, *, path: str) -> None:
     }:
         raise ValueError(f"{path} fields do not match an environment manifest")
     config = value["config"]
-    if not isinstance(config, Mapping):
+    if type(config) is not dict:
         raise ValueError(f"{path}.config must be an object")
     reconstructed = ReferenceEnvironmentManifest.from_config(
         implementation_id=cast(str, value["implementation_id"]),
@@ -1875,10 +1875,10 @@ def _validate_resolved_components(
     _validate_environment_manifest_descriptor(
         environment_manifest, path=f"{path}.environment_manifest"
     )
-    assert isinstance(agent_manifest, Mapping)
-    assert isinstance(environment_manifest, Mapping)
+    assert type(agent_manifest) is dict
+    assert type(environment_manifest) is dict
     environment_config = environment_manifest["config"]
-    assert isinstance(environment_config, Mapping)
+    assert type(environment_config) is dict
     if environment_config.get("environment_kind") != spec.environment_kind:
         raise ValueError(f"{path} environment kind differs from the schedule")
     if agent_manifest["observation_spec"] != environment_manifest["observation_spec"]:
@@ -1887,7 +1887,7 @@ def _validate_resolved_components(
         raise ValueError(f"{path} agent/environment action specs differ")
 
     life_config = resolved["life_config"]
-    if not isinstance(life_config, Mapping):
+    if type(life_config) is not dict:
         raise ValueError(f"{path} lacks a complete life config")
     if _sha256_json(life_config) != resolved["life_config_sha256"]:
         raise ValueError(f"{path} life config digest mismatch")
@@ -1903,7 +1903,7 @@ def _validate_resolved_components(
             raise ValueError(f"{path}.life_config.{field} differs from the schedule")
     life_agent = life_config.get("agent")
     life_environment = life_config.get("environment")
-    if not isinstance(life_agent, Mapping) or not isinstance(life_environment, Mapping):
+    if type(life_agent) is not dict or type(life_environment) is not dict:
         raise ValueError(f"{path}.life_config lacks complete component bindings")
     if life_agent.get("manifest_id") != agent_manifest["manifest_id"]:
         raise ValueError(f"{path}.life_config binds another agent manifest")
@@ -1920,7 +1920,7 @@ def _validate_resolved_components(
 
 
 def _validate_resource_payload(resource: Any, *, arm: str, path: str) -> None:
-    if not isinstance(resource, Mapping):
+    if type(resource) is not dict:
         raise ValueError(f"{path} must be an object")
     expected_method = (
         "prototype_control_parameter_tree"
@@ -2052,7 +2052,7 @@ def _validate_metric_window(
     path: str,
 ) -> float:
     required = {"event_count", "reward_sum", "mean_reward", "mean_oracle_regret"}
-    if not isinstance(window, Mapping) or set(window) != required:
+    if type(window) is not dict or set(window) != required:
         raise ValueError(f"{path} fields do not match the metric-window contract")
     if window["event_count"] != event_count or type(window["event_count"]) is not int:
         raise ValueError(f"{path}.event_count differs from the fixed window")
@@ -2092,7 +2092,7 @@ def _validate_completed_outcome(
     expected_initial_resource: Mapping[str, Any],
     path: str,
 ) -> None:
-    if not isinstance(outcome, Mapping):
+    if type(outcome) is not dict:
         raise ValueError(f"{path} must be an object")
     required = {
         "summary_mode",
@@ -2154,7 +2154,7 @@ def _validate_completed_outcome(
     if not _is_sha256(outcome["transcript_sha256"]):
         raise ValueError(f"{path}.transcript_sha256 must be a digest")
     resources = outcome["resources"]
-    if not isinstance(resources, Mapping) or set(resources) != {"initial", "final"}:
+    if type(resources) is not dict or set(resources) != {"initial", "final"}:
         raise ValueError(f"{path}.resources must bind initial and final state")
     for label in ("initial", "final"):
         _validate_resource_payload(
@@ -2166,18 +2166,18 @@ def _validate_completed_outcome(
         raise ValueError(f"{path}.resources reports persistent-state growth or shrinkage")
 
     windows = outcome["windows"]
-    if not isinstance(windows, Mapping):
+    if type(windows) is not dict:
         raise ValueError(f"{path}.windows must be an object")
     phase_counts = outcome["phase_event_counts"]
     phase_rewards = outcome["phase_reward_sums"]
     if (
-        not isinstance(phase_counts, list)
+        type(phase_counts) is not list
         or len(phase_counts) != 2
         or any(type(value) is not int or value < 0 for value in phase_counts)
         or sum(phase_counts) != horizon
     ):
         raise ValueError(f"{path}.phase_event_counts is inconsistent")
-    if not isinstance(phase_rewards, list) or len(phase_rewards) != 2:
+    if type(phase_rewards) is not list or len(phase_rewards) != 2:
         raise ValueError(f"{path}.phase_reward_sums is inconsistent")
     phase_reward_values = [
         _require_finite_number(value, path=f"{path}.phase_reward_sums[{index}]")
@@ -2365,7 +2365,7 @@ def _validate_partial_outcome(
         "high_end_visit_count",
         "high_end_visit_rate",
     }
-    if not isinstance(partial, Mapping) or set(partial) != required:
+    if type(partial) is not dict or set(partial) != required:
         raise ValueError(f"{path} fields do not match the partial-outcome contract")
     horizon = protocol["horizon"]
     if (
@@ -2400,11 +2400,11 @@ def _validate_partial_outcome(
     phase_counts = partial["phase_event_counts"]
     phase_rewards = partial["phase_reward_sums"]
     if (
-        not isinstance(phase_counts, list)
+        type(phase_counts) is not list
         or len(phase_counts) != 2
         or any(type(value) is not int or value < 0 for value in phase_counts)
         or sum(phase_counts) != accepted
-        or not isinstance(phase_rewards, list)
+        or type(phase_rewards) is not list
         or len(phase_rewards) != 2
     ):
         raise ValueError(f"{path} phase summaries are malformed")
@@ -2415,7 +2415,7 @@ def _validate_partial_outcome(
     if not _numerically_equal(math.fsum(phase_reward_values), reward_sum):
         raise ValueError(f"{path}.phase_reward_sums do not sum to reward_sum")
     windows = partial["windows"]
-    if not isinstance(windows, Mapping):
+    if type(windows) is not dict:
         raise ValueError(f"{path}.windows must be an object")
 
     if environment == "switching_two_state":
@@ -2541,7 +2541,7 @@ def _validate_run_record(
     path: str,
     consistency_identities: tuple[dict[str, Any], dict[str, Any], dict[str, Any]],
 ) -> None:
-    if not isinstance(record, Mapping):
+    if type(record) is not dict:
         raise ValueError(f"{path} must be an object")
     required = {
         "schema",
@@ -2614,7 +2614,7 @@ def _validate_run_record(
         "warmed_step_seconds_mean",
         "total_seconds",
     }
-    if not isinstance(telemetry, Mapping) or set(telemetry) != telemetry_fields:
+    if type(telemetry) is not dict or set(telemetry) != telemetry_fields:
         raise ValueError(f"{path}.telemetry fields do not match the telemetry contract")
     if not _json_exact_equal(telemetry["policy"], TELEMETRY_POLICY):
         raise ValueError(f"{path}.telemetry is not clearly telemetry-only")
@@ -2655,7 +2655,7 @@ def _validate_run_record(
         raise ValueError(f"{path}.telemetry.total_seconds is smaller than timed work")
 
     resolved = record["resolved"]
-    if not isinstance(resolved, Mapping):
+    if type(resolved) is not dict:
         raise ValueError(f"{path}.resolved must be an object")
     expected_resolved_fields = {
         "arm_definition",
@@ -2703,7 +2703,7 @@ def _validate_run_record(
         if record["outcome"] is not None:
             raise ValueError(f"{path} failed record cannot carry a completed outcome")
         failure = record["failure"]
-        if not isinstance(failure, Mapping) or set(failure) != {
+        if type(failure) is not dict or set(failure) != {
             "stage",
             "type",
             "message",
@@ -2796,7 +2796,7 @@ def validate_scorecard_artifact(payload: Mapping[str, Any]) -> dict[str, Any]:
     ):
         raise ValueError("artifact identity scope note is misleading")
     plan_value = payload["plan"]
-    if not isinstance(plan_value, Mapping):
+    if type(plan_value) is not dict:
         raise ValueError("artifact plan must be an object")
     plan = ReferenceLifeDevelopmentPlan.from_payload(plan_value)
     if payload["plan_sha256"] != plan.plan_sha256:
@@ -2815,7 +2815,7 @@ def validate_scorecard_artifact(payload: Mapping[str, Any]) -> dict[str, Any]:
     if not _json_exact_equal(payload["run_order"], expected_order):
         raise ValueError("artifact run order is not the fixed cyclic schedule")
     runs = payload["runs"]
-    if not isinstance(runs, list) or len(runs) != len(specs):
+    if type(runs) is not list or len(runs) != len(specs):
         raise ValueError("artifact must retain exactly one record per scheduled run")
     for index, (record, spec) in enumerate(zip(runs, specs, strict=True)):
         _validate_run_record(
@@ -2956,7 +2956,7 @@ def _control_adapter(
     if arm_definition != build_development_plan().arm_definition(arm):
         raise ValueError("control arm definition is not the pinned plan-v1 definition")
     definition_config = arm_definition.get("config")
-    if not isinstance(definition_config, Mapping):
+    if type(definition_config) is not dict:
         raise ValueError("control arm definition lacks its exact config")
     config = dict(definition_config)
 
