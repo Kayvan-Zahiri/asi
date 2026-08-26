@@ -598,7 +598,7 @@ def _required_mapping(
     owner: str,
 ) -> Mapping[str, object]:
     candidate = value.get(key)
-    if not isinstance(candidate, Mapping) or not candidate:
+    if type(candidate) is not dict or not candidate:
         raise RuntimeError(f"{owner}.{key} must be a non-empty mapping")
     return candidate
 
@@ -612,7 +612,7 @@ def _required_string_tuple(
     for key in keys:
         candidate = value.get(key)
         if (
-            isinstance(candidate, list)
+            type(candidate) is list
             and candidate
             and all(type(item) is str and item for item in candidate)
         ):
