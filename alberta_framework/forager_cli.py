@@ -28,6 +28,7 @@ import tempfile
 from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any, cast
 
 import jax
@@ -145,7 +146,7 @@ def _parse_named_config(value: str) -> tuple[str, str]:
 def _json_safe(value: Any) -> Any:
     if dataclasses.is_dataclass(value) and not isinstance(value, type):
         return _json_safe(dataclasses.asdict(value))
-    if isinstance(value, Mapping):
+    if type(value) is dict or type(value) is MappingProxyType:
         return {str(key): _json_safe(item) for key, item in value.items()}
     if isinstance(value, (list, tuple)):
         return [_json_safe(item) for item in value]
