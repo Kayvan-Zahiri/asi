@@ -282,8 +282,8 @@ def threshold_calibration_ready() -> bool:
 
     thresholds = _threshold_payload()
     calibration = thresholds.get("calibration")
-    status = calibration.get("status") if isinstance(calibration, Mapping) else None
-    unset = calibration.get("unset_thresholds") if isinstance(calibration, Mapping) else None
+    status = calibration.get("status") if type(calibration) is dict else None
+    unset = calibration.get("unset_thresholds") if type(calibration) is dict else None
     try:
         calibration_digest = _calibration_record_sha256()
     except RuntimeError:
@@ -1631,19 +1631,19 @@ def _mapping(
     location: str,
     errors: list[str],
 ) -> Mapping[str, object] | None:
-    if not isinstance(value, Mapping):
+    if type(value) is not dict:
         errors.append(f"{location} must be an object")
         return None
     return value
 
 
 def _parsed_pairs(value: object) -> tuple[tuple[int, int], ...] | None:
-    if not isinstance(value, list):
+    if type(value) is not list:
         return None
     pairs: list[tuple[int, int]] = []
     for pair in value:
         if (
-            not isinstance(pair, list)
+            type(pair) is not list
             or len(pair) != 2
             or _strict_int(pair[0]) is None
             or _strict_int(pair[1]) is None
