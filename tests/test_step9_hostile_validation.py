@@ -333,9 +333,7 @@ def test_run_step9_scan_rejects_origin_hang_class_before_scan(
     """A far larger sequence length -- the actual hang class -- is also
     rejected before ``jax.lax.scan`` is ever called."""
     seen = _spy_scan(monkeypatch)
-    cfg, agent, model, buffer, state, rewards, next_observations = _step9_scan_components(
-        200_000
-    )
+    cfg, agent, model, buffer, state, rewards, next_observations = _step9_scan_components(200_000)
     with pytest.raises(ValueError, match="rewards length must be an integer in"):
         run_step9_scan(cfg, agent, model, buffer, state, rewards, next_observations)
     assert seen == []
@@ -358,9 +356,7 @@ def test_run_step9_scan_rejects_non_config_type_before_scan(
     seen = _spy_scan(monkeypatch)
     _cfg, agent, model, buffer, state, rewards, next_observations = _step9_scan_components(5)
     with pytest.raises(TypeError, match="actual Step9DreamingConfig"):
-        run_step9_scan(
-            cast(Any, object()), agent, model, buffer, state, rewards, next_observations
-        )
+        run_step9_scan(cast(Any, object()), agent, model, buffer, state, rewards, next_observations)
     assert seen == []
 
 
@@ -409,3 +405,22 @@ def test_run_step9_scan_accepts_a_small_in_bounds_sequence() -> None:
     cfg, agent, model, buffer, state, rewards, next_observations = _step9_scan_components(4)
     result = run_step9_scan(cfg, agent, model, buffer, state, rewards, next_observations)
     assert result.real_td_errors.shape == (4,)
+
+
+def test_step9_rejects_oversized_planning_budget_rollout_and_candidate_count() -> None:
+    with pytest.raises(ValueError, match="planning_budget"):
+        Step9DreamingConfig(planning_budget=10_001)
+
+    with pytest.raises(ValueError, match="dream_rollout_horizon"):
+        Step9DreamingConfig(dream_rollout_horizon=10_001)
+
+    with pytest.raises(ValueError, match="dream_candidate_count"):
+        Step9DreamingConfig(dream_candidate_count=10_001)
+
+    # Boundary cases accepted:
+    cfg_max = Step9DreamingConfig(
+        planning_budget=0, dream_rollout_horizon=10_000, dream_candidate_count=10_000
+    )
+    assert cfg_max.planning_budget == 0
+    assert cfg_max.dream_rollout_horizon == 10_000
+    assert cfg_max.dream_candidate_count == 10_000

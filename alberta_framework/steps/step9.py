@@ -71,6 +71,9 @@ from alberta_framework.steps.step6 import (
 )
 
 _INT32_MAX = 2**31 - 1
+_MAX_STEP9_PLANNING_BUDGET = 10_000
+_MAX_STEP9_DREAM_ROLLOUT_HORIZON = 10_000
+_MAX_STEP9_DREAM_CANDIDATE_COUNT = 10_000
 _MAX_CONFIG_SEQUENCE_LENGTH = 4_096
 _MAX_DREAM_WORK_PER_REAL_STEP = 4_096
 # Matches the established ceiling for other scan-driven array-loop runners
@@ -150,9 +153,7 @@ class Step9DreamingConfig:
             move it. Set True only when dream TD errors should update rbar.
     """
 
-    control: Step6DifferentialSARSAConfig = field(
-        default_factory=Step6DifferentialSARSAConfig
-    )
+    control: Step6DifferentialSARSAConfig = field(default_factory=Step6DifferentialSARSAConfig)
     observation_dim: int = 4
     n_actions: int = 2
     model_hidden_sizes: tuple[int, ...] = (64,)
@@ -197,9 +198,7 @@ class Step9DreamingConfig:
             name="control payload",
             fields=frozenset(Step6DifferentialSARSAConfig.__dataclass_fields__),
         )
-        data["control"] = Step6DifferentialSARSAConfig.from_dict(
-            control_raw
-        )
+        data["control"] = Step6DifferentialSARSAConfig.from_dict(control_raw)
         hs = data["model_hidden_sizes"]
         if type(hs) is not list:
             raise ValueError("model_hidden_sizes payload must be an exact list")
@@ -310,9 +309,7 @@ def _require_exact_payload(
 
 def _require_sequence_length(name: str, count: int) -> None:
     if count > _MAX_CONFIG_SEQUENCE_LENGTH:
-        raise ValueError(
-            f"{name} must contain at most {_MAX_CONFIG_SEQUENCE_LENGTH} values"
-        )
+        raise ValueError(f"{name} must contain at most {_MAX_CONFIG_SEQUENCE_LENGTH} values")
 
 
 def _checked_product(name: str, *factors: int) -> int:
@@ -358,12 +355,8 @@ def _preflight_step9_resources(config: Step9DreamingConfig) -> None:
 
 def _preflight_step9_smoke_resources(config: Step9DreamingConfig, steps: int) -> None:
     rows = _checked_sum("Step 9 observation row count", steps, 1)
-    observations = _checked_product(
-        "Step 9 observation count", rows, config.observation_dim
-    )
-    dream_outputs = _checked_product(
-        "Step 9 dream output count", steps, config.planning_budget
-    )
+    observations = _checked_product("Step 9 observation count", rows, config.observation_dim)
+    dream_outputs = _checked_product("Step 9 dream output count", steps, config.planning_budget)
     _checked_sum(
         "Step 9 smoke array bytes",
         _checked_product("Step 9 observation bytes", 4, observations),
@@ -380,13 +373,10 @@ def _validate_dreaming_config(config: Step9DreamingConfig) -> None:
     observation_dim = _require_int(
         "observation_dim", config.observation_dim, minimum=1, maximum=_INT32_MAX
     )
-    n_actions = _require_int(
-        "n_actions", config.n_actions, minimum=1, maximum=_INT32_MAX
-    )
+    n_actions = _require_int("n_actions", config.n_actions, minimum=1, maximum=_INT32_MAX)
     if config.control.n_actions != n_actions:
         raise ValueError(
-            f"control.n_actions ({config.control.n_actions}) must equal "
-            f"n_actions ({n_actions})"
+            f"control.n_actions ({config.control.n_actions}) must equal n_actions ({n_actions})"
         )
     if type(config.model_hidden_sizes) is not tuple:
         raise ValueError("model_hidden_sizes must be a tuple of integers")
@@ -426,20 +416,20 @@ def _validate_dreaming_config(config: Step9DreamingConfig) -> None:
         config.behavior_model_step_size,
     )
     planning_budget = _require_int(
-        "planning_budget", config.planning_budget, minimum=0, maximum=_INT32_MAX
+        "planning_budget", config.planning_budget, minimum=0, maximum=_MAX_STEP9_PLANNING_BUDGET
     )
     dream_rollout_horizon = _require_int(
         "dream_rollout_horizon",
         config.dream_rollout_horizon,
         minimum=1,
-        maximum=_INT32_MAX,
+        maximum=_MAX_STEP9_DREAM_ROLLOUT_HORIZON,
     )
     # Candidate selection publishes selected indices as signed int32 values.
     dream_candidate_count = _require_int(
         "dream_candidate_count",
         config.dream_candidate_count,
         minimum=1,
-        maximum=_INT32_MAX,
+        maximum=_MAX_STEP9_DREAM_CANDIDATE_COUNT,
     )
     dream_surprise_weight = _require_real(
         "dream_surprise_weight",
@@ -718,9 +708,8 @@ def step9_update(
     buffer_state = buffer.add(state.buffer_state, next_observation)
 
     warmup_ready = model_state.step_count >= config.dreaming_warmup_steps
-    error_ok = (
-        model_state.model_error_ema
-        <= jnp.asarray(config.dreaming_max_model_error, dtype=jnp.float32)
+    error_ok = model_state.model_error_ema <= jnp.asarray(
+        config.dreaming_max_model_error, dtype=jnp.float32
     )
     dream_gate = warmup_ready & error_ok
 
@@ -729,8 +718,8 @@ def step9_update(
         _: Array,
     ) -> tuple[tuple[DifferentialSARSAState, BehaviorModelState], tuple[Array, Array]]:
         ctrl_state, behavior_state = carry
-        next_master_key, candidate_key, behavior_rollout_key, control_rollout_key = (
-            jr.split(ctrl_state.rng_key, 4)
+        next_master_key, candidate_key, behavior_rollout_key, control_rollout_key = jr.split(
+            ctrl_state.rng_key, 4
         )
         candidate_keys = jr.split(candidate_key, config.dream_candidate_count)
 
@@ -739,17 +728,13 @@ def step9_update(
             del index
             anchor_key, sample_key = jr.split(cand_key)
             anchor_obs, _ = buffer.sample(buffer_state, anchor_key)
-            behavior_for_sample = behavior_state.replace(
-                rng_key=sample_key
-            )
+            behavior_for_sample = behavior_state.replace(rng_key=sample_key)
             behavior_sample = behavior_model.sample_action(
                 behavior_for_sample,
                 anchor_obs,
             )
             prediction = model.predict(model_state, anchor_obs, behavior_sample.action)
-            transition_magnitude = jnp.mean(
-                (prediction.next_observation - anchor_obs) ** 2
-            )
+            transition_magnitude = jnp.mean((prediction.next_observation - anchor_obs) ** 2)
             surprise = transition_magnitude + jnp.abs(prediction.reward)
             utility = jnp.abs(prediction.reward)
             return (
@@ -797,12 +782,8 @@ def step9_update(
         selected_index = selection.selected_indices[0]
         anchor_obs = candidate_anchors[selected_index]
         action = candidate_actions[selected_index]
-        initial_control_state = ctrl_state.replace(
-            rng_key=control_rollout_key
-        )
-        initial_behavior_state = behavior_state.replace(
-            rng_key=behavior_rollout_key
-        )
+        initial_control_state = ctrl_state.replace(rng_key=control_rollout_key)
+        initial_behavior_state = behavior_state.replace(rng_key=behavior_rollout_key)
 
         def rollout_step(
             rollout_carry: tuple[
@@ -816,9 +797,7 @@ def step9_update(
             tuple[DifferentialSARSAState, BehaviorModelState, Array, Array],
             tuple[Array, Array, Array],
         ]:
-            rollout_ctrl, rollout_behavior, rollout_obs, rollout_action = (
-                rollout_carry
-            )
+            rollout_ctrl, rollout_behavior, rollout_obs, rollout_action = rollout_carry
             prediction = model.predict(model_state, rollout_obs, rollout_action)
             temp_state = rollout_ctrl.replace(
                 last_observation=rollout_obs,
@@ -836,9 +815,7 @@ def step9_update(
                 # Planning backups improve value estimates only: restore the
                 # pre-dream reward-rate estimate so imagined rewards can never
                 # move rbar (see Step9DreamingConfig docstring).
-                dream_state = dream_state.replace(
-                    average_reward=rollout_ctrl.average_reward
-                )
+                dream_state = dream_state.replace(average_reward=rollout_ctrl.average_reward)
             next_behavior = behavior_model.sample_action(
                 rollout_behavior,
                 prediction.next_observation,
@@ -863,9 +840,7 @@ def step9_update(
             jnp.arange(config.dream_rollout_horizon, dtype=jnp.int32),
         )
         rollout_td_signal = jnp.sum(rollout_td_errors)
-        finite = jnp.all(jnp.isfinite(rollout_td_errors)) & jnp.all(
-            jnp.isfinite(rollout_discounts)
-        )
+        finite = jnp.all(jnp.isfinite(rollout_td_errors)) & jnp.all(jnp.isfinite(rollout_discounts))
         selected_discount = candidate_discounts[selected_index]
         selected_accepted = selection.accepted[selected_index]
         accepted = (
@@ -985,9 +960,7 @@ def run_step9_scan(
     except (AttributeError, IndexError, TypeError, ValueError) as error:
         raise TypeError("rewards must expose trusted shape metadata") from error
     if not 1 <= steps <= _STEP9_SEQUENCE_MAX_STEPS:
-        raise ValueError(
-            f"rewards length must be an integer in [1, {_STEP9_SEQUENCE_MAX_STEPS}]"
-        )
+        raise ValueError(f"rewards length must be an integer in [1, {_STEP9_SEQUENCE_MAX_STEPS}]")
     rewards = _require_step9_trusted_array("rewards", rewards, shape=(steps,), dtype=jnp.float32)
     next_observations = _require_step9_trusted_array(
         "next_observations",
@@ -1012,14 +985,17 @@ def run_step9_scan(
             result.dream_accepted,
         )
 
-    final_state, (
-        real_td_errors,
-        average_rewards,
-        actions,
-        model_prediction_errors,
-        model_updates_applied,
-        dream_td_errors,
-        dream_accepted,
+    (
+        final_state,
+        (
+            real_td_errors,
+            average_rewards,
+            actions,
+            model_prediction_errors,
+            model_updates_applied,
+            dream_td_errors,
+            dream_accepted,
+        ),
     ) = jax.lax.scan(scan_step, state, (rewards, next_observations))
     return Step9ArrayResult(
         state=final_state,

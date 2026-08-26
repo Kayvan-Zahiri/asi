@@ -136,7 +136,9 @@ def test_rejects_hostile_int_metaclass_without_hooks() -> None:
 def test_rejects_hostile_float_without_hook_and_repr_leak() -> None:
     _HostileFloat.calls = 0
     with pytest.raises(ValueError, match="must be") as exc:
-        Step7DynaConfig(**{**_valid_config_kwargs(), "planning_utility_step_size": _HostileFloat(0.1)})  # type: ignore[arg-type]  # noqa: E501
+        Step7DynaConfig(
+            **{**_valid_config_kwargs(), "planning_utility_step_size": _HostileFloat(0.1)}
+        )  # type: ignore[arg-type]  # noqa: E501
     assert _HostileFloat.calls == 0
     assert "HostileFloat" not in str(exc.value)
     assert "!r" not in str(exc.value)
@@ -293,3 +295,19 @@ def test_smoke_preflights_all_live_arrays_before_allocation(
     monkeypatch.setattr(jr, "normal", unexpected_allocation)
     with pytest.raises(ValueError, match="smoke resources"):
         run_step7_smoke(steps=50_000_000)
+
+
+def test_step7_rejects_oversized_planning_steps_and_rollout_depth() -> None:
+    control, world = _control_world()
+    with pytest.raises(ValueError, match="planning_steps"):
+        Step7DynaConfig(control=control, world_model=world, planning_steps=10_001)
+
+    with pytest.raises(ValueError, match="planning_rollout_depth"):
+        Step7DynaConfig(control=control, world_model=world, planning_rollout_depth=10_001)
+
+    # Boundary cases accepted:
+    cfg_max = Step7DynaConfig(
+        control=control, world_model=world, planning_steps=10_000, planning_rollout_depth=10_000
+    )
+    assert cfg_max.planning_steps == 10_000
+    assert cfg_max.planning_rollout_depth == 10_000

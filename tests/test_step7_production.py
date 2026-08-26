@@ -131,7 +131,10 @@ def _init(cfg: Step7DynaConfig | None = None) -> tuple[object, object, Step7Dyna
     agent, model = make_step7_components(cfg)
     obs0 = jnp.zeros(OBS_DIM)
     state = init_step7_state(
-        agent, model, key=jr.key(0), initial_observation=obs0,
+        agent,
+        model,
+        key=jr.key(0),
+        initial_observation=obs0,
         memory_size=cfg.planning_memory_size,
     )
     return agent, model, state
@@ -586,9 +589,7 @@ class TestScorePlanningActions:
         state = model.init(jr.key(7))
         obs = jr.normal(jr.key(8), (OBS_DIM,), dtype=jnp.float32)
         next_obs = jr.normal(jr.key(9), (OBS_DIM,), dtype=jnp.float32)
-        result = model.update(
-            state, obs, jnp.array(1, dtype=jnp.int32), jnp.array(0.7), next_obs
-        )
+        result = model.update(state, obs, jnp.array(1, dtype=jnp.int32), jnp.array(0.7), next_obs)
         return result.state
 
     def test_reward_strategy_score_is_selected_abs_reward(self) -> None:
@@ -597,17 +598,11 @@ class TestScorePlanningActions:
         model_state = self._trained_model_state(model)
         anchor = jr.normal(jr.key(10), (OBS_DIM,), dtype=jnp.float32)
 
-        selected, score = _score_planning_actions(
-            model, model_state, anchor, "reward", N_ACTIONS
-        )
+        selected, score = _score_planning_actions(model, model_state, anchor, "reward", N_ACTIONS)
 
         rewards = jnp.array(
             [
-                jnp.abs(
-                    model.predict(
-                        model_state, anchor, jnp.array(a, dtype=jnp.int32)
-                    ).reward
-                )
+                jnp.abs(model.predict(model_state, anchor, jnp.array(a, dtype=jnp.int32)).reward)
                 for a in range(N_ACTIONS)
             ]
         )
@@ -620,13 +615,9 @@ class TestScorePlanningActions:
         model_state = self._trained_model_state(model)
         anchor = jr.normal(jr.key(11), (OBS_DIM,), dtype=jnp.float32)
 
-        selected, score = _score_planning_actions(
-            model, model_state, anchor, "surprise", N_ACTIONS
-        )
+        selected, score = _score_planning_actions(model, model_state, anchor, "surprise", N_ACTIONS)
 
-        prediction = model.predict(
-            model_state, anchor, jnp.asarray(selected, dtype=jnp.int32)
-        )
+        prediction = model.predict(model_state, anchor, jnp.asarray(selected, dtype=jnp.int32))
         expected = jnp.abs(prediction.reward) + jnp.sqrt(
             jnp.mean((prediction.next_observation - anchor) ** 2)
         )
@@ -673,9 +664,9 @@ def test_step7_dyna_preserves_float32_boundaries() -> None:
 
 
 def test_step7_dyna_rejects_derived_work_and_memory_resources() -> None:
-    with pytest.raises(ValueError, match="derived planning evaluations"):
+    with pytest.raises(ValueError, match="planning_steps|derived planning evaluations"):
         Step7DynaConfig(planning_steps=2**30, planning_rollout_depth=2)
-    with pytest.raises(ValueError, match="planning output bytes"):
+    with pytest.raises(ValueError, match="planning_steps|planning output bytes"):
         Step7DynaConfig(planning_steps=2**26, planning_rollout_depth=1)
     with pytest.raises(ValueError, match="planning-memory bytes"):
         Step7DynaConfig(planning_memory_size=2**28)
@@ -764,8 +755,7 @@ def test_step7_dyna_json_roundtrip() -> None:
     assert restored.planning_strategy == config.planning_strategy
     assert restored.planning_importance_ratio_clip == config.planning_importance_ratio_clip
     assert (
-        restored.planning_apply_importance_correction
-        == config.planning_apply_importance_correction
+        restored.planning_apply_importance_correction == config.planning_apply_importance_correction
     )
     assert restored.planning_priority_propagation == config.planning_priority_propagation
     assert restored.planning_utility_step_size == config.planning_utility_step_size
