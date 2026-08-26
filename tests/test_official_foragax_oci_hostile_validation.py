@@ -87,14 +87,10 @@ class _HostileBuildSpec(dict[str, object]):
         raise AssertionError("hostile mapping hook executed")
 
 
-def test_build_context_rejects_hostile_build_spec_before_hooks() -> None:
-    from pathlib import Path
-
-    from alberta_framework.benchmarks.official_foragax_oci import BuildContext
-
+def test_prepared_oci_build_rejects_hostile_build_spec_before_hooks() -> None:
     _HostileBuildSpec.calls = 0
     with pytest.raises(OfficialForagaxOciError, match="exact mapping"):
-        BuildContext(
+        PreparedOciBuild(
             context=Path("/tmp"),
             build_spec=_HostileBuildSpec({"layers": []}),
             build_spec_sha256="a" * 64,
