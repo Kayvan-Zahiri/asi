@@ -774,3 +774,31 @@ def test_publication_rejects_zero_write_and_nonregular_reread_swap(
         monkeypatch.setattr(campaign, "_link_unnamed_file", link_then_swap)
         with pytest.raises(ValueError, match="regular file"):
             campaign._publish_reserved_json(target, cheap_plan)
+
+
+def test_paired_summary_rejects_nonfinite_interval_bounds(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """IEEE lower/upper comparisons are always false for NaN, so fail closed."""
+    import math
+
+    monkeypatch.setattr(
+        campaign,
+        "_COMPARISONS",
+        (("family", "candidate", "control"),),
+    )
+    seeds = (0, 1, 2, 3, 4)
+    by_identity: dict[tuple[int, str], dict[str, object]] = {}
+    for seed in seeds:
+        by_identity[(seed, "candidate")] = {
+            "result": {
+                "metrics": {
+                    "asi_whole_stream_mean_accuracy": math.nan if seed == 0 else 0.5
+                }
+            }
+        }
+        by_identity[(seed, "control")] = {
+            "result": {"metrics": {"asi_whole_stream_mean_accuracy": 0.4}}
+        }
+    with pytest.raises(ValueError, match="must be finite"):
+        campaign._paired_summary(by_identity, seeds)

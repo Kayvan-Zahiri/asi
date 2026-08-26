@@ -1099,6 +1099,16 @@ def _paired_summary(
         margin = _T_CRITICAL_DF4_BONFERRONI_8 * standard_error
         lower = mean - margin
         upper = mean + margin
+        # Non-finite bounds must fail closed: IEEE comparisons involving NaN are
+        # always false, so ``lower > 0.0`` / ``upper < 0.0`` alone cannot reject
+        # ``nan``/``±inf`` and would otherwise report a false "inconclusive".
+        if not (
+            math.isfinite(mean)
+            and math.isfinite(lower)
+            and math.isfinite(upper)
+            and math.isfinite(standard_error)
+        ):
+            raise ValueError("paired confidence interval bounds must be finite")
         outcome = "supported" if lower > 0.0 else "rejected" if upper < 0.0 else "inconclusive"
         summaries.append(
             {
