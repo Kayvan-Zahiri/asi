@@ -424,9 +424,7 @@ def test_upgd_memory_preserves_legal_boundary_configs(
         pytest.param((2**200 + 1, 2**200), id="above-one-rounds-to-one"),
     ],
 )
-def test_upgd_memory_rejects_adversarial_ratio_floats(
-    ratio: tuple[int, int]
-) -> None:
+def test_upgd_memory_rejects_adversarial_ratio_floats(ratio: tuple[int, int]) -> None:
     class HiddenBoundaryFloat(float):
         def as_integer_ratio(self) -> tuple[int, int]:
             return ratio
@@ -564,3 +562,20 @@ def test_upgd_memory_preserves_legal_closed_endpoints() -> None:
     assert allocation_endpoint.target_allocation_rate == 1.0
     assert fixed_threshold.min_novelty_threshold == 0.5
     assert fixed_threshold.max_novelty_threshold == 0.5
+
+
+def test_normalize_simplex_preserves_distribution_mass_on_zero_and_extreme_inputs() -> None:
+    import numpy as np
+
+    from alberta_framework.core.upgd_memory import _normalize_simplex
+
+    for p in (
+        [0.0, 0.0, 0.0],
+        [-1.0, -2.0, -3.0],
+        [1e38, 1.0, 1.0],
+        [7.5e-13, 0.0, 0.0],
+        [1e-30, 0.0, 0.0],
+    ):
+        res = _normalize_simplex(jnp.asarray(p, dtype=jnp.float32))
+        assert np.isclose(float(jnp.sum(res)), 1.0, atol=1e-5)
+        assert np.all(np.asarray(res) >= 0.0)

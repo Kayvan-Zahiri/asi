@@ -68,9 +68,7 @@ _MIN_LOG_ROUNDTRIP_FLOAT32 = 2.0 * float(np.finfo(np.float32).tiny)
 def _is_trusted_jax_value(value: object) -> bool:
     """Return whether the actual runtime type is a JAX array or tracer."""
     actual_type = type(value)
-    return issubclass(actual_type, jax.Array) or issubclass(
-        actual_type, jax.core.Tracer
-    )
+    return issubclass(actual_type, jax.Array) or issubclass(actual_type, jax.core.Tracer)
 
 
 def _is_trusted_array(value: object) -> bool:
@@ -103,8 +101,7 @@ def _combined_state_resource_counts(
     """Return exact serialized float32, int32, and uint32 state leaf counts."""
     layer_sizes = (feature_dim, *hidden_sizes)
     trunk_weights = sum(
-        layer_sizes[index] * layer_sizes[index + 1]
-        for index in range(len(layer_sizes) - 1)
+        layer_sizes[index] * layer_sizes[index + 1] for index in range(len(layer_sizes) - 1)
     )
     trunk_biases = sum(hidden_sizes)
     head_input_dim = hidden_sizes[-1] if hidden_sizes else feature_dim
@@ -114,12 +111,7 @@ def _combined_state_resource_counts(
     # initialization aliases their arrays. It also stores utilities, the
     # label adapter, targets, nine control scalars, and two telemetry scalars.
     upgd_float32 = (
-        2 * trunk_weights
-        + trunk_biases
-        + 2 * head_weights
-        + 3 * n_heads
-        + n_heads * n_heads
-        + 11
+        2 * trunk_weights + trunk_biases + 2 * head_weights + 3 * n_heads + n_heads * n_heads + 11
     )
     # Prototype means/counts plus the six wrapper EMA/logit scalars.
     memory_and_wrapper_float32 = slots * feature_dim + slots + 6
@@ -129,9 +121,7 @@ def _combined_state_resource_counts(
     return upgd_float32 + memory_and_wrapper_float32, int32_scalars, 2
 
 
-def _require_array(
-    name: str, value: object, shape: tuple[int, ...], dtype: Any
-) -> None:
+def _require_array(name: str, value: object, shape: tuple[int, ...], dtype: Any) -> None:
     if not _is_trusted_array(value):
         raise TypeError(f"{name} must be a NumPy or JAX array")
     trusted = cast(Any, value)
@@ -231,9 +221,7 @@ def _require_positive_log_real(name: str, value: object) -> float:
     _trusted_real(name, value)
     canonical = validated_float32_scalar(name, value, positive=True)
     if canonical < _MIN_LOG_ROUNDTRIP_FLOAT32:
-        raise ValueError(
-            f"{name} must be at least the float32 log/exp round-trip endpoint"
-        )
+        raise ValueError(f"{name} must be at least the float32 log/exp round-trip endpoint")
     return canonical
 
 
@@ -443,9 +431,7 @@ class UPGDMemoryLearningResult:
 
 
 def _validate_config(config: UPGDMemoryConfig) -> None:
-    feature_dim = _require_int(
-        "feature_dim", config.feature_dim, minimum=1, maximum=_INT32_MAX
-    )
+    feature_dim = _require_int("feature_dim", config.feature_dim, minimum=1, maximum=_INT32_MAX)
     n_heads = _require_int("n_heads", config.n_heads, minimum=2, maximum=_INT32_MAX)
     if type(config.hidden_sizes) is not tuple:
         raise TypeError(
@@ -457,9 +443,7 @@ def _validate_config(config: UPGDMemoryConfig) -> None:
     )
     readout_mode = config.readout_mode
     if type(readout_mode) is not str:
-        raise TypeError(
-            "readout_mode must be an actual string, got invalid value"
-        )
+        raise TypeError("readout_mode must be an actual string, got invalid value")
     if readout_mode not in {"linear_mse", "softmax_ce"}:
         raise ValueError("readout_mode must be 'linear_mse' or 'softmax_ce'")
     canonical_readout_mode = str(readout_mode)
@@ -516,18 +500,12 @@ def _validate_config(config: UPGDMemoryConfig) -> None:
     initial_novelty_threshold = _require_positive_log_real(
         "initial_novelty_threshold", config.initial_novelty_threshold
     )
-    memory_bandwidth = _require_positive_normal_real(
-        "memory_bandwidth", config.memory_bandwidth
-    )
-    initial_memory_logit = _require_real(
-        "initial_memory_logit", config.initial_memory_logit
-    )
+    memory_bandwidth = _require_positive_normal_real("memory_bandwidth", config.memory_bandwidth)
+    initial_memory_logit = _require_real("initial_memory_logit", config.initial_memory_logit)
     memory_logit_step_size = _require_nonnegative_real(
         "memory_logit_step_size", config.memory_logit_step_size
     )
-    confidence_logit_scale = _require_real(
-        "confidence_logit_scale", config.confidence_logit_scale
-    )
+    confidence_logit_scale = _require_real("confidence_logit_scale", config.confidence_logit_scale)
     reliability_logit_scale = _require_real(
         "reliability_logit_scale", config.reliability_logit_scale
     )
@@ -612,41 +590,23 @@ def _validate_config(config: UPGDMemoryConfig) -> None:
     )
     object.__setattr__(config, "slots_per_class", slots_per_class)
     object.__setattr__(config, "memory_update_rate", memory_update_rate)
-    object.__setattr__(
-        config, "initial_novelty_threshold", initial_novelty_threshold
-    )
+    object.__setattr__(config, "initial_novelty_threshold", initial_novelty_threshold)
     object.__setattr__(config, "memory_bandwidth", memory_bandwidth)
     object.__setattr__(config, "initial_memory_logit", initial_memory_logit)
-    object.__setattr__(
-        config, "memory_logit_step_size", memory_logit_step_size
-    )
-    object.__setattr__(
-        config, "confidence_logit_scale", confidence_logit_scale
-    )
-    object.__setattr__(
-        config, "reliability_logit_scale", reliability_logit_scale
-    )
+    object.__setattr__(config, "memory_logit_step_size", memory_logit_step_size)
+    object.__setattr__(config, "confidence_logit_scale", confidence_logit_scale)
+    object.__setattr__(config, "reliability_logit_scale", reliability_logit_scale)
     object.__setattr__(config, "reliability_decay", reliability_decay)
-    object.__setattr__(
-        config, "target_trace_blend_scale", target_trace_blend_scale
-    )
+    object.__setattr__(config, "target_trace_blend_scale", target_trace_blend_scale)
     object.__setattr__(
         config,
         "target_trace_pressure_threshold",
         target_trace_pressure_threshold,
     )
-    object.__setattr__(
-        config, "novelty_adaptation_rate", novelty_adaptation_rate
-    )
-    object.__setattr__(
-        config, "target_allocation_rate", target_allocation_rate
-    )
-    object.__setattr__(
-        config, "min_novelty_threshold", min_novelty_threshold
-    )
-    object.__setattr__(
-        config, "max_novelty_threshold", max_novelty_threshold
-    )
+    object.__setattr__(config, "novelty_adaptation_rate", novelty_adaptation_rate)
+    object.__setattr__(config, "target_allocation_rate", target_allocation_rate)
+    object.__setattr__(config, "min_novelty_threshold", min_novelty_threshold)
+    object.__setattr__(config, "max_novelty_threshold", max_novelty_threshold)
     float32_scalars, int32_scalars, uint32_scalars = _combined_state_resource_counts(
         feature_dim,
         n_heads,
@@ -675,7 +635,13 @@ def _active_mse(prediction: Array, target: Array) -> Array:
 
 def _normalize_simplex(prediction: Array) -> Array:
     clipped = jnp.maximum(prediction, 0.0)
-    return clipped / jnp.maximum(jnp.sum(clipped), 1e-12)
+    max_val = jnp.max(clipped)
+    _, exponent = jnp.frexp(max_val)
+    scaled = jnp.ldexp(clipped, -exponent)
+    total = jnp.sum(scaled)
+    uniform = jnp.full_like(clipped, 1.0 / jnp.maximum(clipped.size, 1))
+    valid = (max_val > 0.0) & (total > 0.0) & jnp.isfinite(total)
+    return jnp.where(valid, scaled / jnp.where(valid, total, 1.0), uniform)
 
 
 class UPGDMemoryLearner:
@@ -1071,9 +1037,7 @@ class UPGDMemoryLearner:
         next_memory_logit = jnp.clip(next_memory_logit, -8.0, 8.0)
 
         threshold = jnp.exp(state.novelty_log_threshold)
-        upgd_result = self._upgd.update(
-            state.upgd_state, safe_observation, safe_update_target
-        )
+        upgd_result = self._upgd.update(state.upgd_state, safe_observation, safe_update_target)
         safe_upgd_state = upgd_result.state.replace(
             step_count=(
                 jnp.minimum(
@@ -1118,8 +1082,7 @@ class UPGDMemoryLearner:
             memory_loss_ema=_skip_zero_scale(decay, state.memory_loss_ema)
             + one_minus_decay * memory_loss,
             blended_loss_ema=(
-                _skip_zero_scale(decay, state.blended_loss_ema)
-                + one_minus_decay * blended_loss
+                _skip_zero_scale(decay, state.blended_loss_ema) + one_minus_decay * blended_loss
             ),
             allocation_ema=next_allocation_ema,
             step_count=(
@@ -1191,16 +1154,10 @@ def run_upgd_memory_arrays(
     if type(state) is not UPGDMemoryState:
         raise TypeError("state must be an actual UPGDMemoryState")
     learner._validate_state_static_contract(state)  # noqa: SLF001
-    observation_shape, observation_dtype = _trusted_array_metadata(
-        "observations", observations
-    )
+    observation_shape, observation_dtype = _trusted_array_metadata("observations", observations)
     target_shape, target_dtype = _trusted_array_metadata("targets", targets)
-    if len(observation_shape) != 2 or observation_shape[1:] != (
-        learner.config.feature_dim,
-    ):
-        raise ValueError(
-            f"observations must have shape (steps, {learner.config.feature_dim})"
-        )
+    if len(observation_shape) != 2 or observation_shape[1:] != (learner.config.feature_dim,):
+        raise ValueError(f"observations must have shape (steps, {learner.config.feature_dim})")
     steps = _require_int("steps", observation_shape[0], minimum=1, maximum=_INT32_MAX)
     if target_shape != (steps, learner.config.n_heads):
         raise ValueError(f"targets must have shape ({steps}, {learner.config.n_heads})")
@@ -1217,22 +1174,15 @@ def run_upgd_memory_arrays(
     _require_resource(
         "UPGD memory batch aggregate",
         float32_scalars=(
-            steps
-            * (
-                learner.config.feature_dim
-                + 2 * learner.config.n_heads
-                + 10
-            )
+            steps * (learner.config.feature_dim + 2 * learner.config.n_heads + 10)
             + 2 * state_float32
         ),
         int32_scalars=2 * state_int32,
         uint32_scalars=2 * state_uint32,
         bool_scalars=steps,
     )
-    working_set_bytes = (
-        8 * (state_float32 + state_int32 + state_uint32)
-        + steps
-        * (4 * (learner.config.feature_dim + 2 * learner.config.n_heads + 10) + 1)
+    working_set_bytes = 8 * (state_float32 + state_int32 + state_uint32) + steps * (
+        4 * (learner.config.feature_dim + 2 * learner.config.n_heads + 10) + 1
     )
     if working_set_bytes > _UINT32_MAX:
         raise ValueError("UPGD memory scan working set must fit unsigned int32")
