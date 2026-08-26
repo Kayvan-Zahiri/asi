@@ -88,3 +88,19 @@ def test_frozen_configuration_rejects_string_subclass_before_len_hook() -> None:
             stdout="not bytes",  # type: ignore[arg-type]
             stderr=b"",
         )
+
+def test_require_dict_rejects_mapping_subclass_before_iteration() -> None:
+    from alberta_framework.benchmarks import foragax_open_screen as mod
+
+    class HostileDict(dict):
+        calls = 0
+
+        def __iter__(self):  # type: ignore[override]
+            type(self).calls += 1
+            raise AssertionError("HostileDict.__iter__ must not run")
+
+    HostileDict.calls = 0
+    with pytest.raises(mod.ScreenError, match="must be an object"):
+        mod._require_dict(HostileDict({"a": 1}), "probe")
+    assert HostileDict.calls == 0
+
