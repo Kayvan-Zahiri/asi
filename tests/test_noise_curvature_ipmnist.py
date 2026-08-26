@@ -143,6 +143,35 @@ def test_fixed_scheduler_is_inert_and_cool_warm_decisions_are_causal() -> None:
     assert not bool(cooled) and bool(warmed)
 
 
+def test_zero_ema_decay_does_not_multiply_inf_curvature_stats() -> None:
+    """ema_decay=0 times poisoned curvature EMA history is 0*inf = NaN without a skip."""
+    params = _tiny_params()
+    config = NoiseCurvatureConfig(
+        mode="combined",
+        total_steps=2,
+        control_interval=2,
+        power_iterations=1,
+        ema_decay=0.0,
+    )
+    state = init_noise_curvature_state(params, config).replace(
+        curvature_mean=jnp.full((3,), jnp.inf, dtype=jnp.float32),
+        curvature_variance=jnp.full((3,), jnp.inf, dtype=jnp.float32),
+    )
+    raw = jnp.asarray(0.0, dtype=jnp.float32) * state.curvature_mean
+    assert not bool(jnp.all(jnp.isfinite(raw)))
+
+    for index in range(2):
+        x = jnp.asarray([0.2, -0.1, 0.4, index * 0.1], dtype=jnp.float32)
+        y = jnp.asarray(index % 2, dtype=jnp.int32)
+        grads = jax.grad(lambda p: cross_entropy_loss(p, x, y)[0])(params)
+        params, state = noise_curvature_step(params, state, grads, x, y, cross_entropy_loss, config)
+
+    assert int(state.controller_count) == 1
+    assert int(state.diagnostic_failures) == 0
+    assert bool(jnp.all(jnp.isfinite(state.curvature_mean)))
+    assert bool(jnp.all(jnp.isfinite(state.curvature_variance)))
+
+
 def test_mechanism_off_matches_fixed_adamw_updates() -> None:
     params = _tiny_params()
     config = NoiseCurvatureConfig(mode="fixed", total_steps=2, control_interval=2)

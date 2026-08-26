@@ -38,6 +38,11 @@ LAYER_PARAMETER_NAMES: Final[tuple[tuple[str, str], ...]] = (
     ("w2", "b2"),
     ("w3", "b3"),
 )
+
+
+def _skip_zero_scale(scale: Array, value: Array) -> Array:
+    """Skip ``0 * inf`` so a closed EMA decay does not poison curvature stats."""
+    return jnp.where(scale == 0.0, jnp.zeros_like(value), scale * value)
 PARAMETER_NAMES: Final[frozenset[str]] = frozenset(
     name for layer in LAYER_PARAMETER_NAMES for name in layer
 )
@@ -454,11 +459,15 @@ def _controller_update(
     normalized_sharpness = jnp.stack(normalizing_steps) * sharpness
     controller_count = state.controller_count + jnp.asarray(1, dtype=jnp.int32)
     decay = jnp.asarray(config.ema_decay, dtype=jnp.float32)
-    mean_uncorrected = decay * state.curvature_mean + (1.0 - decay) * normalized_sharpness
+    mean_uncorrected = (
+        _skip_zero_scale(decay, state.curvature_mean) + (1.0 - decay) * normalized_sharpness
+    )
     correction = 1.0 - decay ** controller_count.astype(jnp.float32)
     mean = mean_uncorrected / correction
     deviations = jnp.square(normalized_sharpness - mean)
-    variance_uncorrected = decay * state.curvature_variance + (1.0 - decay) * deviations
+    variance_uncorrected = (
+        _skip_zero_scale(decay, state.curvature_variance) + (1.0 - decay) * deviations
+    )
     variance = variance_uncorrected / correction
     volatility = variance / (mean + config.volatility_epsilon)
 
