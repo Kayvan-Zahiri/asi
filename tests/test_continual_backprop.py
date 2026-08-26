@@ -988,3 +988,24 @@ class TestCBPWrapperConstructorIdentities:
         payload[field] = value
         with pytest.raises(ValueError, match="serialized"):
             CBPMultiHeadMLPLearner.from_config(payload)
+
+def test_cbp_selects_replacement_using_bias_corrected_utility() -> None:
+    # Young-strong vs old-weak:
+    # Unit 0: constant contribution 1.0 for 100 steps -> age=100
+    # Unit 1: constant contribution 0.9 for 700 steps -> age=700
+    # decay_rate = 0.99, maturity_threshold = 100
+    decay_rate = 0.99
+    age = jnp.array([100, 700], dtype=jnp.int32)
+    # Raw EMA values
+    raw_u0 = 1.0 * (1.0 - decay_rate**100)  # ~0.634
+    raw_u1 = 0.9 * (1.0 - decay_rate**700)  # ~0.899
+    utilities = jnp.array([raw_u0, raw_u1], dtype=jnp.float32)
+
+    # With bias-correction, unit 0 has u_hat=1.0 and unit 1 has u_hat=0.9
+    # Unit 1 (the less useful unit) must be selected for replacement
+    idx, has_candidate = _select_replacement_index(
+        utilities, age, maturity_threshold=100, decay_rate=decay_rate
+    )
+    assert bool(has_candidate)
+    assert int(idx) == 1
+
