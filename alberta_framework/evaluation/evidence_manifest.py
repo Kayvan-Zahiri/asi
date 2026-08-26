@@ -40,7 +40,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from types import FunctionType
+from types import FunctionType, MappingProxyType
 from typing import Literal, NoReturn, Protocol, cast
 
 from alberta_framework.evaluation.continual_ia import (
@@ -1197,8 +1197,8 @@ def _chain_mapping(
     expected_keys: set[str],
     errors: list[str],
 ) -> Mapping[str, object] | None:
-    if not isinstance(value, Mapping):
-        errors.append(f"{location} must be an object")
+    if type(value) is not dict and type(value) is not MappingProxyType:
+        errors.append(f"{location} must be an exact object")
         return None
     if set(value) != expected_keys:
         errors.append(f"{location} keys do not match the frozen chain schema")
