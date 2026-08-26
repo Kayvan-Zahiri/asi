@@ -360,7 +360,7 @@ def _cast_representable(
 
 
 def _nested_tuple(value: Any) -> Any:
-    if isinstance(value, list):
+    if type(value) is list:
         return tuple(_nested_tuple(item) for item in value)
     return value
 
