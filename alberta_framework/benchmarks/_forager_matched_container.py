@@ -811,7 +811,7 @@ def _strict_json(raw: bytes) -> dict[str, Any]:
         raise
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise ContainerError("scorer did not return strict UTF-8 JSON") from exc
-    if not isinstance(value, dict):
+    if type(value) is not dict:
         raise ContainerError("scorer result must be a JSON object")
     return value
 
