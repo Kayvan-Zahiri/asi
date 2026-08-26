@@ -1197,7 +1197,7 @@ def _chain_mapping(
     expected_keys: set[str],
     errors: list[str],
 ) -> Mapping[str, object] | None:
-    if not isinstance(value, Mapping):
+    if type(value) is not dict:
         errors.append(f"{location} must be an object")
         return None
     if set(value) != expected_keys:
@@ -1212,11 +1212,11 @@ def _ftl_acceptance_passed(
     errors: list[str],
 ) -> bool | None:
     scientific = artifact.get("scientific_payload")
-    if not isinstance(scientific, Mapping):
+    if type(scientific) is not dict:
         errors.append(f"{location}.scientific_payload must be an object")
         return None
     acceptance = scientific.get("acceptance")
-    if not isinstance(acceptance, Mapping):
+    if type(acceptance) is not dict:
         errors.append(f"{location}.scientific_payload.acceptance must be an object")
         return None
     passed = acceptance.get("passed")
@@ -1236,10 +1236,10 @@ def _ftl_scientific_digest(
 ) -> str | None:
     scientific = artifact.get("scientific_payload")
     digest = artifact.get("scientific_digest")
-    if not isinstance(scientific, Mapping):
+    if type(scientific) is not dict:
         errors.append(f"{location}.scientific_payload must be an object")
         return None
-    if not isinstance(digest, Mapping):
+    if type(digest) is not dict:
         errors.append(f"{location}.scientific_digest must be an object")
         return None
     recorded = digest.get("sha256")
