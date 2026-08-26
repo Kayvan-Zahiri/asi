@@ -238,9 +238,7 @@ def _require_probability(value: object, *, name: str, strict: bool) -> float:
             return validated_float32_scalar(
                 name, value, positive=True, upper=1.0, upper_inclusive=False
             )
-        return validated_float32_scalar(
-            name, value, lower=0.0, upper=1.0, upper_inclusive=True
-        )
+        return validated_float32_scalar(name, value, lower=0.0, upper=1.0, upper_inclusive=True)
     except ValueError:
         domain = "strictly between 0 and 1" if strict else "in [0, 1]"
         raise ValueError(f"{name} must be a finite real {domain}") from None
@@ -371,6 +369,33 @@ def compute_timeseries_statistics(
     return mean, ci_lower, ci_upper
 
 
+def paired_cohens_d(
+    values_a: NDArray[np.float64] | list[float],
+    values_b: NDArray[np.float64] | list[float],
+) -> float:
+    """Compute Cohen's d_z effect size for paired samples.
+
+    d_z = mean(differences) / std(differences, ddof=1)
+    """
+    a = _require_sample_vector(values_a, name="values_a")
+    b = _require_sample_vector(values_b, name="values_b")
+    if len(a) != len(b):
+        raise ValueError(
+            f"paired_cohens_d requires equal-length samples (got {len(a)} and {len(b)})"
+        )
+    if len(a) < 2:
+        raise ValueError(f"paired_cohens_d requires at least 2 pairs (got {len(a)})")
+
+    diff = a - b
+    mean_diff = float(np.mean(diff))
+    std_diff = float(np.std(diff, ddof=1))
+    if std_diff == 0.0:
+        if mean_diff == 0.0:
+            return 0.0
+        return float(np.copysign(np.inf, mean_diff))
+    return float(mean_diff / std_diff)
+
+
 def cohens_d(
     values_a: NDArray[np.float64] | list[float],
     values_b: NDArray[np.float64] | list[float],
@@ -399,9 +424,7 @@ def cohens_d(
     n_b = len(b)
 
     if n_a == 0 or n_b == 0:
-        raise ValueError(
-            f"cohens_d requires non-empty groups (got n_a={n_a}, n_b={n_b})"
-        )
+        raise ValueError(f"cohens_d requires non-empty groups (got n_a={n_a}, n_b={n_b})")
 
     pooled_df = n_a + n_b - 2
     if pooled_df <= 0:
@@ -497,13 +520,11 @@ def ttest_comparison(
             test_name = "independent t-test"
         # scipy returns (statistic, pvalue) tuple
         stat_val = float(result[0])
-        p_val = _require_p_value(
-            result[1], name=f"p_value returned by {test_name}"
-        )
+        p_val = _require_p_value(result[1], name=f"p_value returned by {test_name}")
     except ImportError:
         raise ImportError("scipy is required for t-test. Install with: pip install scipy")
 
-    effect = cohens_d(a, b)
+    effect = paired_cohens_d(a, b) if paired else cohens_d(a, b)
 
     return SignificanceResult(
         test_name=test_name,
@@ -565,9 +586,7 @@ def mann_whitney_comparison(
             result = stats.mannwhitneyu(a, b, alternative="two-sided")
             # scipy returns (statistic, pvalue) tuple
             stat_val = float(result[0])
-            p_val = _require_p_value(
-                result[1], name="p_value returned by Mann-Whitney U"
-            )
+            p_val = _require_p_value(result[1], name="p_value returned by Mann-Whitney U")
         except ImportError:
             raise ImportError(
                 "scipy is required for Mann-Whitney test. Install with: pip install scipy"
@@ -630,8 +649,7 @@ def wilcoxon_comparison(
 
     if len(a) != len(b):
         raise ValueError(
-            f"Wilcoxon signed-rank test requires equal-length samples "
-            f"(got {len(a)} and {len(b)})"
+            f"Wilcoxon signed-rank test requires equal-length samples (got {len(a)} and {len(b)})"
         )
     _require_exact_str("method_a", method_a)
     _require_exact_str("method_b", method_b)
@@ -641,9 +659,7 @@ def wilcoxon_comparison(
             "samples; the Wilcoxon signed-rank statistic is undefined"
         )
     if len(a) < 2:
-        raise ValueError(
-            f"Wilcoxon signed-rank test requires at least 2 pairs (got {len(a)})"
-        )
+        raise ValueError(f"Wilcoxon signed-rank test requires at least 2 pairs (got {len(a)})")
 
     try:
         from scipy import stats
@@ -651,13 +667,11 @@ def wilcoxon_comparison(
         result = stats.wilcoxon(a, b, alternative="two-sided")
         # scipy returns (statistic, pvalue) tuple
         stat_val = float(result[0])
-        p_val = _require_p_value(
-            result[1], name="p_value returned by Wilcoxon signed-rank"
-        )
+        p_val = _require_p_value(result[1], name="p_value returned by Wilcoxon signed-rank")
     except ImportError:
         raise ImportError("scipy is required for Wilcoxon test. Install with: pip install scipy")
 
-    effect = cohens_d(a, b)
+    effect = paired_cohens_d(a, b)
 
     return SignificanceResult(
         test_name="Wilcoxon signed-rank",
@@ -729,9 +743,7 @@ def holm_correction(
     return significant
 
 
-def _holm_decisions(
-    p_values: list[float], alpha: float
-) -> tuple[list[bool], list[float]]:
+def _holm_decisions(p_values: list[float], alpha: float) -> tuple[list[bool], list[float]]:
     """Return Holm decisions and each record's effective step-down threshold."""
 
     n_tests = len(p_values)
@@ -840,8 +852,7 @@ def pairwise_comparisons(
         _require_exact_str("metric", metric)
         if arr.shape[1] == 0:
             raise ValueError(
-                f"AggregatedResults '{name}' must contain at least one metric step "
-                f"for '{metric}'"
+                f"AggregatedResults '{name}' must contain at least one metric step for '{metric}'"
             )
         metric_arrays[name] = arr
         seeds_by_name[name] = agg.seeds
@@ -972,9 +983,7 @@ def bootstrap_ci(
     _validate_confidence_level(confidence_level)
     n_bootstrap = _require_positive_int("n_bootstrap", n_bootstrap)
     if n_bootstrap > _BOOTSTRAP_MAX_COUNT:
-        raise ValueError(
-            f"n_bootstrap count must be an integer in [1, {_BOOTSTRAP_MAX_COUNT}]"
-        )
+        raise ValueError(f"n_bootstrap count must be an integer in [1, {_BOOTSTRAP_MAX_COUNT}]")
     sample_count = require_parallel_count("sample count", len(arr), _BOOTSTRAP_BUDGET)
     require_step_units(n_bootstrap, sample_count, _BOOTSTRAP_BUDGET)
     rng = np.random.default_rng(seed)

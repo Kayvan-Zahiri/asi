@@ -44,6 +44,7 @@ from alberta_framework.utils.statistics import (
     compute_timeseries_statistics,
     holm_correction,
     mann_whitney_comparison,
+    paired_cohens_d,
     pairwise_comparisons,
     ttest_comparison,
     wilcoxon_comparison,
@@ -168,13 +169,9 @@ class TestSampleVectorContract:
             bootstrap_ci(self._MATRIX, n_bootstrap=10)
 
     def test_cohens_d_rejects_seed_by_step_matrices(self) -> None:
-        with pytest.raises(
-            ValueError, match="values_a must be a one-dimensional sample vector"
-        ):
+        with pytest.raises(ValueError, match="values_a must be a one-dimensional sample vector"):
             cohens_d(self._MATRIX, np.arange(1.0, 6.0))
-        with pytest.raises(
-            ValueError, match="values_b must be a one-dimensional sample vector"
-        ):
+        with pytest.raises(ValueError, match="values_b must be a one-dimensional sample vector"):
             cohens_d(np.arange(1.0, 6.0), self._MATRIX)
 
     @pytest.mark.parametrize(
@@ -189,13 +186,9 @@ class TestSampleVectorContract:
     )
     def test_comparisons_reject_seed_by_step_matrices(self, comparison: Any) -> None:
         vector = np.arange(1.0, 6.0) + 0.5
-        with pytest.raises(
-            ValueError, match="values_a must be a one-dimensional sample vector"
-        ):
+        with pytest.raises(ValueError, match="values_a must be a one-dimensional sample vector"):
             comparison(self._MATRIX, vector)
-        with pytest.raises(
-            ValueError, match="values_b must be a one-dimensional sample vector"
-        ):
+        with pytest.raises(ValueError, match="values_b must be a one-dimensional sample vector"):
             comparison(vector, self._MATRIX)
 
     def test_scalar_and_zero_dimensional_inputs_are_rejected(self) -> None:
@@ -334,9 +327,7 @@ class TestProbabilityContracts:
             _FloatClassSpoof(),
         ],
     )
-    def test_corrections_reject_invalid_p_values(
-        self, correction: Any, invalid_p: Any
-    ) -> None:
+    def test_corrections_reject_invalid_p_values(self, correction: Any, invalid_p: Any) -> None:
         with pytest.raises(
             ValueError,
             match=r"^p_values\[1\] must be a finite real in \[0, 1\]$",
@@ -476,9 +467,7 @@ class TestBootstrapCI:
         coverage = covered / n_reps
         assert 0.85 <= coverage <= 0.99, f"coverage {coverage} outside [0.85, 0.99]"
 
-    @pytest.mark.parametrize(
-        "empty", [[], np.array([], dtype=np.float64)], ids=["list", "ndarray"]
-    )
+    @pytest.mark.parametrize("empty", [[], np.array([], dtype=np.float64)], ids=["list", "ndarray"])
     def test_empty_input_rejected(self, empty: list[float] | np.ndarray) -> None:
         """Empty input raises a descriptive ValueError, with no RuntimeWarning.
 
@@ -645,9 +634,7 @@ class TestIdenticalWilcoxonRejection:
     """All-zero paired differences fail closed before version-dependent SciPy behavior."""
 
     @pytest.mark.parametrize("values", [[0.91], [0.91, 0.88, 0.95]])
-    def test_wilcoxon_rejects_identical_samples_without_warning(
-        self, values: list[float]
-    ) -> None:
+    def test_wilcoxon_rejects_identical_samples_without_warning(self, values: list[float]) -> None:
         with warnings.catch_warnings():
             warnings.simplefilter("error")
             with pytest.raises(
@@ -668,7 +655,7 @@ class TestIdenticalWilcoxonRejection:
         assert result.test_name == "Wilcoxon signed-rank"
         assert result.statistic == pytest.approx(0.0)
         assert result.p_value < 1.0
-        assert result.effect_size == cohens_d([1.0, 2.0, 3.0], [0.5, 1.5, 2.5])
+        assert result.effect_size == paired_cohens_d([1.0, 2.0, 3.0], [0.5, 1.5, 2.5])
 
 
 class TestOneSampleRejection:
@@ -849,9 +836,7 @@ class TestCorrections:
             holm = holm_correction(p_list, alpha=0.05)
             assert len(holm) == len(bonf) == m
             for b_sig, h_sig in zip(bonf, holm, strict=True):
-                assert (not b_sig) or h_sig, (
-                    f"Bonferroni rejected but Holm did not on p={p_list}"
-                )
+                assert (not b_sig) or h_sig, f"Bonferroni rejected but Holm did not on p={p_list}"
             strictly_more += int(sum(holm) > sum(bonf))
         assert strictly_more >= 50, f"Holm strictly larger on only {strictly_more}/2000 draws"
 
@@ -983,9 +968,7 @@ class TestPairwiseComparisons:
             assert res.effect_size < 0.0
 
     def test_correction_matches_manual_holm(self) -> None:
-        comps = pairwise_comparisons(
-            self._results(), test="ttest", correction="holm", window=10
-        )
+        comps = pairwise_comparisons(self._results(), test="ttest", correction="holm", window=10)
         p_values = [r.p_value for r in comps.values()]
         expected = holm_correction(p_values, alpha=0.05)
         assert [r.significant for r in comps.values()] == expected
@@ -1179,3 +1162,23 @@ class TestPairwiseComparisons:
     def test_common_final_window_requires_positive_integer(self, window: object) -> None:
         with pytest.raises(ValueError, match="window must be a positive integer"):
             common_final_window({"learner": 10}, window, "squared_error")
+
+
+def test_paired_ttest_and_wilcoxon_use_cohens_dz() -> None:
+    from alberta_framework.utils.statistics import (
+        paired_cohens_d,
+        ttest_comparison,
+        wilcoxon_comparison,
+    )
+
+    a = np.array([101.0, 202.0, 303.0, 404.0])
+    b = np.array([100.0, 200.0, 300.0, 400.0])
+    expected_dz = float(np.mean(a - b) / np.std(a - b, ddof=1))
+
+    assert paired_cohens_d(a, b) == pytest.approx(expected_dz)
+
+    res_t = ttest_comparison(a, b, paired=True)
+    assert res_t.effect_size == pytest.approx(expected_dz)
+
+    res_w = wilcoxon_comparison(a, b)
+    assert res_w.effect_size == pytest.approx(expected_dz)
