@@ -95,13 +95,13 @@ def _is_exact_int(value: Any) -> TypeGuard[int]:
 
 def _validate_task_intake(protocol: dict[str, Any]) -> tuple[dict[str, Any], int, list[int]]:
     task = protocol.get("task")
-    if not isinstance(task, dict):
+    if type(task) is not dict:
         _fail("protocol task must be an object")
     horizon = task.get("steps_per_seed", task.get("steps"))
     seeds = task.get("seeds")
     if not _is_exact_int(horizon) or horizon <= 0:
         _fail("protocol horizon is invalid")
-    if not isinstance(seeds, list) or not seeds or not all(_is_exact_int(v) for v in seeds):
+    if type(seeds) is not list or not seeds or not all(_is_exact_int(v) for v in seeds):
         _fail("protocol seeds are invalid")
     return task, horizon, cast(list[int], seeds)
 
@@ -132,15 +132,15 @@ def _source_records(protocol: dict[str, Any]) -> list[dict[str, str]]:
     raw = protocol.get("source_files")
     if raw is None:
         implementation = protocol.get("implementation")
-        if not isinstance(implementation, dict):
+        if type(implementation) is not dict:
             _fail("protocol has no implementation object")
         raw = implementation.get("source_files")
-    if not isinstance(raw, list) or not raw:
+    if type(raw) is not list or not raw:
         _fail("protocol source file list must be non-empty")
     records: list[dict[str, str]] = []
     seen: set[str] = set()
     for index, item in enumerate(raw):
-        if not isinstance(item, dict):
+        if type(item) is not dict:
             _fail(f"source_files[{index}] must be an object")
         relative = _relative_path(item.get("path"), f"source_files[{index}].path")
         expected = item.get("sha256")
@@ -173,7 +173,7 @@ def _root_is_read_only() -> bool:
 
 def _load_config(path: Path) -> dict[str, Any]:
     value = load_strict_json_object(path)
-    if not isinstance(value, dict):
+    if type(value) is not dict:
         _fail(f"configuration must be an object: {path}")
     return value
 
@@ -305,11 +305,11 @@ def _validate_configurations(
     task, horizon, typed_seeds = _validate_task_intake(protocol)
 
     raw_configs = protocol.get("configurations")
-    if not isinstance(raw_configs, list) or not raw_configs:
+    if type(raw_configs) is not list or not raw_configs:
         _fail("protocol configurations must be a non-empty list")
     checked: list[dict[str, Any]] = []
     for index, item in enumerate(raw_configs):
-        if not isinstance(item, dict):
+        if type(item) is not dict:
             _fail(f"configurations[{index}] must be an object")
         relative = _relative_path(item.get("path"), f"configurations[{index}].path")
         expected_hash = item.get("sha256")
@@ -346,7 +346,7 @@ def _validate_configurations(
         if environment != expected_environment:
             _fail(f"configuration environment drift: {relative}")
         nested_experiment = hypers.get("experiment", {})
-        if not isinstance(nested_experiment, dict) or nested_experiment.get("seed_offset", 0) != 0:
+        if type(nested_experiment) is not dict or nested_experiment.get("seed_offset", 0) != 0:
             _fail(f"configuration seed offset drift: {relative}")
         agent = config.get("agent")
         if type(agent) is not str or not agent:
@@ -529,7 +529,7 @@ def main() -> None:
     base_schema = base_protocol.get("schema_version")
     base_record = protocol.get("base_protocol")
     if (
-        not isinstance(base_record, dict)
+        type(base_record) is not dict
         or base_schema != _CPU_SCHEMAS[schema]
         or base_record.get("schema_version") != base_schema
         or base_record.get("sha256") != _sha256(base_path)
@@ -541,7 +541,7 @@ def main() -> None:
     predecessor_schema = predecessor_protocol.get("schema_version")
     predecessor_record = protocol.get("supersedes_protocol")
     if (
-        not isinstance(predecessor_record, dict)
+        type(predecessor_record) is not dict
         or predecessor_schema != _PREDECESSOR_SCHEMAS[schema]
         or predecessor_record.get("schema_version") != predecessor_schema
         or predecessor_record.get("sha256") != _sha256(predecessor_path)
@@ -550,7 +550,7 @@ def main() -> None:
         _fail("CPU v3 predecessor identity drift")
     scoring = protocol.get("scoring")
     if (
-        not isinstance(scoring, dict)
+        type(scoring) is not dict
         or scoring.get("implementation_sha256") != _sha256(_SCORER_PATH)
     ):
         _fail("CPU protocol scorer identity drift")
@@ -558,7 +558,7 @@ def main() -> None:
 
     version = importlib.metadata.version("continual-foragax")
     task = base_protocol.get("task")
-    if not isinstance(task, dict):
+    if type(task) is not dict:
         _fail("protocol task must be an object")
     expected_version = task.get("foragax_version")
     if version != expected_version:

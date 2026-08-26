@@ -88,3 +88,35 @@ def test_frozen_configuration_rejects_string_subclass_before_len_hook() -> None:
             stdout="not bytes",  # type: ignore[arg-type]
             stderr=b"",
         )
+
+
+def test_open_screen_probe_rejects_mapping_subclass_task_without_iter_hooks() -> None:
+    from alberta_framework.benchmarks import _foragax_open_screen_probe as probe
+
+    class HostileDict(dict):
+        calls = 0
+
+        def __iter__(self):  # type: ignore[override]
+            type(self).calls += 1
+            raise AssertionError("HostileDict.__iter__ must not run")
+
+    HostileDict.calls = 0
+    with pytest.raises(RuntimeError, match="protocol"):
+        probe._validate_task_intake({"task": HostileDict({"seeds": [0], "steps": 1})})
+    assert HostileDict.calls == 0
+
+
+def test_open_screen_probe_rejects_list_subclass_seeds_without_iter_hooks() -> None:
+    from alberta_framework.benchmarks import _foragax_open_screen_probe as probe
+
+    class HostileList(list):
+        calls = 0
+
+        def __iter__(self):  # type: ignore[override]
+            type(self).calls += 1
+            raise AssertionError("HostileList.__iter__ must not run")
+
+    HostileList.calls = 0
+    with pytest.raises(RuntimeError, match="protocol"):
+        probe._validate_task_intake({"task": {"seeds": HostileList([0]), "steps": 1}})
+    assert HostileList.calls == 0
