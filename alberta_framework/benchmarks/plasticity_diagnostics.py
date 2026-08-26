@@ -13,7 +13,9 @@ import hashlib
 import json
 import math
 import operator
+import os
 import platform
+import stat
 import time
 import zipfile
 from collections.abc import Mapping, Sequence
@@ -637,11 +639,9 @@ def _npy_header(buffer: IO[bytes]) -> tuple[tuple[int, ...], np.dtype]:
     return parsed, np.dtype(dtype)
 
 
-def _preflight_dataset_npz(path: Path) -> None:
-    if not zipfile.is_zipfile(path):
-        raise ValueError("dataset NPZ must be a bounded regular file")
+def _preflight_dataset_npz(source: IO[bytes]) -> None:
     try:
-        archive = zipfile.ZipFile(path)
+        archive = zipfile.ZipFile(source)
     except zipfile.BadZipFile as exc:
         raise ValueError("dataset NPZ must be a bounded regular file") from exc
     with archive:
@@ -691,18 +691,39 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
     if args.dataset is None:
         parser.error("--dataset is required unless --catalog is used")
-    if (
-        args.dataset.is_symlink()
-        or not args.dataset.is_file()
-        or args.dataset.stat().st_size > 256 * 1024 * 1024
+    if not all(hasattr(os, name) for name in ("O_CLOEXEC", "O_NOFOLLOW")):
+        raise ValueError("dataset NPZ loading requires no-follow file support")
+    flags = os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW
+    try:
+        descriptor = os.open(args.dataset, flags)
+    except OSError as exc:
+        raise ValueError("dataset NPZ must be a bounded regular file") from exc
+    try:
+        opened = os.fstat(descriptor)
+        if (
+            not stat.S_ISREG(opened.st_mode)
+            or opened.st_nlink != 1
+            or not 0 < opened.st_size <= 256 * 1024 * 1024
+        ):
+            raise ValueError("dataset NPZ must be a bounded regular file")
+        with os.fdopen(descriptor, "rb") as source:
+            descriptor = -1
+            _preflight_dataset_npz(source)
+            source.seek(0)
+            with np.load(source, allow_pickle=False) as payload:
+                if set(payload.files) != {"images", "labels"}:
+                    raise ValueError("dataset NPZ must contain exactly images and labels")
+                result = run_diagnostic(
+                    payload["images"], payload["labels"], seed=args.seed, profile_id=args.profile
+                )
+            final = os.fstat(source.fileno())
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+    stable_fields = ("st_dev", "st_ino", "st_size", "st_mtime_ns", "st_ctime_ns")
+    if final.st_nlink != 1 or any(
+        getattr(opened, name) != getattr(final, name) for name in stable_fields
     ):
         raise ValueError("dataset NPZ must be a bounded regular file")
-    _preflight_dataset_npz(args.dataset)
-    with np.load(args.dataset, allow_pickle=False) as payload:
-        if set(payload.files) != {"images", "labels"}:
-            raise ValueError("dataset NPZ must contain exactly images and labels")
-        result = run_diagnostic(
-            payload["images"], payload["labels"], seed=args.seed, profile_id=args.profile
-        )
     print(_json_result(result))
     return 0
