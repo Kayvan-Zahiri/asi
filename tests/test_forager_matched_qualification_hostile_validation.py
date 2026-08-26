@@ -91,3 +91,43 @@ def test_probe_invocation_rejects_nonhex_sha256(field: str) -> None:
     inv = _make_probe_invocation()
     with pytest.raises(ForagerMatchedQualificationError, match=f"{field} must be"):
         replace(inv, **{field: "z" * 64})
+
+
+def test_matched_current_qualification_bundle_rejects_mapping_subclasses() -> None:
+    from alberta_framework.benchmarks.forager_matched_qualification import (
+        MatchedCurrentQualificationBundle,
+    )
+
+    class HostileDict(dict[str, object]):
+        pass
+
+    base_kwargs = {
+        "output_root": Path("/out"),
+        "cpu_qualification_root": Path("/cpu"),
+        "rng_parity_qualification_root": Path("/rng"),
+        "runtime_qualification": {},
+        "manifest_bytes": b"{}",
+        "manifest_sha256": "a" * 64,
+    }
+
+    with pytest.raises(
+        ForagerMatchedQualificationError,
+        match="candidate mappings are invalid",
+    ):
+        MatchedCurrentQualificationBundle(
+            **base_kwargs,
+            candidate_qualifications=HostileDict({"cand": {}}),
+            candidate_assets={"cand": {}},
+            manifest={"schema_version": "unused"},
+        )
+
+    with pytest.raises(
+        ForagerMatchedQualificationError,
+        match="manifest must be a mapping",
+    ):
+        MatchedCurrentQualificationBundle(
+            **base_kwargs,
+            candidate_qualifications={"cand": {}},
+            candidate_assets={"cand": {}},
+            manifest=HostileDict({"schema_version": "unused"}),
+        )

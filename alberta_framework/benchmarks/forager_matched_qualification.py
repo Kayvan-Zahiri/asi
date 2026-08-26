@@ -438,14 +438,11 @@ class MatchedCurrentQualificationBundle:
     manifest_sha256: str
 
     def __post_init__(self) -> None:
-        if not isinstance(self.candidate_qualifications, Mapping) or not isinstance(
-            self.candidate_assets,
-            Mapping,
-        ):
+        if type(self.candidate_qualifications) is not dict or type(self.candidate_assets) is not dict:
             raise ForagerMatchedQualificationError(
                 "qualification bundle candidate mappings are invalid"
             )
-        if not isinstance(self.manifest, Mapping):
+        if type(self.manifest) is not dict:
             raise ForagerMatchedQualificationError(
                 "qualification bundle manifest must be a mapping"
             )
