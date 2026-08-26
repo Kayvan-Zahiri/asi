@@ -18,7 +18,7 @@ import hashlib
 import json
 import math
 import re
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any, Final, cast
@@ -66,7 +66,7 @@ def _plain_json(value: Any) -> Any:
                 )
             result[key] = _plain_json(item)
         return result
-    if type(value) is list:
+    if type(value) is list or type(value) is tuple:
         return [_plain_json(item) for item in value]
     if value is None or type(value) in {str, bool, int}:
         return value

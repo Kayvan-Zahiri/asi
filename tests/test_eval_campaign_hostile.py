@@ -82,6 +82,21 @@ def test_plain_json_rejects_mapping_and_sequence_subclasses() -> None:
         _plain_json(HostileList([1, 2]))
     assert HostileList.calls == 0
 
+    class HostileTuple(tuple):
+        calls = 0
+
+        def __iter__(self):  # type: ignore[override]
+            type(self).calls += 1
+            raise AssertionError("HostileTuple.__iter__ must not run")
+
+    HostileTuple.calls = 0
+    with pytest.raises(
+        ForagerMatchedEvaluationCampaignError,
+        match="unsupported HostileTuple",
+    ):
+        _plain_json(HostileTuple((1, 2)))
+    assert HostileTuple.calls == 0
+
 
 def test_decode_schedule_rejects_mapping_subclass() -> None:
     from types import MappingProxyType
