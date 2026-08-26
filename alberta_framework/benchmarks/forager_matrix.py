@@ -847,10 +847,14 @@ def _validate_json_complexity(value: Any, *, description: str) -> None:
             raise ForagerMatrixManifestError(
                 f"{description} exceeds the JSON nesting limit"
             )
-        if isinstance(item, Mapping):
+        if type(item) is dict:
             pending.extend((child, depth + 1) for child in item.values())
-        elif isinstance(item, list):
+        elif type(item) is list:
             pending.extend((child, depth + 1) for child in item)
+        elif item is not None and type(item) not in (bool, int, float, str):
+            raise ForagerMatrixManifestError(
+                f"{description} contains a non-JSON value of type {type(item).__name__}"
+            )
 
 
 def _decode_strict_json(data: str, *, description: str) -> Any:
@@ -916,7 +920,7 @@ def _require_nonnegative_int(value: Any, path: str) -> int:
 
 
 def _require_seed_list(value: Any, path: str) -> tuple[int, ...]:
-    if not isinstance(value, list):
+    if type(value) is not list:
         raise ForagerMatrixManifestError(f"{path} must be a JSON array")
     if not value:
         raise ForagerMatrixManifestError(f"{path} must not be empty")
@@ -957,7 +961,7 @@ def _coerce_typed_value(value: Any, annotation: Any, path: str) -> Any:
             return _coerce_typed_value(value, non_none[0], path)
 
     if origin is tuple:
-        if not isinstance(value, list):
+        if type(value) is not list:
             raise ForagerMatrixManifestError(f"{path} must be a JSON array")
         element_type = arguments[0] if arguments else Any
         return tuple(

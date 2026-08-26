@@ -192,3 +192,31 @@ def test_source_snapshot_rejects_hostile_archive_size_before_comparison() -> Non
             description="hostile snapshot",
         )
     assert _HostileString.calls == _ExplodingPattern.calls == 0
+
+
+def test_json_complexity_rejects_mapping_subclass_without_values_hooks() -> None:
+    class HostileDict(dict):
+        calls = 0
+
+        def values(self):  # type: ignore[override]
+            type(self).calls += 1
+            raise AssertionError("HostileDict.values must not run")
+
+    HostileDict.calls = 0
+    with pytest.raises(matrix.ForagerMatrixManifestError, match="non-JSON value"):
+        matrix._validate_json_complexity(HostileDict({"a": 1}), description="manifest")
+    assert HostileDict.calls == 0
+
+
+def test_require_seed_list_rejects_list_subclass_without_iter_hooks() -> None:
+    class HostileList(list):
+        calls = 0
+
+        def __iter__(self):  # type: ignore[override]
+            type(self).calls += 1
+            raise AssertionError("HostileList.__iter__ must not run")
+
+    HostileList.calls = 0
+    with pytest.raises(matrix.ForagerMatrixManifestError, match="must be a JSON array"):
+        matrix._require_seed_list(HostileList([1]), "seeds")
+    assert HostileList.calls == 0
