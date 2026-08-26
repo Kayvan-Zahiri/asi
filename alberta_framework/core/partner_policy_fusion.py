@@ -29,6 +29,7 @@ import json
 import math
 import operator
 from collections.abc import Mapping
+from types import MappingProxyType
 from numbers import Real
 from typing import Any, SupportsIndex, cast
 
@@ -1790,6 +1791,8 @@ class PartnerPolicyFusion:
     ) -> tuple[PartnerPolicyFusion, PartnerPolicyFusionState]:
         """Strictly restore an exact v1 construction and state."""
 
+        if type(checkpoint) is not dict and type(checkpoint) is not MappingProxyType:
+            raise ValueError("partner-fusion checkpoint must be an exact mapping")
         expected = {
             "schema",
             "mechanism_status",
@@ -1810,7 +1813,9 @@ class PartnerPolicyFusion:
             raise ValueError("partner-fusion checkpoint cannot claim promotion")
         construction = checkpoint.get("fusion")
         state_payload = checkpoint.get("state")
-        if not isinstance(construction, Mapping) or not isinstance(state_payload, Mapping):
+        if (type(construction) is not dict and type(construction) is not MappingProxyType) or (
+            type(state_payload) is not dict and type(state_payload) is not MappingProxyType
+        ):
             raise ValueError("checkpoint fusion and state fields must be mappings")
         if checkpoint.get("config_digest") != _payload_digest(construction):
             raise ValueError("partner-fusion checkpoint config digest mismatch")

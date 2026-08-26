@@ -975,3 +975,34 @@ def test_maximum_fusion_config_keeps_derived_resources_in_int32_domain() -> None
     for value in budget.to_config().values():
         if type(value) is int:
             assert 0 <= value <= 2**31 - 1
+
+
+def test_from_checkpoint_payload_rejects_mapping_subclasses() -> None:
+    from types import MappingProxyType
+
+    fusion = _fusion()
+    armed = fusion.init()
+    payload = fusion.checkpoint_payload(armed)
+
+    class HostileDict(dict):
+        calls = 0
+
+        def get(self, *args, **kwargs):  # type: ignore[override]
+            type(self).calls += 1
+            raise AssertionError("HostileDict.get must not run")
+
+    HostileDict.calls = 0
+    with pytest.raises(ValueError, match="exact mapping"):
+        PartnerPolicyFusion.from_checkpoint_payload(HostileDict(payload))
+    assert HostileDict.calls == 0
+
+    nested = dict(payload)
+    nested["fusion"] = HostileDict(payload["fusion"])
+    with pytest.raises(ValueError, match="must be mappings"):
+        PartnerPolicyFusion.from_checkpoint_payload(nested)
+
+    restored_fusion, restored_state = PartnerPolicyFusion.from_checkpoint_payload(
+        MappingProxyType(payload)
+    )
+    assert restored_fusion.to_config() == fusion.to_config()
+    assert restored_state is not None
