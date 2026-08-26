@@ -883,7 +883,7 @@ def load_recurring_feature_artifact(path: Path) -> dict[str, object]:
         parse_float=_parse_finite_json_float,
         object_pairs_hook=_reject_duplicate_keys,
     )
-    if not isinstance(parsed, dict):
+    if type(parsed) is not dict:
         raise ValueError("evidence artifact must be a JSON object")
     return parsed
 
@@ -895,7 +895,7 @@ def _mapping(
     errors: list[str],
 ) -> Mapping[str, object] | None:
     value = parent.get(key)
-    if not isinstance(value, Mapping):
+    if type(value) is not dict:
         errors.append(f"{location}.{key} must be an object")
         return None
     return value
@@ -940,7 +940,7 @@ def _extract_seed_metrics(
     summaries: object,
     errors: list[str],
 ) -> tuple[list[int], dict[str, list[dict[str, object]]]]:
-    if not isinstance(summaries, list) or not summaries:
+    if type(summaries) is not list or not summaries:
         errors.append("scientific_payload.seed_summaries must be a non-empty array")
         return [], {"retained": [], "no_retention": []}
     seeds: list[int] = []
@@ -950,7 +950,7 @@ def _extract_seed_metrics(
     }
     for index, raw_summary in enumerate(summaries):
         location = f"scientific_payload.seed_summaries[{index}]"
-        if not isinstance(raw_summary, Mapping):
+        if type(raw_summary) is not dict:
             errors.append(f"{location} must be an object")
             continue
         if set(raw_summary) != {"seed", "retained", "no_retention"}:
@@ -962,7 +962,7 @@ def _extract_seed_metrics(
         seeds.append(seed)
         for name in variants:
             raw_variant = raw_summary.get(name)
-            if not isinstance(raw_variant, Mapping):
+            if type(raw_variant) is not dict:
                 errors.append(f"{location}.{name} must be an object")
                 continue
             variants[name].append(dict(raw_variant))
@@ -981,7 +981,7 @@ def _nmse_values(
     nmse_values: dict[str, list[float]] = {task: [] for task in TASK_NAMES}
     for index, variant in enumerate(variants):
         raw_nmse = variant.get("final_heldout_nmse")
-        if not isinstance(raw_nmse, Mapping):
+        if type(raw_nmse) is not dict:
             errors.append(f"{name}[{index}].final_heldout_nmse must be an object")
             continue
         if set(raw_nmse) != set(TASK_NAMES):
@@ -996,12 +996,12 @@ def _nmse_values(
 
 
 def _pair_set(value: object) -> set[tuple[int, int]] | None:
-    if not isinstance(value, list):
+    if type(value) is not list:
         return None
     pairs: set[tuple[int, int]] = set()
     for pair in value:
         if (
-            not isinstance(pair, list)
+            type(pair) is not list
             or len(pair) != 2
             or any(isinstance(item, bool) or not isinstance(item, int) for item in pair)
         ):
@@ -1022,7 +1022,7 @@ def _valid_task_recovery_record(
     expected_task: str,
     maximum_step: int,
 ) -> bool:
-    if not isinstance(value, Mapping) or set(value) != {
+    if type(value) is not dict or set(value) != {
         "task",
         "acquisition_steps",
         "recurrence_steps",
@@ -1035,7 +1035,7 @@ def _valid_task_recovery_record(
             value.get("acquisition_steps"),
             maximum=maximum_step,
         )
-        and isinstance(recurrence_steps, list)
+        and type(recurrence_steps) is list
         and all(
             _valid_optional_recovery_step(step, maximum=maximum_step) for step in recurrence_steps
         )
@@ -1093,13 +1093,13 @@ def _recomputed_aggregate(
             candidates = _pair_set(raw_candidates)
             active = _pair_set(raw_active)
             candidate_archive_valid = (
-                isinstance(raw_candidates, list)
+                type(raw_candidates) is list
                 and len(raw_candidates) == protocol.candidate_pair_budget
                 and candidates is not None
                 and frozenset(candidates) == expected_candidates
             )
             active_bank_valid = (
-                isinstance(raw_active, list)
+                type(raw_active) is list
                 and len(raw_active) == protocol.active_pair_budget
                 and active is not None
                 and len(active) == protocol.active_pair_budget
@@ -1121,7 +1121,7 @@ def _recomputed_aggregate(
             evictions[variant_name].append(float(expected_evicted))
             declared_critical = variant_record.get("critical_pairs_retained")
             if (
-                not isinstance(declared_critical, list)
+                type(declared_critical) is not list
                 or len(declared_critical) != len(CRITICAL_TASKS)
                 or not all(isinstance(value, bool) for value in declared_critical)
                 or declared_critical != expected_critical
@@ -1160,13 +1160,13 @@ def _recomputed_aggregate(
 
             raw_phases = variant_record.get("phase_evidence")
             derived_recovery: dict[str, list[int | None]] = {task: [] for task in TASK_NAMES}
-            phases_valid = isinstance(raw_phases, list) and len(raw_phases) == len(PHASE_TASKS)
+            phases_valid = type(raw_phases) is list and len(raw_phases) == len(PHASE_TASKS)
             if not phases_valid:
                 errors.append(f"{location}.phase_evidence is not the complete frozen schedule")
-            if isinstance(raw_phases, list):
+            if type(raw_phases) is list:
                 for phase_index, raw_phase in enumerate(raw_phases):
                     phase_location = f"{location}.phase_evidence[{phase_index}]"
-                    if not isinstance(raw_phase, Mapping):
+                    if type(raw_phase) is not dict:
                         errors.append(f"{phase_location} must be an object")
                         continue
                     if set(raw_phase) != {
@@ -1224,7 +1224,7 @@ def _recomputed_aggregate(
             ]
             raw_task_recovery = variant_record.get("task_recovery")
             task_recovery_schema_valid = (
-                isinstance(raw_task_recovery, list)
+                type(raw_task_recovery) is list
                 and len(raw_task_recovery) == len(TASK_NAMES)
                 and all(
                     _valid_task_recovery_record(
@@ -1249,11 +1249,11 @@ def _recomputed_aggregate(
         recurrence: list[float] = []
         for index, variant_record in enumerate(variants[name]):
             raw_recovery = variant_record.get("task_recovery")
-            if not isinstance(raw_recovery, list):
+            if type(raw_recovery) is not list:
                 errors.append(f"{name}[{index}].task_recovery must be an array")
                 continue
             for task_record in raw_recovery:
-                if not isinstance(task_record, Mapping):
+                if type(task_record) is not dict:
                     continue
                 if task_record.get("task") not in CRITICAL_TASKS:
                     continue
@@ -1261,7 +1261,7 @@ def _recomputed_aggregate(
                 if acquisition_value is not None:
                     acquisition.append(acquisition_value)
                 recurrence_values = task_record.get("recurrence_steps")
-                if isinstance(recurrence_values, list):
+                if type(recurrence_values) is list:
                     recurrence.extend(
                         value
                         for raw_value in recurrence_values
@@ -1299,12 +1299,12 @@ def _recomputed_aggregate(
     recovery_differences: list[float] = []
     for retained_record in variants["retained"]:
         raw_recovery = retained_record.get("task_recovery")
-        if not isinstance(raw_recovery, list):
+        if type(raw_recovery) is not list:
             continue
         acquisitions: list[float] = []
         recurrences: list[float] = []
         for task_record in raw_recovery:
-            if not isinstance(task_record, Mapping):
+            if type(task_record) is not dict:
                 continue
             if task_record.get("task") not in CRITICAL_TASKS:
                 continue
@@ -1373,7 +1373,7 @@ def _validate_checks(
     expected_actuals: Mapping[str, float],
     errors: list[str],
 ) -> bool:
-    if not isinstance(value, list):
+    if type(value) is not list:
         errors.append("scientific_payload.acceptance.checks must be an array")
         return False
     criteria = RecurringFeatureGateCriteria()
@@ -1418,7 +1418,7 @@ def _validate_checks(
     all_passed = True
     for index, raw_check in enumerate(value):
         location = f"scientific_payload.acceptance.checks[{index}]"
-        if not isinstance(raw_check, Mapping):
+        if type(raw_check) is not dict:
             errors.append(f"{location} must be an object")
             all_passed = False
             continue
@@ -1488,12 +1488,12 @@ def _expected_check_actuals(
 ) -> dict[str, float]:
     retained = aggregate.get("retained")
     baseline = aggregate.get("no_retention")
-    retained_map = retained if isinstance(retained, Mapping) else {}
-    baseline_map = baseline if isinstance(baseline, Mapping) else {}
+    retained_map = retained if type(retained) is dict else {}
+    baseline_map = baseline if type(baseline) is dict else {}
     configuration = scientific.get("configuration")
     memory = scientific.get("memory_budget")
     canonical = _configuration_payload(RecurringFeatureProtocol())
-    canonical_protocol = isinstance(configuration, Mapping) and configuration == canonical
+    canonical_protocol = type(configuration) is dict and configuration == canonical
     matched = (
         len(seeds) == len(set(seeds))
         and seeds == sorted(seeds)
@@ -1509,7 +1509,7 @@ def _expected_check_actuals(
             raw_candidates = variant_record.get("candidate_pairs")
             raw_active = variant_record.get("active_pairs")
             archive_ok = archive_ok and (
-                isinstance(raw_candidates, list)
+                type(raw_candidates) is list
                 and len(raw_candidates) == protocol.candidate_pair_budget
                 and (candidate_pairs := _pair_set(raw_candidates)) is not None
                 and frozenset(candidate_pairs) == expected_candidates
@@ -1518,7 +1518,7 @@ def _expected_check_actuals(
             )
             active_pairs = _pair_set(raw_active)
             active_ok = active_ok and (
-                isinstance(raw_active, list)
+                type(raw_active) is list
                 and len(raw_active) == protocol.active_pair_budget
                 and active_pairs is not None
                 and len(active_pairs) == protocol.active_pair_budget
@@ -1529,7 +1529,7 @@ def _expected_check_actuals(
             phases_complete = isinstance(raw_phases, list) and len(raw_phases) == len(PHASE_TASKS)
             phases_finite = (
                 all(
-                    isinstance(raw_phase, Mapping)
+                    type(raw_phase) is dict
                     and (phase_nmse := _finite_number(raw_phase.get("prequential_nmse")))
                     is not None
                     and phase_nmse >= 0.0
@@ -1541,7 +1541,7 @@ def _expected_check_actuals(
             steps_seen = variant_record.get("steps_seen")
             finite_ok = (
                 finite_ok
-                and isinstance(raw_nmse, Mapping)
+                and type(raw_nmse) is dict
                 and all(
                     (value := _finite_number(raw_nmse.get(task))) is not None and value >= 0.0
                     for task in TASK_NAMES
@@ -1567,9 +1567,9 @@ def _expected_check_actuals(
     acquisition = _finite_number(retained_map.get("median_acquisition_recovery_steps"))
     recurrence = _finite_number(retained_map.get("median_recurrence_recovery_steps"))
     heldout_samples = _finite_number(
-        configuration.get("heldout_samples") if isinstance(configuration, Mapping) else None
+        configuration.get("heldout_samples") if type(configuration) is dict else None
     )
-    memory_ok = isinstance(memory, Mapping) and memory == expected_memory
+    memory_ok = type(memory) is dict and memory == expected_memory
     actuals = {
         "canonical_protocol": float(canonical_protocol),
         "evidence_seed_schedule": float(tuple(seeds) == EVIDENCE_SEEDS),
@@ -1681,14 +1681,14 @@ def _validate_operational(
     if wall_seconds is None or wall_seconds < 0.0:
         errors.append("operational_metadata.gate_wall_seconds must be non-negative")
     runtime = operational.get("runtime")
-    if not isinstance(runtime, Mapping):
+    if type(runtime) is not dict:
         errors.append("operational_metadata.runtime must be an object")
     else:
         if set(runtime) != {"python", "platform", "packages", "jax"}:
             errors.append("operational_metadata.runtime keys do not match the v1 schema")
         python_runtime = runtime.get("python")
         if (
-            not isinstance(python_runtime, Mapping)
+            type(python_runtime) is not dict
             or set(python_runtime)
             != {
                 "implementation",
@@ -1702,7 +1702,7 @@ def _validate_operational(
             errors.append("operational_metadata.runtime.python is invalid")
         platform_runtime = runtime.get("platform")
         if (
-            not isinstance(platform_runtime, Mapping)
+            type(platform_runtime) is not dict
             or set(platform_runtime)
             != {
                 "system",
@@ -1717,7 +1717,7 @@ def _validate_operational(
             errors.append("operational_metadata.runtime.platform is invalid")
         packages = runtime.get("packages")
         if (
-            not isinstance(packages, Mapping)
+            type(packages) is not dict
             or set(packages)
             != {
                 "alberta-framework",
@@ -1732,7 +1732,7 @@ def _validate_operational(
         ):
             errors.append("operational_metadata.runtime.packages is invalid")
         jax_runtime = runtime.get("jax")
-        if not isinstance(jax_runtime, Mapping) or set(jax_runtime) != {
+        if type(jax_runtime) is not dict or set(jax_runtime) != {
             "default_backend",
             "devices",
         }:
@@ -1743,10 +1743,10 @@ def _validate_operational(
             if not isinstance(backend, str) or not backend:
                 errors.append("operational_metadata.runtime.jax.default_backend is invalid")
             if (
-                not isinstance(devices, list)
+                type(devices) is not list
                 or not devices
                 or not all(
-                    isinstance(device, Mapping)
+                    type(device) is dict
                     and set(device) == {"platform", "device_kind"}
                     and isinstance(device.get("platform"), str)
                     and bool(device.get("platform"))
@@ -1757,7 +1757,7 @@ def _validate_operational(
             ):
                 errors.append("operational_metadata.runtime.jax.devices is invalid")
     git_worktree = operational.get("git_worktree")
-    if not isinstance(git_worktree, Mapping):
+    if type(git_worktree) is not dict:
         errors.append("operational_metadata.git_worktree must be an object")
     else:
         if set(git_worktree) != {"head", "dirty"}:
@@ -1772,7 +1772,7 @@ def _validate_operational(
         provenance_head: object = None
         if scientific is not None:
             provenance = scientific.get("source_provenance")
-            if isinstance(provenance, Mapping):
+            if type(provenance) is dict:
                 provenance_head = provenance.get("git_head")
         if recorded_head != provenance_head:
             errors.append(
@@ -1885,7 +1885,7 @@ def validate_recurring_feature_artifact(
             if not isinstance(acceptance.get("upstream_summary"), str):
                 errors.append("scientific_payload.acceptance.upstream_summary must be a string")
             upstream_failures = acceptance.get("upstream_failures")
-            if not isinstance(upstream_failures, list) or not all(
+            if type(upstream_failures) is not list or not all(
                 isinstance(failure, str) for failure in upstream_failures
             ):
                 errors.append(
