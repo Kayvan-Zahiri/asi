@@ -69,3 +69,24 @@ def test_benign_timeout_passes() -> None:
         assert "finite and positive" not in str(error)
     except Exception:
         pass
+
+
+class _HostileEnvDict(dict):
+    calls = 0
+
+    def items(self):  # type: ignore[override]
+        type(self).calls += 1
+        raise AssertionError("hostile env items")
+
+
+def test_environment_rejects_mapping_subclass_before_items() -> None:
+    _HostileEnvDict.calls = 0
+    with pytest.raises(TypeError, match="exact dict or MappingProxyType"):
+        _run_bounded_process(
+            ["echo", "hi"],
+            timeout=1,
+            maximum_stdout_bytes=100,
+            maximum_stderr_bytes=100,
+            environment=_HostileEnvDict({"A": "b"}),  # type: ignore[arg-type]
+        )
+    assert _HostileEnvDict.calls == 0
