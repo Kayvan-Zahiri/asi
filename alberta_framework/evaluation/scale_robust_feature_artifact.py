@@ -37,6 +37,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from types import MappingProxyType
 from typing import NoReturn
 
 import jax
@@ -1631,8 +1632,8 @@ def _mapping(
     location: str,
     errors: list[str],
 ) -> Mapping[str, object] | None:
-    if not isinstance(value, Mapping):
-        errors.append(f"{location} must be an object")
+    if type(value) is not dict and type(value) is not MappingProxyType:
+        errors.append(f"{location} must be an exact object")
         return None
     return value
 
