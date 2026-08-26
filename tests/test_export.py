@@ -581,3 +581,39 @@ def test_export_rejects_boolean_summary_statistics(
 
     with pytest.raises(ValueError, match="refusing to export boolean as numeric measurement"):
         generate_markdown_table(results)
+
+
+def test_significance_markers_use_stored_decision_alpha() -> None:
+    from alberta_framework.utils.export import _get_md_significance_marker, _get_significance_marker
+    from alberta_framework.utils.statistics import SignificanceResult
+    from alberta_framework.utils.visualization import _get_significance_marker_for_plot
+
+    r1 = SignificanceResult(
+        test_name="wilcoxon",
+        statistic=1.0,
+        p_value=0.08,
+        significant=True,
+        alpha=0.10,
+        effect_size=0.5,
+        method_a="b",
+        method_b="a",
+    )
+    sig_dict1 = {("b", "a"): r1}
+    assert _get_md_significance_marker("b", "a", sig_dict1) == " *"
+    assert _get_significance_marker("b", "a", sig_dict1) == r"$^{*}$"
+    assert _get_significance_marker_for_plot("b", "a", sig_dict1) == "*"
+
+    r2 = SignificanceResult(
+        test_name="ttest",
+        statistic=5.0,
+        p_value=0.002,
+        significant=True,
+        alpha=0.0025,
+        effect_size=1.2,
+        method_a="b",
+        method_b="a",
+    )
+    sig_dict2 = {("b", "a"): r2}
+    assert _get_md_significance_marker("b", "a", sig_dict2) == " *"
+    assert _get_significance_marker("b", "a", sig_dict2) == r"$^{*}$"
+    assert _get_significance_marker_for_plot("b", "a", sig_dict2) == "*"
