@@ -77,3 +77,17 @@ def test_driver_launch_contract_rejects_invalid_inputs() -> None:
             cuda_wheel_library_paths=(),
             driver_user_library_paths=(),
         )
+
+
+def test_prepared_oci_build_rejects_build_spec_mapping_subclasses() -> None:
+    class HostileDict(dict[str, object]):
+        pass
+
+    with pytest.raises(OfficialForagaxOciError, match="build_spec must be a mapping"):
+        PreparedOciBuild(
+            context=Path("/context"),
+            build_spec=HostileDict(),  # type: ignore[arg-type]
+            build_spec_sha256="a" * 64,
+            dockerfile_sha256="b" * 64,
+            launcher_sha256="c" * 64,
+        )
