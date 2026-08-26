@@ -272,11 +272,21 @@ class PreparedCandidate:
             )
         if self.rng_isolation_patch_sha256 is not None:
             _sha256(self.rng_isolation_patch_sha256, "rng_isolation_patch_sha256")
-        if not isinstance(self.capability_receipt, Mapping):
-            raise ForagerMatchedExecutorError("capability_receipt must be a mapping")
+        if (
+            type(self.capability_receipt) is not dict
+            and type(self.capability_receipt) is not MappingProxyType
+        ):
+            raise ForagerMatchedExecutorError(
+                "capability_receipt must be an exact dict or MappingProxyType"
+            )
         _sha256(self.capability_receipt_sha256, "capability_receipt_sha256")
-        if not isinstance(self.source_inventory, Mapping):
-            raise ForagerMatchedExecutorError("source_inventory must be a mapping")
+        if (
+            type(self.source_inventory) is not dict
+            and type(self.source_inventory) is not MappingProxyType
+        ):
+            raise ForagerMatchedExecutorError(
+                "source_inventory must be an exact dict or MappingProxyType"
+            )
 
 
 @dataclass(frozen=True, slots=True)
@@ -1270,7 +1280,7 @@ def _freeze(value: Any) -> Any:
 
 
 def _thaw(value: Any) -> Any:
-    if isinstance(value, Mapping):
+    if type(value) is dict or type(value) is MappingProxyType:
         if any(type(key) is not str for key in value):
             raise ForagerMatchedExecutorError(
                 "canonical JSON object keys must be strings"
@@ -1672,7 +1682,7 @@ def _docker_mount_path(path: Path, label: str) -> str:
 
 
 def _decode_mapping(value: Mapping[str, Any] | bytes | str, label: str) -> dict[str, Any]:
-    if isinstance(value, Mapping):
+    if type(value) is dict or type(value) is MappingProxyType:
         decoded = decode_strict_json(canonical_json_bytes(dict(value)))
     elif type(value) in (bytes, str):
         decoded = decode_strict_json(value)
@@ -2812,7 +2822,7 @@ def parse_execution_plan(
         expected_qualification_manifest_sha256,
         "expected qualification manifest SHA-256",
     )
-    if isinstance(value, Mapping):
+    if type(value) is dict or type(value) is MappingProxyType:
         payload = _decode_mapping(value, "execution plan")
     elif type(value) in (bytes, str):
         payload = _decode_mapping(value, "execution plan")

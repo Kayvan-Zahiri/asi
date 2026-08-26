@@ -106,3 +106,19 @@ def test_protocol_instance_rejects_subclass_without_to_dict() -> None:
     with pytest.raises(ForagerMatchedExecutorError):
         _protocol_instance(hostile)  # type: ignore[arg-type]
     assert _HostileProtocol.calls == 0
+
+
+def test_decode_mapping_rejects_dict_subclass_without_iter_hooks() -> None:
+    from alberta_framework.benchmarks.forager_matched_executor import _decode_mapping
+
+    class HostileDict(dict):
+        calls = 0
+
+        def __iter__(self):  # type: ignore[override]
+            type(self).calls += 1
+            raise AssertionError("HostileDict.__iter__ must not run")
+
+    HostileDict.calls = 0
+    with pytest.raises(TypeError, match="must be a mapping, bytes, or str"):
+        _decode_mapping(HostileDict({"x": 1}), "label")
+    assert HostileDict.calls == 0
