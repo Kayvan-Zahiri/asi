@@ -204,6 +204,34 @@ def test_silent_feature_does_not_turn_inf_value_into_nan() -> None:
     chex.assert_trees_all_equal(result.metrics, jnp.zeros_like(result.metrics))
 
 
+def test_zero_utility_decay_does_not_multiply_inf_utility() -> None:
+    """utility_decay=0 times a poisoned utility is 0*inf = NaN without a skip."""
+    learner = AssociativeMemoryLearner(
+        AssociativeMemoryConfig(
+            vocab_size=4,
+            block_size=3,
+            suffix_length=2,
+            max_features=8,
+            utility_decay=0.0,
+        )
+    )
+    state = learner.init()
+    context = jnp.asarray([1, 2, 3], dtype=jnp.int32)
+    label = jnp.asarray(1, dtype=jnp.int32)
+    seeded = learner.update(state, context, label).state
+    occupied = int(jnp.argmax(seeded.counts > 0))
+    poisoned = seeded.replace(
+        utility=seeded.utility.at[occupied].set(jnp.asarray(jnp.inf, dtype=jnp.float32))
+    )
+    raw = jnp.asarray(0.0, dtype=jnp.float32) * poisoned.utility[occupied]
+    assert not bool(jnp.isfinite(raw))
+
+    result = learner.update(poisoned, context, label)
+    assert bool(result.update_applied)
+    assert bool(jnp.all(jnp.isfinite(result.state.utility)))
+    assert float(result.state.utility[occupied]) != float("inf")
+
+
 def test_corrupted_active_family_logits_remain_fail_visible() -> None:
     """An invalid active gate must not masquerade as a uniform valid gate."""
     learner = AssociativeMemoryLearner(

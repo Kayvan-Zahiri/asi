@@ -168,6 +168,11 @@ def _require_half_open_unit_interval(name: str, value: object) -> float:
     return canonical_float32_storage(real, narrowed)
 
 
+def _skip_zero_scale(scale: Array, value: Array) -> Array:
+    """Skip ``0 * inf`` so a closed decay/retention scale does not poison state."""
+    return jnp.where(scale == 0.0, jnp.zeros_like(value), scale * value)
+
+
 def _require_nonnegative_real(name: str, value: object) -> float:
     real, numerator, _, narrowed = finite_real_and_float32(name, value)
     if real < 0.0 or numerator < 0 or narrowed < 0.0:
@@ -673,6 +678,23 @@ class AssociativeMemoryLearner:
             & jnp.all(state.last_update <= state.step_count)
         )
 
+    def _source_state_is_valid(self, state: AssociativeMemoryState) -> Bool[Array, ""]:
+        """Finite-state gate that discards history zeroed by decay/retention."""
+        utility = state.utility
+        values = state.values
+        prior = state.prior
+        if self._config.utility_decay == 0.0:
+            utility = jnp.zeros_like(utility)
+        if self._config.retention == 0.0:
+            values = jnp.zeros_like(values)
+            prior = jnp.zeros_like(prior)
+        checked = state.replace(  # type: ignore[attr-defined]
+            utility=utility,
+            values=values,
+            prior=prior,
+        )
+        return self._state_is_valid(checked)
+
     def _validate_context_static_contract(self, context: object) -> None:
         _require_array(
             "context",
@@ -1069,8 +1091,10 @@ class AssociativeMemoryLearner:
         prediction = self._predict_jit(state, context)
         loss = _cross_entropy_from_logits(prediction.logits, label)
         accuracy = (jnp.argmax(prediction.logits) == label).astype(jnp.float32)
+        retention = jnp.asarray(self._config.retention, dtype=jnp.float32)
+        utility_decay = jnp.asarray(self._config.utility_decay, dtype=jnp.float32)
         next_state = state.replace(  # type: ignore[attr-defined]
-            prior=state.prior * self._config.retention,
+            prior=_skip_zero_scale(retention, state.prior),
         )
         next_state = next_state.replace(  # type: ignore[attr-defined]
             prior=next_state.prior.at[label].add(self._config.write_lr)
@@ -1098,7 +1122,7 @@ class AssociativeMemoryLearner:
                 jnp.log(jnp.asarray(self._config.vocab_size, dtype=jnp.float32)),
             )
             new_utility = (
-                self._config.utility_decay * old_utility
+                _skip_zero_scale(utility_decay, old_utility)
                 + self._config.utility_lr * (loss - feature_loss)
             )
             # Clip the stored trace, not just the derived weight: ±8 is far
@@ -1107,7 +1131,7 @@ class AssociativeMemoryLearner:
             # caps how deeply a row can saturate and keeps the number of
             # opposing-sign updates needed to recover bounded.
             new_utility = jnp.clip(new_utility, -8.0, 8.0)
-            new_row = old_row * self._config.retention
+            new_row = _skip_zero_scale(retention, old_row)
             new_row = new_row.at[label].add(self._config.write_lr)
             active_bool = active > 0
             allocations = _saturating_add_bool(
@@ -1187,7 +1211,7 @@ class AssociativeMemoryLearner:
         )
         update_applied = (
             label_valid
-            & self._state_is_valid(state)
+            & self._source_state_is_valid(state)
             & floating_tree_is_finite(prediction)
             & jnp.isfinite(loss)
             & floating_tree_is_finite(next_state)
