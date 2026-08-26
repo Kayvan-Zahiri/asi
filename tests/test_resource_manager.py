@@ -668,9 +668,7 @@ def _minimal_generator_manager(**overrides: object) -> GeneratorMetaResourceMana
         ("advantage_clip", True),
     ],
 )
-def test_learned_resource_manager_rejects_invalid_float32_config(
-    field: str, value: object
-) -> None:
+def test_learned_resource_manager_rejects_invalid_float32_config(field: str, value: object) -> None:
     with pytest.raises(ValueError, match=field):
         LearnedResourceManager(n_actions=2, **{field: value})  # type: ignore[arg-type]
 
@@ -686,10 +684,17 @@ def test_resource_manager_float32_config_is_canonical_and_json_safe() -> None:
         advantage_clip=np.float32(2.0),
     )
     config = manager.to_config()
-    assert all(type(config[name]) is float for name in (
-        "learning_rate", "discount", "exploration", "loss_decay", "cost_weight",
-        "advantage_clip",
-    ))
+    assert all(
+        type(config[name]) is float
+        for name in (
+            "learning_rate",
+            "discount",
+            "exploration",
+            "loss_decay",
+            "cost_weight",
+            "advantage_clip",
+        )
+    )
 
 
 def test_resource_manager_preflights_complete_state_before_allocation() -> None:
@@ -719,7 +724,7 @@ def test_generator_config_rejects_hostile_sequences_and_accepts_mapping_proxy() 
 
 @pytest.mark.parametrize("shape", [(), (1,), (1, 2), (2, 1), (3,)])
 def test_resource_manager_updates_reject_wrong_vector_shapes_under_jit(
-    shape: tuple[int, ...]
+    shape: tuple[int, ...],
 ) -> None:
     learned = LearnedResourceManager(n_actions=2)
     generator = _minimal_generator_manager()
@@ -859,3 +864,26 @@ def test_resource_manager_serialized_schemas_are_exact() -> None:
         invalid.update(mutation)
         with pytest.raises(ValueError, match=match):
             GeneratorMetaResourceManager.from_config(invalid)
+
+
+def test_resource_manager_masked_baseline_centers_at_extreme_preference_gap() -> None:
+    # 3 actions, 1 context, exploration=0.0
+    manager = LearnedResourceManager(
+        n_actions=3,
+        n_contexts=1,
+        exploration=0.0,
+        learning_rate=1.0,
+    )
+    state = manager.init()
+    # Action 0 has a 40-nat preference gap over actions 1 and 2
+    state = state.replace(log_weights=jnp.array([[40.0, 0.0, 0.0]], dtype=jnp.float32))
+
+    # Action 0 is masked out by NaN loss; actions 1 and 2 have losses 1.0 and 3.0
+    losses = jnp.array([np.nan, 1.0, 3.0], dtype=jnp.float32)
+    result = manager.update(state, losses, 0)
+    assert bool(result.update_applied)
+
+    # Baseline must be the convex combination of [1.0, 3.0] -> 2.0
+    # Centered advantages for actions 1 and 2 must be +1.0 and -1.0
+    assert np.isclose(float(result.advantages[1]), 1.0, atol=1e-4)
+    assert np.isclose(float(result.advantages[2]), -1.0, atol=1e-4)

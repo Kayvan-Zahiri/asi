@@ -50,9 +50,7 @@ from alberta_framework.core.update_safety import (
 )
 
 _INT32_MAX = 2**31 - 1
-_ACTUAL_INT_TYPES = frozenset(
-    {int, *(np.dtype(code).type for code in "bBhHiIlLqQpP")}
-)
+_ACTUAL_INT_TYPES = frozenset({int, *(np.dtype(code).type for code in "bBhHiIlLqQpP")})
 _ACTUAL_REAL_TYPES = _ACTUAL_INT_TYPES | frozenset(
     {float, *(np.dtype(code).type for code in "efdg")}
 )
@@ -320,6 +318,19 @@ class LearnedResourceManagerUpdateResult:
     update_applied: Bool[Array, ""]
 
 
+def _normalize_masked_allocation(weights: Array, mask: Array) -> Array:
+    masked = jnp.where(mask, jnp.maximum(weights, 0.0), 0.0)
+    max_val = jnp.max(masked)
+    _, exponent = jnp.frexp(max_val)
+    rescaled = jnp.ldexp(masked, -exponent)
+    total = jnp.sum(rescaled)
+    is_positive = (max_val > 0.0) & (total > 0.0) & jnp.isfinite(total)
+    mask_count = jnp.sum(mask.astype(jnp.float32))
+    safe_count = jnp.maximum(mask_count, 1.0)
+    uniform = jnp.where(mask, 1.0 / safe_count, 0.0)
+    return jnp.where(is_positive, rescaled / jnp.where(is_positive, total, 1.0), uniform)
+
+
 class LearnedResourceManager:
     """Contextual Hedge manager over discrete resource policies.
 
@@ -502,9 +513,7 @@ class LearnedResourceManager:
         for name in ("log_weights", "loss_ema"):
             leaf = getattr(state, name)
             _require_array_metadata(f"state.{name}", leaf, shape, jnp.float32)
-        _require_array_metadata(
-            "state.action_counts", state.action_counts, shape, jnp.int32
-        )
+        _require_array_metadata("state.action_counts", state.action_counts, shape, jnp.int32)
         _require_array_metadata("state.step_count", state.step_count, (), jnp.int32)
 
     def weights(
@@ -559,9 +568,7 @@ class LearnedResourceManager:
         self._require_state_contract(state)
         _require_vector("losses", losses, self._n_actions, dtype=jnp.float32)
         if resource_costs is not None:
-            _require_vector(
-                "resource_costs", resource_costs, self._n_actions, dtype=jnp.float32
-            )
+            _require_vector("resource_costs", resource_costs, self._n_actions, dtype=jnp.float32)
         return cast(
             LearnedResourceManagerUpdateResult,
             self._update_jit(state, losses, context_id, resource_costs),
@@ -594,8 +601,7 @@ class LearnedResourceManager:
         adjusted = jnp.where(valid_actions, safe_losses + cost_terms, 0.0)
 
         weights = self._weights_jit(state, context)
-        finite_weight_sum = jnp.maximum(jnp.sum(jnp.where(valid_actions, weights, 0.0)), 1e-12)
-        masked_weights = jnp.where(valid_actions, weights / finite_weight_sum, 0.0)
+        masked_weights = _normalize_masked_allocation(weights, valid_actions)
         baseline = jnp.sum(masked_weights * adjusted)
         advantages = jnp.where(valid_actions, baseline - adjusted, 0.0)
         advantages = jnp.clip(
@@ -841,9 +847,7 @@ class GeneratorMetaResourceManager:
             for value in candidate_min_age_multipliers
         )
         imprint_scales = tuple(
-            _validated_float32(
-                "imprint_scales element", value, lower=0.0, preserve_nonzero=True
-            )
+            _validated_float32("imprint_scales element", value, lower=0.0, preserve_nonzero=True)
             for value in imprint_scales
         )
         if initial_preferences is not None:
@@ -975,12 +979,8 @@ class GeneratorMetaResourceManager:
                 op_ids=decoded_op_ids,
                 parent_modes=decoded_parent_modes,
                 replacement_multipliers=float_sequences["replacement_multipliers"],
-                promotion_margin_multipliers=float_sequences[
-                    "promotion_margin_multipliers"
-                ],
-                candidate_min_age_multipliers=float_sequences[
-                    "candidate_min_age_multipliers"
-                ],
+                promotion_margin_multipliers=float_sequences["promotion_margin_multipliers"],
+                candidate_min_age_multipliers=float_sequences["candidate_min_age_multipliers"],
                 imprint_scales=float_sequences["imprint_scales"],
                 initial_preferences=decoded_initial,
                 **config,
@@ -1012,9 +1012,7 @@ class GeneratorMetaResourceManager:
         for name in ("log_weights", "reward_ema"):
             leaf = getattr(state, name)
             _require_array_metadata(f"state.{name}", leaf, shape, jnp.float32)
-        _require_array_metadata(
-            "state.action_counts", state.action_counts, shape, jnp.int32
-        )
+        _require_array_metadata("state.action_counts", state.action_counts, shape, jnp.int32)
         _require_array_metadata("state.step_count", state.step_count, (), jnp.int32)
 
     def weights(
@@ -1141,9 +1139,7 @@ class GeneratorMetaResourceManager:
         if finite_mask is not None:
             _require_vector("finite_mask", finite_mask, self.n_policies, dtype=jnp.bool_)
         if resource_costs is not None:
-            _require_vector(
-                "resource_costs", resource_costs, self.n_policies, dtype=jnp.float32
-            )
+            _require_vector("resource_costs", resource_costs, self.n_policies, dtype=jnp.float32)
         return cast(
             GeneratorMetaResourceUpdateResult,
             self._update_jit(
@@ -1191,8 +1187,7 @@ class GeneratorMetaResourceManager:
         adjusted = jnp.where(finite, safe_rewards - cost_terms, 0.0)
 
         weights = self._weights_jit(state, context)
-        finite_weight_sum = jnp.maximum(jnp.sum(jnp.where(finite, weights, 0.0)), 1e-12)
-        masked_weights = jnp.where(finite, weights / finite_weight_sum, 0.0)
+        masked_weights = _normalize_masked_allocation(weights, finite)
         baseline = jnp.sum(masked_weights * adjusted)
         selection_input_valid = jnp.asarray(True, dtype=jnp.bool_)
         if self._update_rule == "exp3":

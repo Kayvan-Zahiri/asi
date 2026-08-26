@@ -197,6 +197,19 @@ class FeatureDiscoveryLearningResult:
     updates_applied: Bool[Array, " num_steps"]
 
 
+def _normalize_masked_allocation(weights: Array, mask: Array) -> Array:
+    masked = jnp.where(mask, jnp.maximum(weights, 0.0), 0.0)
+    max_val = jnp.max(masked)
+    _, exponent = jnp.frexp(max_val)
+    rescaled = jnp.ldexp(masked, -exponent)
+    total = jnp.sum(rescaled)
+    is_positive = (max_val > 0.0) & (total > 0.0) & jnp.isfinite(total)
+    mask_count = jnp.sum(mask.astype(jnp.float32))
+    safe_count = jnp.maximum(mask_count, 1.0)
+    uniform = jnp.where(mask, 1.0 / safe_count, 0.0)
+    return jnp.where(is_positive, rescaled / jnp.where(is_positive, total, 1.0), uniform)
+
+
 class FixedBudgetFeatureLearner:
     """One-hidden-layer feature bank with utility-based replacement.
 
@@ -792,9 +805,7 @@ class FixedBudgetFeatureLearner:
             if value.shape != shape or value.dtype != jnp.int32:
                 raise ValueError(f"state.{name} must have shape {shape} and dtype int32")
         if observation.shape != (feature_dim,) or observation.dtype != jnp.float32:
-            raise ValueError(
-                f"observation must have shape {(feature_dim,)} and dtype float32"
-            )
+            raise ValueError(f"observation must have shape {(feature_dim,)} and dtype float32")
         if targets is not None and (
             targets.shape != (self._n_tasks,) or targets.dtype != jnp.float32
         ):
@@ -1036,8 +1047,7 @@ class FixedBudgetFeatureLearner:
         finite: Array,
     ) -> Array:
         """Exponentiated-gradient preference update for utility scores."""
-        finite_mass = jnp.maximum(jnp.sum(jnp.where(finite, allocation, 0.0)), 1e-12)
-        masked_allocation = jnp.where(finite, allocation / finite_mass, 0.0)
+        masked_allocation = _normalize_masked_allocation(allocation, finite)
         baseline = jnp.sum(masked_allocation * jnp.where(finite, scores, 0.0))
         advantages = jnp.where(finite, scores - baseline, 0.0)
         advantages = jnp.clip(
