@@ -895,7 +895,7 @@ def _mapping(
     errors: list[str],
 ) -> Mapping[str, object] | None:
     value = parent.get(key)
-    if not isinstance(value, Mapping):
+    if type(value) is not dict:
         errors.append(f"{location}.{key} must be an object")
         return None
     return value
@@ -940,7 +940,7 @@ def _extract_seed_metrics(
     summaries: object,
     errors: list[str],
 ) -> tuple[list[int], dict[str, list[dict[str, object]]]]:
-    if not isinstance(summaries, list) or not summaries:
+    if type(summaries) is not list or not summaries:
         errors.append("scientific_payload.seed_summaries must be a non-empty array")
         return [], {"retained": [], "no_retention": []}
     seeds: list[int] = []
@@ -950,7 +950,7 @@ def _extract_seed_metrics(
     }
     for index, raw_summary in enumerate(summaries):
         location = f"scientific_payload.seed_summaries[{index}]"
-        if not isinstance(raw_summary, Mapping):
+        if type(raw_summary) is not dict:
             errors.append(f"{location} must be an object")
             continue
         if set(raw_summary) != {"seed", "retained", "no_retention"}:
