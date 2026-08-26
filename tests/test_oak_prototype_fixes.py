@@ -380,3 +380,28 @@ def test_oak_and_keyboard_close_schema_float32_and_resource_boundaries() -> None
     KeyboardChordLearnerConfig(n_options=last_legal_keyboard_options)
     with pytest.raises(ValueError, match="keyboard state bytes"):
         KeyboardChordLearnerConfig(n_options=last_legal_keyboard_options + 1)
+
+
+def test_zero_baseline_decay_does_not_multiply_inf_reward_baseline() -> None:
+    """baseline_decay=0 times an infinite reward baseline is 0*inf = NaN."""
+    from alberta_framework.core.oak import (
+        init_keyboard_chord_learner,
+        update_keyboard_chord_learner,
+    )
+
+    cfg = KeyboardChordLearnerConfig(
+        n_options=3,
+        step_size=0.1,
+        baseline_decay=0.0,
+        l2_penalty=0.0,
+        max_norm=10.0,
+    )
+    state = init_keyboard_chord_learner(cfg).replace(
+        reward_baseline=jnp.array(jnp.inf, dtype=jnp.float32)
+    )
+    selected = jnp.array([1.0, 0.0, 0.0], dtype=jnp.float32)
+    updated = update_keyboard_chord_learner(
+        cfg, state, selected, jnp.array(1.0, dtype=jnp.float32)
+    )
+    chex.assert_tree_all_finite(updated.reward_baseline)
+    chex.assert_trees_all_close(updated.reward_baseline, jnp.array(1.0, dtype=jnp.float32))

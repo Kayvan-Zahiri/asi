@@ -1112,6 +1112,11 @@ def _keyboard_state_operand(
     return trusted
 
 
+def _skip_zero_scale(scale: Array, value: Array) -> Array:
+    """Skip ``0 * inf`` so a disabled decay does not poison the next EMA."""
+    return jnp.where(scale == 0.0, jnp.zeros_like(value), scale * value)
+
+
 def init_keyboard_chord_learner(
     config: KeyboardChordLearnerConfig,
 ) -> KeyboardChordLearnerState:
@@ -1163,10 +1168,16 @@ def update_keyboard_chord_learner(
         scaled_chord / scaled_chord_norm,
         jnp.zeros_like(chord),
     )
-    baseline = (
-        config.baseline_decay * state.reward_baseline + (1.0 - config.baseline_decay) * reward_arr
+    baseline_decay = jnp.asarray(config.baseline_decay, dtype=jnp.float32)
+    safe_prior_baseline = jnp.where(
+        jnp.isfinite(state.reward_baseline),
+        state.reward_baseline,
+        jnp.zeros_like(state.reward_baseline),
     )
-    advantage = reward_arr - state.reward_baseline
+    baseline = _skip_zero_scale(baseline_decay, state.reward_baseline) + (
+        1.0 - baseline_decay
+    ) * reward_arr
+    advantage = reward_arr - safe_prior_baseline
     proposed_vector = (
         state.chord_vector * (1.0 - config.step_size * config.l2_penalty)
         + config.step_size * advantage * chord_norm
@@ -1191,7 +1202,7 @@ def update_keyboard_chord_learner(
     # max-norm rescaling is nan/inf and the whole vector stays poisoned.
     source_valid = (
         jnp.all(jnp.isfinite(state.chord_vector))
-        & jnp.isfinite(state.reward_baseline)
+        & (jnp.isfinite(state.reward_baseline) | (baseline_decay == 0.0))
         & (state.step_count >= jnp.asarray(0, dtype=jnp.int32))
     )
     inputs_valid = jnp.all(jnp.isfinite(chord)) & jnp.isfinite(reward_arr)
