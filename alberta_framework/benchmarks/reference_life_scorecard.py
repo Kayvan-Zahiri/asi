@@ -818,11 +818,11 @@ def _iter_array_leaves(value: Any) -> Any:
         for field in dataclasses.fields(value):
             yield from _iter_array_leaves(getattr(value, field.name))
         return
-    if isinstance(value, Mapping):
+    if type(value) is dict:
         for item in value.values():
             yield from _iter_array_leaves(item)
         return
-    if isinstance(value, (tuple, list)):
+    if type(value) is tuple or type(value) is list:
         for item in value:
             yield from _iter_array_leaves(item)
 
@@ -1632,7 +1632,7 @@ def _load_json_strict_with_metadata(
     finally:
         if descriptor is not None:
             os.close(descriptor)
-    if not isinstance(payload, dict):
+    if type(payload) is not dict:
         raise ValueError(f"{path}: top-level JSON value must be an object")
     _validate_json_value(payload)
     return payload, final_metadata
