@@ -1593,7 +1593,7 @@ def load_evidence_artifact(path: Path) -> dict[str, object]:
         parse_float=_parse_finite_json_float,
         object_pairs_hook=_object_without_duplicates,
     )
-    if not isinstance(loaded, dict):
+    if type(loaded) is not dict:
         raise ValueError("artifact root must be an object")
     return loaded
 
@@ -1631,19 +1631,19 @@ def _mapping(
     location: str,
     errors: list[str],
 ) -> Mapping[str, object] | None:
-    if not isinstance(value, Mapping):
+    if type(value) is not dict:
         errors.append(f"{location} must be an object")
         return None
     return value
 
 
 def _parsed_pairs(value: object) -> tuple[tuple[int, int], ...] | None:
-    if not isinstance(value, list):
+    if type(value) is not list:
         return None
     pairs: list[tuple[int, int]] = []
     for pair in value:
         if (
-            not isinstance(pair, list)
+            type(pair) is not list
             or len(pair) != 2
             or _strict_int(pair[0]) is None
             or _strict_int(pair[1]) is None
