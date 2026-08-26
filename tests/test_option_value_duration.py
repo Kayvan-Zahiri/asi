@@ -754,3 +754,96 @@ def test_array_runner_accepts_jax_arrays_under_jit() -> None:
     )
     result = compiled(observations, option_indices, rewards, observations, discounts)
     chex.assert_tree_all_finite(result.predictions)
+
+
+def test_zero_step_size_head_commits_no_op_update_on_overflowing_td_error() -> None:
+    """A frozen head must not stall lifetime counters when the TD error overflows.
+
+    ``reward_step_size``/``duration_step_size`` accept ``0.0``, so a head can be
+    deliberately frozen. Scaling an overflowed float32 TD error by that zero
+    step size evaluates ``0 * inf`` and poisons the proposed weights, which used
+    to reject the whole transition even though every validated input was finite.
+    """
+    config = OptionValueDurationConfig(
+        reward_step_size=0.0,
+        duration_step_size=0.0,
+    )
+    learner = OptionValueDurationLearner(1, config)
+    weights = jnp.full((1, 2, 2), 3.0e38, dtype=jnp.float32)
+    state = learner.init(2).replace(weights=weights)  # type: ignore[attr-defined]
+    observation = jnp.array([1.0, 1.0], dtype=jnp.float32)
+    next_observation = jnp.array([0.0, 0.0], dtype=jnp.float32)
+
+    # Every validated input is finite; only the float32 dot product overflows.
+    assert bool(jnp.all(jnp.isfinite(state.weights)))
+    assert bool(jnp.all(jnp.isfinite(observation)))
+    assert not bool(jnp.all(jnp.isfinite(state.weights[0] @ observation)))
+    assert bool(jnp.isnan(jnp.float32(0.0) * jnp.float32(-jnp.inf)))
+
+    result = jax.jit(learner.update)(
+        state,
+        observation,
+        jnp.array(0, dtype=jnp.int32),
+        jnp.array(1.0, dtype=jnp.float32),
+        next_observation,
+        jnp.array(0.9, dtype=jnp.float32),
+    )
+
+    assert bool(jnp.all(result.head_updates_applied))
+    assert bool(result.update_applied)
+    assert int(result.state.step_count) == 1
+    chex.assert_trees_all_equal(
+        result.state.option_update_counts,
+        jnp.array([1], dtype=jnp.int32),
+    )
+    chex.assert_trees_all_equal(result.state.weights, weights)
+    assert bool(jnp.all(jnp.isfinite(result.state.weights)))
+
+
+def test_nonzero_step_size_still_rejects_overflowing_td_error() -> None:
+    """A learning head keeps its fail-closed rejection of an infinite update."""
+    config = OptionValueDurationConfig(
+        reward_step_size=0.1,
+        duration_step_size=0.1,
+    )
+    learner = OptionValueDurationLearner(1, config)
+    weights = jnp.full((1, 2, 2), 3.0e38, dtype=jnp.float32)
+    state = learner.init(2).replace(weights=weights)  # type: ignore[attr-defined]
+
+    result = jax.jit(learner.update)(
+        state,
+        jnp.array([1.0, 1.0], dtype=jnp.float32),
+        jnp.array(0, dtype=jnp.int32),
+        jnp.array(1.0, dtype=jnp.float32),
+        jnp.array([0.0, 0.0], dtype=jnp.float32),
+        jnp.array(0.9, dtype=jnp.float32),
+    )
+
+    assert not bool(jnp.any(result.head_updates_applied))
+    assert not bool(result.update_applied)
+    assert int(result.state.step_count) == 0
+    chex.assert_trees_all_equal(result.state.weights, weights)
+
+
+def test_negative_zero_step_size_is_treated_as_frozen() -> None:
+    """``-0.0`` is a supported step size and must take the zero-scale path."""
+    config = OptionValueDurationConfig(
+        reward_step_size=-0.0,
+        duration_step_size=-0.0,
+    )
+    learner = OptionValueDurationLearner(1, config)
+    weights = jnp.full((1, 2, 2), 3.0e38, dtype=jnp.float32)
+    state = learner.init(2).replace(weights=weights)  # type: ignore[attr-defined]
+
+    result = jax.jit(learner.update)(
+        state,
+        jnp.array([1.0, 1.0], dtype=jnp.float32),
+        jnp.array(0, dtype=jnp.int32),
+        jnp.array(1.0, dtype=jnp.float32),
+        jnp.array([0.0, 0.0], dtype=jnp.float32),
+        jnp.array(0.9, dtype=jnp.float32),
+    )
+
+    assert bool(result.update_applied)
+    assert int(result.state.step_count) == 1
+    chex.assert_trees_all_equal(result.state.weights, weights)

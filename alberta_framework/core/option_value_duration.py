@@ -117,6 +117,14 @@ def _state_resources(n_options: int, feature_dim: int) -> dict[str, int]:
     }
 
 
+def _skip_zero_scale(scale: float, value: Array) -> Array:
+    """Keep finite multiplication exact while repairing zero-scaled poison."""
+    product = jnp.asarray(scale, dtype=jnp.float32) * value
+    if scale != 0.0:
+        return product
+    return jnp.where(jnp.isfinite(value), product, jnp.zeros_like(value))
+
+
 def _saturating_increment(value: Array) -> Array:
     """Increment an int32 counter without wrapping at its lifetime limit."""
     maximum = jnp.asarray(_INT32_MAX, dtype=jnp.int32)
@@ -500,15 +508,14 @@ class OptionValueDurationLearner:
         )
         td_targets = cumulants + bootstrap
         td_errors = td_targets - predictions
-        step_sizes = jnp.array(
-            [
-                self._config.reward_step_size,
-                self._config.duration_step_size,
-            ],
-            dtype=jnp.float32,
+        scaled_td_errors = jnp.stack(
+            (
+                _skip_zero_scale(self._config.reward_step_size, td_errors[0]),
+                _skip_zero_scale(self._config.duration_step_size, td_errors[1]),
+            )
         )
         proposed_option_weights = (
-            option_weights + step_sizes[:, None] * td_errors[:, None] * observation[None, :]
+            option_weights + scaled_td_errors[:, None] * observation[None, :]
         )
         source_valid = self._state_values_valid(state)
         next_needed = continuation_discount != 0.0
