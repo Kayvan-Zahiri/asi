@@ -336,7 +336,7 @@ class MatchedExecutionPlan:
         _validate_qualified_lock(frozen_protocol)
         object.__setattr__(self, "protocol", frozen_protocol)
         if not all(
-            isinstance(value, Mapping)
+            type(value) is dict
             for value in (
                 self.source_manifest,
                 self.executor_manifest,
@@ -409,10 +409,7 @@ class MatchedExecutionPlan:
         executor_digest = _canonical_sha256(executor_manifest)
         payload_source = payload.get("source_manifest")
         payload_executor = payload.get("executor_manifest")
-        if not isinstance(payload_source, Mapping) or not isinstance(
-            payload_executor,
-            Mapping,
-        ):
+        if type(payload_source) is not dict or type(payload_executor) is not dict:
             raise ForagerMatchedExecutorError(
                 "execution plan payload manifests must be objects"
             )
@@ -1270,12 +1267,16 @@ def _freeze(value: Any) -> Any:
 
 
 def _thaw(value: Any) -> Any:
-    if isinstance(value, Mapping):
+    if type(value) is dict:
         if any(type(key) is not str for key in value):
             raise ForagerMatchedExecutorError(
                 "canonical JSON object keys must be strings"
             )
         return {key: _thaw(item) for key, item in value.items()}
+    if isinstance(value, Mapping):
+        raise ForagerMatchedExecutorError(
+            "canonical JSON objects must be exact dict instances"
+        )
     if type(value) is tuple:
         return [_thaw(item) for item in value]
     return value
@@ -1672,7 +1673,7 @@ def _docker_mount_path(path: Path, label: str) -> str:
 
 
 def _decode_mapping(value: Mapping[str, Any] | bytes | str, label: str) -> dict[str, Any]:
-    if isinstance(value, Mapping):
+    if type(value) is dict:
         decoded = decode_strict_json(canonical_json_bytes(dict(value)))
     elif type(value) in (bytes, str):
         decoded = decode_strict_json(value)

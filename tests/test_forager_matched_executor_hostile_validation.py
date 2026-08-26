@@ -106,3 +106,19 @@ def test_seed_execution_artifacts_reject_bool_seed_and_score(
 ) -> None:
     with pytest.raises(ForagerMatchedExecutorError, match=field):
         _legal_seed_artifacts(**{field: value})
+
+def test_thaw_rejects_mapping_subclass_before_iteration() -> None:
+    from alberta_framework.benchmarks import forager_matched_executor as mod
+
+    class HostileDict(dict):
+        calls = 0
+
+        def items(self):  # type: ignore[override]
+            type(self).calls += 1
+            raise AssertionError("HostileDict.items must not run")
+
+    HostileDict.calls = 0
+    with pytest.raises(mod.ForagerMatchedExecutorError, match="exact dict"):
+        mod._thaw(HostileDict({"a": 1}))
+    assert HostileDict.calls == 0
+
