@@ -211,3 +211,35 @@ def test_selection_result_parser_rejects_subclass_without_conversion() -> None:
     with pytest.raises(ForagerMatchedProtocolError):
         parse_forager_matched_selection_result(hostile)
     assert _HostileSelectionResult.calls == 0
+
+
+def test_parse_rejects_mapping_subclass_without_iter_hooks() -> None:
+    class HostileDict(dict):
+        calls = 0
+
+        def __iter__(self):  # type: ignore[override]
+            type(self).calls += 1
+            raise AssertionError("HostileDict.__iter__ must not run")
+
+    HostileDict.calls = 0
+    with pytest.raises(
+        ForagerMatchedProtocolError, match="non-JSON value|must be a JSON object"
+    ):
+        parse_forager_matched_protocol(HostileDict({"schema_version": "x"}))
+    assert HostileDict.calls == 0
+
+
+def test_require_array_rejects_list_subclass_without_iter_hooks() -> None:
+    from alberta_framework.benchmarks.forager_matched_protocol import _require_array
+
+    class HostileList(list):
+        calls = 0
+
+        def __iter__(self):  # type: ignore[override]
+            type(self).calls += 1
+            raise AssertionError("HostileList.__iter__ must not run")
+
+    HostileList.calls = 0
+    with pytest.raises(ForagerMatchedProtocolError, match="must be a JSON array"):
+        _require_array(HostileList([1]), "path")
+    assert HostileList.calls == 0
