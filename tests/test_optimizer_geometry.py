@@ -340,3 +340,19 @@ def test_geometry_runner_rejects_invalid_transactions(monkeypatch: pytest.Monkey
     )
     with pytest.raises(ValueError, match="transaction"):
         run_streaming_matrix_evaluation()
+
+def test_flad_noise_component_removes_projection_at_underflowing_gradient_scales() -> None:
+    delta = jnp.array([1.0, -2.0, 0.5, 3.0], dtype=jnp.float32)
+    grad = jnp.array([2.0, 1.0, -1.0, 0.5], dtype=jnp.float32)
+
+    # Base reference
+    expected_safe, expected_valid = flad_noise_component_transaction(delta, grad)
+    assert bool(expected_valid)
+
+    # Across extreme underflow scales
+    for scale in (1e-10, 1e-19, 1e-20, 1e-25, 1e-30, 1e20, 1e30):
+        scaled_grad = grad * jnp.asarray(scale, dtype=jnp.float32)
+        safe, valid = flad_noise_component_transaction(delta, scaled_grad)
+        assert bool(valid)
+        np.testing.assert_allclose(np.asarray(safe), np.asarray(expected_safe), atol=1e-5)
+
