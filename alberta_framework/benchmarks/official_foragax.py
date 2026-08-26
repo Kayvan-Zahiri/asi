@@ -5100,7 +5100,7 @@ def _validated_resolved_hyperparameters(
     forbidden_host_paths: Sequence[Path] = (),
 ) -> dict[str, Any]:
     value = probe.get("resolved_hyperparameters")
-    if not isinstance(value, dict):
+    if type(value) is not dict:
         raise OfficialForagaxValidationError(
             "official ExperimentModel did not return resolved hyperparameters"
         )
@@ -5116,7 +5116,10 @@ def _validated_resolved_hyperparameters(
         raise OfficialForagaxValidationError(
             "official resolved hyperparameters are not canonical JSON"
         ) from exc
-    assert isinstance(normalized, dict)
+    if type(normalized) is not dict:
+        raise OfficialForagaxValidationError(
+            "official resolved hyperparameters are not a JSON object"
+        )
     expected_hash = probe.get("resolved_hyperparameters_sha256")
     actual_hash = hashlib.sha256(encoded.encode()).hexdigest()
     if expected_hash != actual_hash:
@@ -5131,14 +5134,14 @@ def _validated_resolved_hyperparameters(
     )
 
     def validate_strings(item: Any) -> None:
-        if isinstance(item, dict):
+        if type(item) is dict:
             for key, nested in item.items():
                 if type(key) is not str:
                     raise OfficialForagaxValidationError(
                         "official resolved hyperparameter keys must be strings"
                     )
                 validate_strings(nested)
-        elif isinstance(item, list):
+        elif type(item) is list:
             for nested in item:
                 validate_strings(nested)
         elif type(item) is str:
