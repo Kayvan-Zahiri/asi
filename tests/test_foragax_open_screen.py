@@ -1250,6 +1250,36 @@ def test_probe_task_intake_rejects_non_object_task() -> None:
         probe._validate_task_intake({"task": [1]})
 
 
+def test_probe_task_intake_rejects_dict_subclass_without_hooks() -> None:
+    """Task intake requires exact dict/list JSON containers."""
+
+    class HostileDict(dict):
+        calls = 0
+
+        def keys(self):  # type: ignore[override]
+            type(self).calls += 1
+            raise AssertionError("HostileDict.keys must not run")
+
+    class HostileList(list):
+        calls = 0
+
+        def __iter__(self):  # type: ignore[override]
+            type(self).calls += 1
+            raise AssertionError("HostileList.__iter__ must not run")
+
+    HostileDict.calls = 0
+    with pytest.raises(RuntimeError, match="protocol task must be an object"):
+        probe._validate_task_intake({"task": HostileDict({"steps_per_seed": 4, "seeds": [1]})})
+    assert HostileDict.calls == 0
+
+    HostileList.calls = 0
+    with pytest.raises(RuntimeError, match="protocol seeds are invalid"):
+        probe._validate_task_intake(
+            {"task": {"steps_per_seed": 4, "seeds": HostileList([1, 2])}}
+        )
+    assert HostileList.calls == 0
+
+
 def test_probe_ppo_schedule_rejects_bool_rollout_and_updates() -> None:
     assert probe._validate_ppo_schedule(4, 8, 32, "configs/demo.json") == (4, 8)
     for rollout, updates in ((True, 32), (32, True), (False, 1), (1.0, 32), (None, 32)):
