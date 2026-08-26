@@ -617,3 +617,27 @@ class TestRunningRMSE:
         assert float(running[-1, 0]) < 0.01
         # Mid-series transition: some error
         assert float(running[19, 0]) > 0.5
+
+def test_forward_view_returns_promotes_integer_and_boolean_cumulants() -> None:
+    from alberta_framework.utils.nexting import (
+        forward_view_returns,
+        multi_horizon_returns,
+    )
+
+    c_int = jnp.array([1, 0, 0, 0, 1], dtype=jnp.int32)
+    res_int = forward_view_returns(c_int, 0.9)
+    assert jnp.issubdtype(res_int.dtype, jnp.floating)
+    expected = np.array([1.6561, 0.729, 0.81, 0.9, 1.0], dtype=np.float32)
+    np.testing.assert_allclose(np.asarray(res_int), expected, rtol=1e-5)
+
+    c_bool = jnp.array([True, False, False, False, True], dtype=bool)
+    res_bool = forward_view_returns(c_bool, 0.9)
+    assert jnp.issubdtype(res_bool.dtype, jnp.floating)
+    np.testing.assert_allclose(np.asarray(res_bool), expected, rtol=1e-5)
+
+    # Multi-horizon returns with int32 cumulants
+    horizons = jnp.array([0.0, 0.5, 0.9], dtype=jnp.float32)
+    res_multi = multi_horizon_returns(c_int, horizons)
+    assert res_multi.shape == (5, 3)
+    assert jnp.issubdtype(res_multi.dtype, jnp.floating)
+
