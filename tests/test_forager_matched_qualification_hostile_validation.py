@@ -91,3 +91,34 @@ def test_probe_invocation_rejects_nonhex_sha256(field: str) -> None:
     inv = _make_probe_invocation()
     with pytest.raises(ForagerMatchedQualificationError, match=f"{field} must be"):
         replace(inv, **{field: "z" * 64})
+
+
+def test_qualification_bundle_rejects_mapping_subclass_without_iter_hooks() -> None:
+    from alberta_framework.benchmarks.forager_matched_qualification import (
+        MatchedCurrentQualificationBundle,
+    )
+
+    class HostileDict(dict):
+        calls = 0
+
+        def __iter__(self):  # type: ignore[override]
+            type(self).calls += 1
+            raise AssertionError("HostileDict.__iter__ must not run")
+
+    HostileDict.calls = 0
+    with pytest.raises(
+        ForagerMatchedQualificationError,
+        match="manifest must be an exact dict or MappingProxyType",
+    ):
+        MatchedCurrentQualificationBundle(
+            output_root=Path("out"),
+            cpu_qualification_root=Path("cpu"),
+            rng_parity_qualification_root=Path("rng"),
+            runtime_qualification=None,
+            candidate_qualifications={},
+            candidate_assets={},
+            manifest=HostileDict(),
+            manifest_bytes=b"{}",
+            manifest_sha256="a" * 64,
+        )
+    assert HostileDict.calls == 0
