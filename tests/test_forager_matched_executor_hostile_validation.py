@@ -106,3 +106,36 @@ def test_seed_execution_artifacts_reject_bool_seed_and_score(
 ) -> None:
     with pytest.raises(ForagerMatchedExecutorError, match=field):
         _legal_seed_artifacts(**{field: value})
+
+
+def test_live_runtime_identity_rejects_mapping_subclass() -> None:
+    class HostileDict(dict):
+        calls = 0
+
+        def __iter__(self):  # type: ignore[override]
+            type(self).calls += 1
+            raise AssertionError("HostileDict.__iter__ must not run")
+
+    HostileDict.calls = 0
+    with pytest.raises(ForagerMatchedExecutorError, match="version must be a mapping"):
+        LiveRuntimeIdentity(
+            executable=Path("/usr/bin/podman"),
+            executable_sha256="a" * 64,
+            version=HostileDict({"major": 4}),
+            image_inspection={"id": "image_id"},
+            executor_manifest_sha256="b" * 64,
+        )
+    assert HostileDict.calls == 0
+
+
+def test_live_runtime_identity_accepts_mapping_proxy() -> None:
+    from types import MappingProxyType
+
+    ident = LiveRuntimeIdentity(
+        executable=Path("/usr/bin/podman"),
+        executable_sha256="a" * 64,
+        version=MappingProxyType({"major": 4}),
+        image_inspection=MappingProxyType({"id": "image_id"}),
+        executor_manifest_sha256="b" * 64,
+    )
+    assert ident.version["major"] == 4

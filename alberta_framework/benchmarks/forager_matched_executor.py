@@ -188,6 +188,11 @@ class _BoundedProcessOutputError(RuntimeError):
     """A child stream produced a byte beyond its active output allowance."""
 
 
+def _is_exact_mapping(value: object) -> bool:
+    """Accept only plain dict or MappingProxyType JSON/frozen objects."""
+    return type(value) is dict or type(value) is MappingProxyType
+
+
 @dataclass(frozen=True, slots=True)
 class CandidateExecutionAssets:
     """Host-local bytes required to construct one nonexecuting candidate plan."""
@@ -272,10 +277,10 @@ class PreparedCandidate:
             )
         if self.rng_isolation_patch_sha256 is not None:
             _sha256(self.rng_isolation_patch_sha256, "rng_isolation_patch_sha256")
-        if not isinstance(self.capability_receipt, Mapping):
+        if not _is_exact_mapping(self.capability_receipt):
             raise ForagerMatchedExecutorError("capability_receipt must be a mapping")
         _sha256(self.capability_receipt_sha256, "capability_receipt_sha256")
-        if not isinstance(self.source_inventory, Mapping):
+        if not _is_exact_mapping(self.source_inventory):
             raise ForagerMatchedExecutorError("source_inventory must be a mapping")
 
 
@@ -310,7 +315,7 @@ class MatchedExecutionPlan:
                 "execution plan protocol must contain 1..256 typed candidates"
             )
         protocol_index = self.protocol.candidate_index
-        if not isinstance(protocol_index, Mapping):
+        if not _is_exact_mapping(protocol_index):
             raise ForagerMatchedExecutorError(
                 "execution plan protocol candidate index must be a mapping"
             )
@@ -336,7 +341,7 @@ class MatchedExecutionPlan:
         _validate_qualified_lock(frozen_protocol)
         object.__setattr__(self, "protocol", frozen_protocol)
         if not all(
-            isinstance(value, Mapping)
+            _is_exact_mapping(value)
             for value in (
                 self.source_manifest,
                 self.executor_manifest,
@@ -409,9 +414,8 @@ class MatchedExecutionPlan:
         executor_digest = _canonical_sha256(executor_manifest)
         payload_source = payload.get("source_manifest")
         payload_executor = payload.get("executor_manifest")
-        if not isinstance(payload_source, Mapping) or not isinstance(
+        if not _is_exact_mapping(payload_source) or not _is_exact_mapping(
             payload_executor,
-            Mapping,
         ):
             raise ForagerMatchedExecutorError(
                 "execution plan payload manifests must be objects"
@@ -488,8 +492,8 @@ class MatchedExecutionPlan:
         if type(self.candidates) is not tuple or not self.candidates or not all(
             type(item) is PreparedCandidate
             and type(item.candidate) is MatchedCandidate
-            and isinstance(item.capability_receipt, Mapping)
-            and isinstance(item.source_inventory, Mapping)
+            and _is_exact_mapping(item.capability_receipt)
+            and _is_exact_mapping(item.source_inventory)
             for item in self.candidates
         ):
             raise ForagerMatchedExecutorError(
@@ -696,9 +700,9 @@ class LiveRuntimeIdentity:
         if not isinstance(self.executable, Path):
             raise ForagerMatchedExecutorError("executable must be a Path")
         _sha256(self.executable_sha256, "executable_sha256")
-        if not isinstance(self.version, Mapping):
+        if not _is_exact_mapping(self.version):
             raise ForagerMatchedExecutorError("version must be a mapping")
-        if not isinstance(self.image_inspection, Mapping):
+        if not _is_exact_mapping(self.image_inspection):
             raise ForagerMatchedExecutorError("image_inspection must be a mapping")
         _sha256(self.executor_manifest_sha256, "executor_manifest_sha256")
 
@@ -783,7 +787,7 @@ class IndexedExecutionReceipt:
             self.execution_receipt_sha256,
             "indexed execution receipt SHA-256",
         )
-        if not isinstance(self.receipt_payload, Mapping):
+        if not _is_exact_mapping(self.receipt_payload):
             raise ForagerMatchedExecutorError(
                 "indexed execution receipt payload must be a mapping"
             )
@@ -1257,6 +1261,7 @@ def canonical_json_bytes(value: Mapping[str, Any]) -> bytes:
         raise ForagerMatchedExecutorError("value is not canonical JSON") from exc
 
 
+
 def _canonical_sha256(value: Mapping[str, Any]) -> str:
     return hashlib.sha256(canonical_json_bytes(value)).hexdigest()
 
@@ -1270,7 +1275,7 @@ def _freeze(value: Any) -> Any:
 
 
 def _thaw(value: Any) -> Any:
-    if isinstance(value, Mapping):
+    if _is_exact_mapping(value):
         if any(type(key) is not str for key in value):
             raise ForagerMatchedExecutorError(
                 "canonical JSON object keys must be strings"
@@ -1672,7 +1677,7 @@ def _docker_mount_path(path: Path, label: str) -> str:
 
 
 def _decode_mapping(value: Mapping[str, Any] | bytes | str, label: str) -> dict[str, Any]:
-    if isinstance(value, Mapping):
+    if _is_exact_mapping(value):
         decoded = decode_strict_json(canonical_json_bytes(dict(value)))
     elif type(value) in (bytes, str):
         decoded = decode_strict_json(value)
@@ -2812,7 +2817,7 @@ def parse_execution_plan(
         expected_qualification_manifest_sha256,
         "expected qualification manifest SHA-256",
     )
-    if isinstance(value, Mapping):
+    if _is_exact_mapping(value):
         payload = _decode_mapping(value, "execution plan")
     elif type(value) in (bytes, str):
         payload = _decode_mapping(value, "execution plan")
