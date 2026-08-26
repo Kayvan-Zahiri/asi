@@ -88,3 +88,26 @@ def test_frozen_configuration_rejects_string_subclass_before_len_hook() -> None:
             stdout="not bytes",  # type: ignore[arg-type]
             stderr=b"",
         )
+
+
+def test_require_dict_rejects_mapping_subclass_without_iter_hooks() -> None:
+    from alberta_framework.benchmarks import foragax_open_screen as screen
+
+    class HostileDict(dict):
+        calls = 0
+
+        def __iter__(self):  # type: ignore[override]
+            type(self).calls += 1
+            raise AssertionError("HostileDict.__iter__ must not run")
+
+    HostileDict.calls = 0
+    with pytest.raises(screen.ScreenError, match="must be an object"):
+        screen._require_dict(HostileDict({"a": 1}), "fixture")
+    assert HostileDict.calls == 0
+
+
+def test_load_json_bytes_rejects_non_object_root() -> None:
+    from alberta_framework.benchmarks import foragax_open_screen as screen
+
+    with pytest.raises(screen.ScreenError, match="must contain a JSON object"):
+        screen._load_json_bytes(b"[]", "fixture")
