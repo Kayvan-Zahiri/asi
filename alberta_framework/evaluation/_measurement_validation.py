@@ -43,8 +43,16 @@ def nonnegative_finite_real(name: str, value: object) -> float:
 def validate_interval_bounds(
     *, lower: float, upper: float, confidence_level: float
 ) -> None:
-    """Validate ordering and the open-unit confidence domain."""
+    """Validate ordering and the open-unit confidence domain.
 
+    Non-finite bounds must fail closed: IEEE comparisons involving NaN are
+    always false, so ``lower > upper`` alone cannot reject ``nan``/``±inf``.
+    """
+
+    if not (
+        math.isfinite(lower) and math.isfinite(upper) and math.isfinite(confidence_level)
+    ):
+        raise ValueError("interval bounds and confidence_level must be finite")
     if lower > upper:
         raise ValueError("lower must not exceed upper")
     if not 0.0 < confidence_level < 1.0:
