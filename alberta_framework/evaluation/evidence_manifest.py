@@ -1212,11 +1212,11 @@ def _ftl_acceptance_passed(
     errors: list[str],
 ) -> bool | None:
     scientific = artifact.get("scientific_payload")
-    if not isinstance(scientific, Mapping):
+    if type(scientific) is not dict:
         errors.append(f"{location}.scientific_payload must be an object")
         return None
     acceptance = scientific.get("acceptance")
-    if not isinstance(acceptance, Mapping):
+    if type(acceptance) is not dict:
         errors.append(f"{location}.scientific_payload.acceptance must be an object")
         return None
     passed = acceptance.get("passed")
@@ -1236,10 +1236,10 @@ def _ftl_scientific_digest(
 ) -> str | None:
     scientific = artifact.get("scientific_payload")
     digest = artifact.get("scientific_digest")
-    if not isinstance(scientific, Mapping):
+    if type(scientific) is not dict:
         errors.append(f"{location}.scientific_payload must be an object")
         return None
-    if not isinstance(digest, Mapping):
+    if type(digest) is not dict:
         errors.append(f"{location}.scientific_digest must be an object")
         return None
     recorded = digest.get("sha256")
@@ -1346,9 +1346,7 @@ def _ftl_source_mismatch_errors(
     *,
     label: str,
 ) -> list[str]:
-    if not isinstance(artifact_source, Mapping) or not isinstance(
-        current_source, Mapping
-    ):
+    if type(artifact_source) is not dict or type(current_source) is not dict:
         return [f"{label} and validation source hashes must both be objects"]
     errors: list[str] = []
     for relative_path in sorted(set(artifact_source) | set(current_source)):
@@ -1369,11 +1367,11 @@ def _ia_acceptance_passed(
     errors: list[str],
 ) -> bool | None:
     content = artifact.get("content")
-    if not isinstance(content, Mapping):
+    if type(content) is not dict:
         errors.append(f"{location}.content must be an object")
         return None
     acceptance = content.get("acceptance")
-    if not isinstance(acceptance, Mapping):
+    if type(acceptance) is not dict:
         errors.append(f"{location}.content.acceptance must be an object")
         return None
     passed = acceptance.get("passed")
@@ -1391,10 +1389,10 @@ def _ia_content_digest(
 ) -> str | None:
     content = artifact.get("content")
     digest = artifact.get("content_digest")
-    if not isinstance(content, Mapping):
+    if type(content) is not dict:
         errors.append(f"{location}.content must be an object")
         return None
-    if not isinstance(digest, Mapping):
+    if type(digest) is not dict:
         errors.append(f"{location}.content_digest must be an object")
         return None
     recorded = digest.get("sha256")
@@ -1525,7 +1523,7 @@ def _ia_source_mismatch_errors(
     artifact_source: object,
     current_source: object,
 ) -> list[str]:
-    if not isinstance(artifact_source, Mapping) or not isinstance(current_source, Mapping):
+    if type(artifact_source) is not dict or type(current_source) is not dict:
         return ["current replay and validation source hashes must both be objects"]
     errors: list[str] = []
     for relative_path in sorted(set(artifact_source) | set(current_source)):
