@@ -75,6 +75,31 @@ def test_runtime_qualification_rejects_invalid_inputs() -> None:
         )
 
 
+def test_build_rejects_hostile_candidate_qualifications_mapping_subclass() -> None:
+    from alberta_framework.benchmarks.forager_matched_open_protocol import (
+        build_forager_matched_open_protocol,
+    )
+    from tests.test_forager_matched_open_protocol import _qualifications, _runtime
+
+    class HostileDict(dict):
+        calls = 0
+
+        def __iter__(self):  # type: ignore[override]
+            type(self).calls += 1
+            raise AssertionError("HostileDict.__iter__ must not run")
+
+    HostileDict.calls = 0
+    with pytest.raises(
+        ForagerMatchedOpenProtocolBuildError,
+        match="candidate_qualifications must be a mapping",
+    ):
+        build_forager_matched_open_protocol(
+            runtime=_runtime(),
+            candidate_qualifications=HostileDict(_qualifications()),
+        )
+    assert HostileDict.calls == 0
+
+
 def test_runtime_qualification_rejects_digest_subclass_without_dispatch() -> None:
     hostile = _HostileString(_digest(b"image"))
     _HostileString.calls = 0
