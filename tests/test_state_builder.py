@@ -1448,3 +1448,28 @@ def test_online_builder_init_returns_a_valid_state_at_normal_scale() -> None:
     state = builder.init(jr.key(0))
 
     assert bool(builder.state_valid(state))
+
+
+def test_state_builder_rejects_oversized_decay_rates() -> None:
+    from alberta_framework.core.state_builder import (
+        _MAX_FIXED_TRACE_DECAY_RATES,
+        FixedTraceStateBuilderConfig,
+    )
+
+    assert _MAX_FIXED_TRACE_DECAY_RATES == 4096
+
+    with pytest.raises(ValueError, match="observation_decay_rates"):
+        FixedTraceStateBuilderConfig(
+            observation_dim=2,
+            n_actions=2,
+            observation_decay_rates=(0.5,) * 4097,
+        )
+
+
+def test_state_builder_from_config_rejects_oversized_decay_rates() -> None:
+    from alberta_framework.core.state_builder import FixedTraceStateBuilderConfig
+
+    cfg_dict = FixedTraceStateBuilderConfig(observation_dim=2, n_actions=2).to_config()
+    cfg_dict["observation_decay_rates"] = [0.5] * 4097
+    with pytest.raises(ValueError, match="must contain at most 4096 elements"):
+        FixedTraceStateBuilderConfig.from_config(cfg_dict)

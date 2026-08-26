@@ -80,9 +80,7 @@ def test_working_memory_config_from_config_accepts_exact_lists_or_tuples() -> No
         "action_decay_rates": tuple(base["action_decay_rates"]),
         "reward_decay_rates": tuple(base["reward_decay_rates"]),
     }
-    assert WorkingMemoryConfig.from_config(tuple_payload) == WorkingMemoryConfig.from_config(
-        base
-    )
+    assert WorkingMemoryConfig.from_config(tuple_payload) == WorkingMemoryConfig.from_config(base)
 
 
 def test_working_memory_trace_decay_and_feature_causality() -> None:
@@ -670,11 +668,14 @@ def test_zero_width_vectors_and_batches_preserve_exact_shapes() -> None:
     chex.assert_shape(result.features, (3, memory.feature_dim()))
 
 
-@pytest.mark.parametrize("field", [
-    "observation_decay_rates",
-    "action_decay_rates",
-    "reward_decay_rates",
-])
+@pytest.mark.parametrize(
+    "field",
+    [
+        "observation_decay_rates",
+        "action_decay_rates",
+        "reward_decay_rates",
+    ],
+)
 @pytest.mark.parametrize(
     "rates",
     [
@@ -699,17 +700,13 @@ def test_decay_rates_must_be_finite_and_in_unit_half_open_interval(
 @pytest.mark.parametrize("temperature", [float("nan"), float("inf"), float("-inf"), 0.0, -1.0])
 def test_gate_temperature_must_be_finite_and_positive(temperature: float) -> None:
     with pytest.raises(ValueError, match="gate_temperature"):
-        WorkingMemoryFeaturizer(
-            _minimal_config(gated_update=True, gate_temperature=temperature)
-        )
+        WorkingMemoryFeaturizer(_minimal_config(gated_update=True, gate_temperature=temperature))
 
 
 @pytest.mark.parametrize("threshold", [float("nan"), float("inf"), float("-inf"), -1.0])
 def test_gate_threshold_must_be_finite_and_nonnegative(threshold: float) -> None:
     with pytest.raises(ValueError, match="gate_threshold"):
-        WorkingMemoryFeaturizer(
-            _minimal_config(gated_update=True, gate_threshold=threshold)
-        )
+        WorkingMemoryFeaturizer(_minimal_config(gated_update=True, gate_threshold=threshold))
 
 
 def test_legal_finite_decay_endpoints_still_construct_and_update() -> None:
@@ -756,3 +753,27 @@ def test_zero_decay_does_not_multiply_inf_traces() -> None:
     )
     assert bool(result.update_applied)
     chex.assert_trees_all_close(result.state.observation_traces, obs[None, :])
+
+
+def test_working_memory_rejects_oversized_decay_rates() -> None:
+    from alberta_framework.core.working_memory import (
+        _MAX_WORKING_MEMORY_DECAY_RATES,
+        WorkingMemoryConfig,
+    )
+
+    assert _MAX_WORKING_MEMORY_DECAY_RATES == 4096
+
+    with pytest.raises(ValueError, match="observation_decay_rates"):
+        WorkingMemoryConfig(
+            observation_dim=2,
+            observation_decay_rates=(0.5,) * 4097,
+        )
+
+
+def test_working_memory_from_config_rejects_oversized_decay_rates() -> None:
+    from alberta_framework.core.working_memory import WorkingMemoryConfig
+
+    cfg_dict = WorkingMemoryConfig(observation_dim=2).to_config()
+    cfg_dict["observation_decay_rates"] = [0.5] * 4097
+    with pytest.raises(ValueError, match="must contain at most 4096 elements"):
+        WorkingMemoryConfig.from_config(cfg_dict)

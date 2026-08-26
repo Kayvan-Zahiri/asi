@@ -70,6 +70,7 @@ from alberta_framework.core.working_memory import (
 )
 
 _INT32_MAX = 2**31 - 1
+_MAX_FIXED_TRACE_DECAY_RATES = 1 << 12
 _ACTUAL_INT_TYPES = frozenset(
     {
         int,
@@ -118,6 +119,8 @@ def _require_int32(name: str, value: object, *, minimum: int) -> int:
 def _require_decay_rates(name: str, value: object) -> tuple[float, ...]:
     if type(value) is not tuple:
         raise ValueError(f"{name} must be an actual tuple")
+    if len(value) > _MAX_FIXED_TRACE_DECAY_RATES:
+        raise ValueError(f"{name} must contain at most {_MAX_FIXED_TRACE_DECAY_RATES} decay rates")
     rates = cast(tuple[object, ...], value)
     return tuple(
         validated_float32_scalar(
@@ -1001,9 +1004,7 @@ class FixedTraceStateBuilderConfig:
             + self.n_actions * len(self.action_decay_rates)
             + 2 * len(self.outcome_decay_rates)
         )
-        feature_dim = trace_scalars + (
-            self.observation_dim if self.include_raw_observation else 0
-        )
+        feature_dim = trace_scalars + (self.observation_dim if self.include_raw_observation else 0)
         state_scalars = trace_scalars + 4
         _require_derived_int32("feature_dim", feature_dim, minimum=1)
         _require_derived_int32("state_scalars", state_scalars)
@@ -1033,15 +1034,17 @@ class FixedTraceStateBuilderConfig:
             raise ValueError(
                 "FixedTraceStateBuilderConfig payload type must be 'FixedTraceStateBuilder'"
             )
+        for name in ("observation_decay_rates", "action_decay_rates", "outcome_decay_rates"):
+            val = data[name]
+            if type(val) is not list and type(val) is not tuple:
+                raise ValueError(f"{name} must be an actual list or tuple")
+            if len(val) > _MAX_FIXED_TRACE_DECAY_RATES:
+                raise ValueError(
+                    f"{name} must contain at most {_MAX_FIXED_TRACE_DECAY_RATES} elements"
+                )
         obs_decays = data["observation_decay_rates"]
         act_decays = data["action_decay_rates"]
         out_decays = data["outcome_decay_rates"]
-        if (
-            not isinstance(obs_decays, (list, tuple))
-            or not isinstance(act_decays, (list, tuple))
-            or not isinstance(out_decays, (list, tuple))
-        ):
-            raise ValueError("decay rates must be lists or tuples")
         return cls(
             observation_dim=data["observation_dim"],
             n_actions=data["n_actions"],
@@ -1355,9 +1358,7 @@ def _online_gated_update_working_set_bytes(
     event_dim = observation_dim + n_actions + 2
     feature_dim = hidden_dim + (observation_dim if include_raw_observation else 0)
     parameter_count = 2 * hidden_dim * (event_dim + 1)
-    persist_scalars = (
-        parameter_count + hidden_dim + hidden_dim * parameter_count + 3
-    )
+    persist_scalars = parameter_count + hidden_dim + hidden_dim * parameter_count + 3
     update_scalars = (
         3 * persist_scalars
         + 2 * hidden_dim * parameter_count
@@ -1385,9 +1386,7 @@ def _preflight_online_gated_update_working_set(
         include_raw_observation=include_raw_observation,
     )
     if working_set_bytes > _INT32_MAX:
-        raise ValueError(
-            "online-gated update working set byte count must fit signed int32"
-        )
+        raise ValueError("online-gated update working set byte count must fit signed int32")
 
 
 @dataclass(frozen=True)
@@ -1448,12 +1447,7 @@ class OnlineGatedStateBuilderConfig:
             self.observation_dim if self.include_raw_observation else 0
         )
         parameter_count = 2 * self.hidden_dim * (event_dim + 1)
-        state_scalars = (
-            parameter_count
-            + self.hidden_dim
-            + self.hidden_dim * parameter_count
-            + 3
-        )
+        state_scalars = parameter_count + self.hidden_dim + self.hidden_dim * parameter_count + 3
         _require_derived_int32("event_dim", event_dim, minimum=1)
         _require_derived_int32("feature_dim", feature_dim, minimum=1)
         _require_derived_int32("parameter_count", parameter_count, minimum=1)
