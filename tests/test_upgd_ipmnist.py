@@ -695,6 +695,38 @@ class TestLeanUPGDParity:
                 )
 
 
+def test_zero_utility_decay_does_not_multiply_inf_utility() -> None:
+    """utility_decay=0 times poisoned utility EMA is 0*inf = NaN without a skip."""
+    params = {
+        "w": jnp.asarray([[1.0, -0.5], [0.25, 0.5]], dtype=jnp.float32),
+        "b": jnp.asarray([0.1, -0.2], dtype=jnp.float32),
+    }
+    poisoned = LeanUPGDState(
+        utility={name: jnp.full_like(value, jnp.inf) for name, value in params.items()},
+        step=jnp.asarray(3, dtype=jnp.int32),
+    )
+    grads = {name: jnp.ones_like(value) for name, value in params.items()}
+    noise = {name: jnp.zeros_like(value) for name, value in params.items()}
+    hp = {
+        "utility_decay": 0.0,
+        "step_size": 0.01,
+        "weight_decay": 0.0,
+        "noise_std": 0.0,
+    }
+    raw = jnp.asarray(0.0, dtype=jnp.float32) * jnp.asarray(jnp.inf, dtype=jnp.float32)
+    assert not bool(jnp.isfinite(raw))
+
+    new_params, new_state = lean_upgd_w_update(params, poisoned, grads, noise, hp)
+    for name in params:
+        assert bool(jnp.all(jnp.isfinite(new_state.utility[name])))
+        assert bool(jnp.all(jnp.isfinite(new_params[name])))
+        np.testing.assert_allclose(
+            np.asarray(new_state.utility[name]),
+            np.asarray(-grads[name] * params[name]),
+            atol=1e-6,
+        )
+
+
 class TestAdamWTransaction:
     """AdamW's parameter leaves form one checked learner transaction."""
 
