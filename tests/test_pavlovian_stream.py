@@ -485,6 +485,15 @@ def test_construct_canonicalizes_noise_std_to_float32() -> None:
     assert stream._noise_std == float(np.float32(0.1))  # noqa: SLF001
 
 
+_LONGDOUBLE_WIDER_THAN_FLOAT64 = (
+    np.finfo(np.longdouble).nmant > np.finfo(np.float64).nmant
+)
+
+
+@pytest.mark.skipif(
+    not _LONGDOUBLE_WIDER_THAN_FLOAT64,
+    reason="np.longdouble precision-widening probe requires longdouble wider than float64",
+)
 def test_construct_narrows_original_noise_real_once() -> None:
     midpoint_plus = (
         np.longdouble(1.0)
@@ -500,6 +509,10 @@ def test_construct_narrows_original_noise_real_once() -> None:
     assert stream._noise_std == float(np.float32(midpoint_plus))  # noqa: SLF001
 
 
+@pytest.mark.skipif(
+    not _LONGDOUBLE_WIDER_THAN_FLOAT64,
+    reason="np.longdouble subnormal underflow probe requires longdouble wider than float64",
+)
 def test_construct_rejects_negative_real_that_rounds_to_zero() -> None:
     below_zero = -np.nextafter(np.longdouble(0.0), np.longdouble(1.0))
     assert float(below_zero) == 0.0
