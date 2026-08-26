@@ -69,3 +69,48 @@ def test_open_directory_validation() -> None:
             descriptor=3,
             inode_identity=(1, True, 3),
         )
+
+
+def test_seal_bundle_rejects_manifest_subclass_before_other_fields() -> None:
+    """Manifest identity requires exact dict or MappingProxyType."""
+    from types import MappingProxyType
+
+    class HostileDict(dict):
+        calls = 0
+
+        def keys(self):  # type: ignore[override]
+            type(self).calls += 1
+            raise AssertionError("HostileDict.keys must not run")
+
+    HostileDict.calls = 0
+    with pytest.raises(ForagerMatchedSealError, match="manifest must be a Mapping"):
+        ContentVerifiedSealBundle(
+            output_root=Path("."),
+            manifest=HostileDict({}),
+            open_protocol=None,  # type: ignore[arg-type]
+            open_score_evidence=None,  # type: ignore[arg-type]
+            open_verification_request=None,  # type: ignore[arg-type]
+            recorded_bindings_cache={},
+            selection_result=None,  # type: ignore[arg-type]
+            selection_report={},
+            sealed_protocol=None,  # type: ignore[arg-type]
+            sealed_transition={},
+            sealed_transition_sha256="a" * 64,
+        )
+    assert HostileDict.calls == 0
+
+    # MappingProxyType remains an intentional round-trip container.
+    with pytest.raises(ForagerMatchedSealError, match="open_protocol must be"):
+        ContentVerifiedSealBundle(
+            output_root=Path("."),
+            manifest=MappingProxyType({}),
+            open_protocol=None,  # type: ignore[arg-type]
+            open_score_evidence=None,  # type: ignore[arg-type]
+            open_verification_request=None,  # type: ignore[arg-type]
+            recorded_bindings_cache=MappingProxyType({}),
+            selection_result=None,  # type: ignore[arg-type]
+            selection_report=MappingProxyType({}),
+            sealed_protocol=None,  # type: ignore[arg-type]
+            sealed_transition=MappingProxyType({}),
+            sealed_transition_sha256="a" * 64,
+        )

@@ -84,6 +84,11 @@ class PublishedSealUncertainError(ForagerMatchedSealError):
         super().__init__(f"seal published at {destination}, but {detail}")
 
 
+def _is_exact_json_object(value: object) -> bool:
+    """True for exact dict or MappingProxyType JSON object containers."""
+    return type(value) is dict or type(value) is MappingProxyType
+
+
 @dataclass(frozen=True, slots=True)
 class ContentVerifiedSealBundle:
     """A deterministically replayed seal whose external trust is unchecked.
@@ -109,7 +114,7 @@ class ContentVerifiedSealBundle:
     def __post_init__(self) -> None:
         if not isinstance(self.output_root, Path):
             raise ForagerMatchedSealError("output_root must be a Path")
-        if not isinstance(self.manifest, Mapping):
+        if not _is_exact_json_object(self.manifest):
             raise ForagerMatchedSealError("manifest must be a Mapping")
         if not isinstance(self.open_protocol, protocol.ForagerMatchedProtocol):
             raise ForagerMatchedSealError("open_protocol must be a ForagerMatchedProtocol")
@@ -119,17 +124,17 @@ class ContentVerifiedSealBundle:
             raise ForagerMatchedSealError(
                 "open_verification_request must be a VerificationRequest"
             )
-        if not isinstance(self.recorded_bindings_cache, Mapping):
+        if not _is_exact_json_object(self.recorded_bindings_cache):
             raise ForagerMatchedSealError("recorded_bindings_cache must be a Mapping")
         if not isinstance(self.selection_result, protocol.ForagerMatchedSelectionResult):
             raise ForagerMatchedSealError(
                 "selection_result must be a ForagerMatchedSelectionResult"
             )
-        if not isinstance(self.selection_report, Mapping):
+        if not _is_exact_json_object(self.selection_report):
             raise ForagerMatchedSealError("selection_report must be a Mapping")
         if not isinstance(self.sealed_protocol, protocol.ForagerMatchedProtocol):
             raise ForagerMatchedSealError("sealed_protocol must be a ForagerMatchedProtocol")
-        if not isinstance(self.sealed_transition, Mapping):
+        if not _is_exact_json_object(self.sealed_transition):
             raise ForagerMatchedSealError("sealed_transition must be a Mapping")
         _require_sha256(self.sealed_transition_sha256, "sealed_transition_sha256")
 
