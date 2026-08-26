@@ -4,7 +4,10 @@ from typing import Any
 
 import pytest
 
-from alberta_framework.streams.recurring_multiagent import RecurringTwoAgentWorld
+from alberta_framework.streams.recurring_multiagent import (
+    RecurringTwoAgentWorld,
+    migrate_legacy_recurring_two_agent_state,
+)
 
 pytestmark = pytest.mark.unit
 
@@ -162,3 +165,28 @@ def test_recurring_world_from_config_rejects_invalid_initial_positions() -> None
         RecurringTwoAgentWorld.from_config({**valid, "initial_positions": [-0.5]})
     with pytest.raises(ValueError, match="initial_positions must have length 2"):
         RecurringTwoAgentWorld.from_config({**valid, "initial_positions": [-0.5, 0.0, 0.5]})
+
+
+def test_migrate_legacy_state_rejects_mapping_subclass_without_iter_hooks() -> None:
+    class HostileDict(dict):
+        calls = 0
+
+        def __iter__(self):  # type: ignore[override]
+            type(self).calls += 1
+            raise AssertionError("HostileDict.__iter__ must not run")
+
+    HostileDict.calls = 0
+    with pytest.raises(TypeError, match="must be a mapping or dataclass"):
+        migrate_legacy_recurring_two_agent_state(
+            HostileDict(
+                {
+                    "key": None,
+                    "positions": None,
+                    "velocities": None,
+                    "nuisance": None,
+                    "step_count": None,
+                }
+            ),
+            world=RecurringTwoAgentWorld(),
+        )
+    assert HostileDict.calls == 0
