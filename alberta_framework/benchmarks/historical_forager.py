@@ -172,13 +172,13 @@ def _json_mapping_copy(
     name: str,
     maximum_bytes: int = _MAX_JSON_BYTES,
 ) -> dict[str, Any]:
-    if not isinstance(value, Mapping):
+    if type(value) is not dict:
         raise HistoricalForagerContractError(f"{name} must be a mapping")
     encoded = _canonical_json_bytes(value)
     if len(encoded) > maximum_bytes:
         raise HistoricalForagerContractError(f"{name} exceeds the byte limit")
     copied = json.loads(encoded)
-    if not isinstance(copied, dict):  # pragma: no cover - Mapping JSON invariant
+    if type(copied) is not dict:  # pragma: no cover - Mapping JSON invariant
         raise HistoricalForagerContractError(f"{name} must encode as an object")
     return copied
 
@@ -307,7 +307,7 @@ def _historical_transition(
     if (
         not isinstance(terminal, (bool, np.bool_))
         or bool(terminal)
-        or not isinstance(info, Mapping)
+        or type(info) is not dict
         or len(info) != 0
     ):
         raise HistoricalForagerContractError(
@@ -509,7 +509,7 @@ def _verify_installed_forager_source_inventory() -> None:
 
     provenance = historical_forager_provenance()
     raw_files = provenance["environment"]["files"]
-    if not isinstance(raw_files, Mapping):  # pragma: no cover - canonical constant invariant
+    if type(raw_files) is not dict:  # pragma: no cover - canonical constant invariant
         raise RuntimeError("historical environment file inventory is malformed")
     expected: dict[str, str] = {}
     for raw_name, raw_digest in raw_files.items():
@@ -1130,7 +1130,7 @@ def _strict_json_object(path: Path) -> tuple[dict[str, Any], bytes]:
         raise HistoricalForagerArtifactError("result.json exceeds the JSON nesting limit") from exc
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise HistoricalForagerArtifactError("result.json is not valid UTF-8 JSON") from exc
-    if not isinstance(parsed, dict):
+    if type(parsed) is not dict:
         raise HistoricalForagerArtifactError("result.json must contain an object")
     if payload != _canonical_json_bytes(parsed) + b"\n":
         raise HistoricalForagerArtifactError("result.json is not canonical JSON")
@@ -1143,7 +1143,7 @@ def _require_exact_keys(value: Mapping[str, Any], expected: set[str], *, name: s
 
 
 def _validate_adapter_manifest(value: Any) -> None:
-    if not isinstance(value, Mapping):
+    if type(value) is not dict:
         raise HistoricalForagerArtifactError("environment_adapter must be an object")
     _require_exact_keys(
         value,
@@ -1295,7 +1295,7 @@ def validate_historical_forager_artifact(output_directory: Path) -> dict[str, An
     ):
         raise HistoricalForagerArtifactError("historical result identity is invalid")
     provenance = manifest["provenance"]
-    if not isinstance(provenance, Mapping):
+    if type(provenance) is not dict:
         raise HistoricalForagerArtifactError("provenance must be an object")
     try:
         validate_historical_forager_provenance(provenance)

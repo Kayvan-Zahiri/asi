@@ -187,3 +187,33 @@ def test_historical_module_identities_reject_hostile_strings_before_hooks(
             Path.home(),
         )
     assert _HostileString.calls == 0
+
+
+def test_json_mapping_copy_rejects_mapping_subclass_without_iter_hooks() -> None:
+    class HostileDict(dict):
+        calls = 0
+
+        def __iter__(self):  # type: ignore[override]
+            type(self).calls += 1
+            raise AssertionError("HostileDict.__iter__ must not run")
+
+    HostileDict.calls = 0
+    with pytest.raises(HistoricalForagerContractError, match="must be a mapping"):
+        historical_forager._json_mapping_copy(HostileDict({"a": 1}), name="payload")
+    assert HostileDict.calls == 0
+
+
+def test_adapter_manifest_rejects_mapping_subclass_without_iter_hooks() -> None:
+    class HostileDict(dict):
+        calls = 0
+
+        def __iter__(self):  # type: ignore[override]
+            type(self).calls += 1
+            raise AssertionError("HostileDict.__iter__ must not run")
+
+    HostileDict.calls = 0
+    with pytest.raises(
+        historical_forager.HistoricalForagerArtifactError, match="must be an object"
+    ):
+        historical_forager._validate_adapter_manifest(HostileDict())
+    assert HostileDict.calls == 0
