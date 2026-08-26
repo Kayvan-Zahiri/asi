@@ -198,8 +198,8 @@ class PreparedOciBuild:
     def __post_init__(self) -> None:
         if not isinstance(self.context, Path):
             raise OfficialForagaxOciError("context must be a Path")
-        if not isinstance(self.build_spec, Mapping):
-            raise OfficialForagaxOciError("build_spec must be a mapping")
+        if type(self.build_spec) is not dict:
+            raise OfficialForagaxOciError("build_spec must be an exact mapping")
         _require_sha256(self.build_spec_sha256, label="build_spec_sha256")
         _require_sha256(self.dockerfile_sha256, label="dockerfile_sha256")
         _require_sha256(self.launcher_sha256, label="launcher_sha256")

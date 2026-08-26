@@ -34,7 +34,7 @@ def test_prepared_oci_build_rejects_invalid_inputs() -> None:
             launcher_sha256="c" * 64,
         )
 
-    with pytest.raises(OfficialForagaxOciError, match="build_spec must be a mapping"):
+    with pytest.raises(OfficialForagaxOciError, match="build_spec must be an exact mapping"):
         PreparedOciBuild(
             context=Path("/context"),
             build_spec=None,  # type: ignore[arg-type]
@@ -77,3 +77,28 @@ def test_driver_launch_contract_rejects_invalid_inputs() -> None:
             cuda_wheel_library_paths=(),
             driver_user_library_paths=(),
         )
+
+
+class _HostileBuildSpec(dict[str, object]):
+    calls = 0
+
+    def items(self):  # type: ignore[no-untyped-def, override]
+        type(self).calls += 1
+        raise AssertionError("hostile mapping hook executed")
+
+
+def test_build_context_rejects_hostile_build_spec_before_hooks() -> None:
+    from pathlib import Path
+
+    from alberta_framework.benchmarks.official_foragax_oci import BuildContext
+
+    _HostileBuildSpec.calls = 0
+    with pytest.raises(OfficialForagaxOciError, match="exact mapping"):
+        BuildContext(
+            context=Path("/tmp"),
+            build_spec=_HostileBuildSpec({"layers": []}),
+            build_spec_sha256="a" * 64,
+            dockerfile_sha256="b" * 64,
+            launcher_sha256="c" * 64,
+        )
+    assert _HostileBuildSpec.calls == 0
