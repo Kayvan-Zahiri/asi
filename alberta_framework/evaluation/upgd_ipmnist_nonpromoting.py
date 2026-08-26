@@ -307,7 +307,7 @@ def _decode_strict_json_object(raw: bytes) -> dict[str, object]:
         parse_constant=reject_constant,
         parse_float=parse_float,
     )
-    if not isinstance(parsed, dict):
+    if type(parsed) is not dict:
         raise ValueError("payload must contain one JSON object")
     return parsed
 
@@ -341,12 +341,12 @@ def _numeric_matrix(
     upper: float | None,
     lower_inclusive: bool,
 ) -> FloatMatrix | None:
-    if not isinstance(value, list) or len(value) != row_count:
+    if type(value) is not list or len(value) != row_count:
         errors.append(f"{field} must have shape ({row_count}, {column_count})")
         return None
     rows: list[list[float]] = []
     for row in value:
-        if not isinstance(row, list) or len(row) != column_count:
+        if type(row) is not list or len(row) != column_count:
             errors.append(f"{field} must have shape ({row_count}, {column_count})")
             return None
         numeric_row: list[float] = []
@@ -386,7 +386,7 @@ def _parse_partial(path: Path, errors: list[str]) -> _Shard | None:
         errors.append(f"{path}: learner must be one of {sorted(EXPECTED_HYPERPARAMETERS)}")
 
     config = payload.get("config")
-    if not isinstance(config, Mapping) or set(config) != set(EXPECTED_CONFIG):
+    if type(config) is not dict or set(config) != set(EXPECTED_CONFIG):
         errors.append(f"{path}: config fields do not match the published protocol")
     else:
         for name, expected in EXPECTED_CONFIG.items():
@@ -397,7 +397,7 @@ def _parse_partial(path: Path, errors: list[str]) -> _Shard | None:
     hyperparameters_value = payload.get("hyperparameters")
     hyperparameters: dict[str, float] = {}
     expected_hp = EXPECTED_HYPERPARAMETERS.get(learner)
-    if not isinstance(hyperparameters_value, Mapping) or expected_hp is None:
+    if type(hyperparameters_value) is not dict or expected_hp is None:
         errors.append(f"{path}: hyperparameters must be an object for a known learner")
     elif set(hyperparameters_value) != set(expected_hp):
         errors.append(f"{path}: hyperparameter fields do not match {learner}")
@@ -411,7 +411,7 @@ def _parse_partial(path: Path, errors: list[str]) -> _Shard | None:
 
     seeds = payload.get("seeds")
     seed = -1
-    if not isinstance(seeds, list) or len(seeds) != 1 or type(seeds[0]) is not int:
+    if type(seeds) is not list or len(seeds) != 1 or type(seeds[0]) is not int:
         errors.append(f"{path}: each recorded shard must contain exactly one integer seed")
     else:
         seed = seeds[0]
@@ -627,7 +627,7 @@ def _validate_artifact_payload(
         errors.append("artifact protocol payload does not match the immutable v1 record")
 
     provenance = artifact.get("provenance")
-    if not isinstance(provenance, Mapping) or set(provenance) != {
+    if type(provenance) is not dict or set(provenance) != {
         "openml_data_home",
         "deviations",
     }:
@@ -768,7 +768,7 @@ def validate_completed_upgd_ipmnist_run(
         if second_digest != artifact_validation.artifact_sha256:
             errors.append("artifact bytes changed during validation")
         provenance = artifact.get("provenance")
-        raw_home = provenance.get("openml_data_home") if isinstance(provenance, Mapping) else None
+        raw_home = provenance.get("openml_data_home") if type(provenance) is dict else None
         data_home = Path(raw_home) if type(raw_home) is str else Path("__missing_data_home__")
     reconstructed = validate_upgd_ipmnist_reconstructed_provenance(root, data_home)
     errors.extend(reconstructed.errors)
@@ -809,11 +809,11 @@ _V2_ENVIRONMENT_FIELDS = {"jax", "numpy", "python", "platform", "device"}
 
 
 def _contains_legacy_protocol_marker(value: object) -> bool:
-    if isinstance(value, Mapping):
+    if type(value) is dict:
         return "is_protocol_exact" in value or any(
             _contains_legacy_protocol_marker(item) for item in value.values()
         )
-    if isinstance(value, list):
+    if type(value) is list:
         return any(_contains_legacy_protocol_marker(item) for item in value)
     return False
 
@@ -914,7 +914,7 @@ def validate_upgd_ipmnist_v2_artifact(
         errors.append("v2 artifact created_unix must be finite and positive")
     policy = artifact.get("evidence_policy")
     if (
-        not isinstance(policy, Mapping)
+        type(policy) is not dict
         or set(policy) != set(V2_NONPROMOTING_POLICY)
         or policy.get("evidence_class") != V2_NONPROMOTING_POLICY["evidence_class"]
         or policy.get("development_only") is not True
@@ -926,7 +926,7 @@ def validate_upgd_ipmnist_v2_artifact(
         errors.append("v2 artifact structured deviations do not match the contract")
 
     provenance = artifact.get("provenance")
-    if not isinstance(provenance, Mapping) or set(provenance) != _V2_PROVENANCE_FIELDS:
+    if type(provenance) is not dict or set(provenance) != _V2_PROVENANCE_FIELDS:
         errors.append("v2 artifact provenance fields do not match the strict schema")
     else:
         data_home = provenance.get("openml_data_home")
@@ -937,7 +937,7 @@ def validate_upgd_ipmnist_v2_artifact(
                 errors.append(f"v2 provenance.{field} must deny an absent binding")
 
     environment = artifact.get("environment")
-    if not isinstance(environment, Mapping) or set(environment) != _V2_ENVIRONMENT_FIELDS:
+    if type(environment) is not dict or set(environment) != _V2_ENVIRONMENT_FIELDS:
         errors.append("v2 artifact environment fields do not match the strict schema")
     elif any(type(value) is not str or not value for value in environment.values()):
         errors.append("v2 artifact environment values must be non-empty strings")
