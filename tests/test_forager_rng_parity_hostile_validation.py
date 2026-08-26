@@ -116,3 +116,25 @@ def test_environment_trace_digest_validation() -> None:
                 transitions=(_make_transition_digest(),),
                 trace_sha256=invalid_digest,  # type: ignore[arg-type]
             )
+
+
+def test_require_object_rejects_mapping_subclass_before_iter() -> None:
+    from alberta_framework.benchmarks.forager_rng_parity import (
+        ForagerRngParityError,
+        _require_object,
+    )
+
+    class HostileDict(dict):
+        calls = 0
+
+        def __iter__(self):  # type: ignore[override]
+            type(self).calls += 1
+            raise AssertionError("HostileDict.__iter__ must not run")
+
+    HostileDict.calls = 0
+    with pytest.raises(
+        ForagerRngParityError,
+        match="exact dict or MappingProxyType",
+    ):
+        _require_object(HostileDict({"a": 1}), "probe")
+    assert HostileDict.calls == 0
