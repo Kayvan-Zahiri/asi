@@ -282,8 +282,8 @@ def threshold_calibration_ready() -> bool:
 
     thresholds = _threshold_payload()
     calibration = thresholds.get("calibration")
-    status = calibration.get("status") if isinstance(calibration, Mapping) else None
-    unset = calibration.get("unset_thresholds") if isinstance(calibration, Mapping) else None
+    status = calibration.get("status") if type(calibration) is dict else None
+    unset = calibration.get("unset_thresholds") if type(calibration) is dict else None
     try:
         calibration_digest = _calibration_record_sha256()
     except RuntimeError:
@@ -536,11 +536,11 @@ def _metrics_from_condition(
     condition: Mapping[str, object],
 ) -> dict[str, object]:
     phases_object = condition.get("phase_windows")
-    if not isinstance(phases_object, list) or len(phases_object) != len(SEGMENT_NAMES):
+    if type(phases_object) is not list or len(phases_object) != len(SEGMENT_NAMES):
         return {key: None for key in _METRIC_KEYS}
     phases: list[Mapping[str, object]] = []
     for phase in phases_object:
-        if not isinstance(phase, Mapping):
+        if type(phase) is not dict:
             return {key: None for key in _METRIC_KEYS}
         phases.append(phase)
 
@@ -695,10 +695,10 @@ def _metric_vector(
     values: list[float] = []
     for seed_record in seed_records:
         conditions = seed_record.get("conditions")
-        if not isinstance(conditions, Mapping):
+        if type(conditions) is not dict:
             return None
         condition_record = conditions.get(condition)
-        if not isinstance(condition_record, Mapping):
+        if type(condition_record) is not dict:
             return None
         metrics = condition_record.get("metrics")
         if not isinstance(metrics, Mapping):
@@ -999,11 +999,11 @@ def _comparison_value(
     field: str,
 ) -> float | None:
     record = comparisons.get(comparison)
-    if not isinstance(record, Mapping):
+    if type(record) is not dict:
         return None
     if field == "paired_mean_interval.lower":
         interval = record.get("paired_mean_interval")
-        if not isinstance(interval, Mapping):
+        if type(interval) is not dict:
             return None
         return _finite_number(interval.get("lower"))
     return _finite_number(record.get(field))
@@ -1015,13 +1015,13 @@ def _aggregate_value(
     metric: str,
 ) -> float | None:
     conditions = aggregate.get("conditions")
-    if not isinstance(conditions, Mapping):
+    if type(conditions) is not dict:
         return None
     condition_record = conditions.get(condition)
-    if not isinstance(condition_record, Mapping):
+    if type(condition_record) is not dict:
         return None
     medians = condition_record.get("median_metrics")
-    if not isinstance(medians, Mapping):
+    if type(medians) is not dict:
         return None
     return _finite_number(medians.get(metric))
 
@@ -1031,7 +1031,7 @@ def _extreme_value(
     name: str,
 ) -> float | None:
     extrema = aggregate.get("primary_extrema")
-    if not isinstance(extrema, Mapping):
+    if type(extrema) is not dict:
         return None
     return _finite_number(extrema.get(name))
 
@@ -1100,10 +1100,10 @@ def _acceptance_payload(
     nonfinite_complete = True
     for condition in CONDITION_NAMES:
         conditions = aggregate.get("conditions")
-        condition_record = conditions.get(condition) if isinstance(conditions, Mapping) else None
+        condition_record = conditions.get(condition) if type(conditions) is dict else None
         value = (
             _finite_number(condition_record.get("total_nonfinite_steps"))
-            if isinstance(condition_record, Mapping)
+            if type(condition_record) is dict
             else None
         )
         if value is None:
@@ -1113,7 +1113,7 @@ def _acceptance_payload(
 
     primary = CONDITION_PRIMARY
     calibration = thresholds.get("calibration")
-    calibration_status = calibration.get("status") if isinstance(calibration, Mapping) else None
+    calibration_status = calibration.get("status") if type(calibration) is dict else None
     all_required_thresholds_frozen = threshold_calibration_ready()
     checks = [
         _check(
@@ -1638,7 +1638,7 @@ def _mapping(
 
 
 def _parsed_pairs(value: object) -> tuple[tuple[int, int], ...] | None:
-    if not isinstance(value, list):
+    if type(value) is not list:
         return None
     pairs: list[tuple[int, int]] = []
     for pair in value:
@@ -1738,7 +1738,7 @@ def _validate_condition_record(
         return
     _exact_keys(condition, _CONDITION_RECORD_KEYS, location, errors)
     phases = condition.get("phase_windows")
-    if not isinstance(phases, list) or len(phases) != len(SEGMENT_NAMES):
+    if type(phases) is not list or len(phases) != len(SEGMENT_NAMES):
         errors.append(f"{location}.phase_windows must contain all nine phases")
     else:
         for phase_index, phase in enumerate(phases):
@@ -1770,7 +1770,7 @@ def _validated_seed_records(
     value: object,
     errors: list[str],
 ) -> list[Mapping[str, object]]:
-    if not isinstance(value, list):
+    if type(value) is not list:
         errors.append("scientific_payload.seed_records must be a list")
         return []
     records: list[Mapping[str, object]] = []
@@ -1955,7 +1955,7 @@ def _validate_comparison_shape(
             errors,
         )
     per_seed = comparison.get("per_seed")
-    if not isinstance(per_seed, list) or len(per_seed) != sample_size:
+    if type(per_seed) is not list or len(per_seed) != sample_size:
         errors.append(f"{location}.per_seed has wrong sample size")
     else:
         for index, item in enumerate(per_seed):
@@ -2038,7 +2038,7 @@ def _validate_acceptance_shape(
     if not isinstance(acceptance.get("retention_ablation_interpretation"), str):
         errors.append("acceptance.retention_ablation_interpretation must be a string")
     checks = acceptance.get("checks")
-    if not isinstance(checks, list) or not checks:
+    if type(checks) is not list or not checks:
         errors.append("scientific_payload.acceptance.checks must be non-empty list")
         return
     names: list[str] = []
@@ -2166,7 +2166,7 @@ def _validate_operational_metadata(
                 errors,
             )
     jax_payload = runtime.get("jax")
-    if isinstance(jax_payload, Mapping):
+    if type(jax_payload) is dict:
         devices = jax_payload.get("devices")
         if not isinstance(devices, list):
             errors.append("runtime_provenance.jax.devices must be list")
