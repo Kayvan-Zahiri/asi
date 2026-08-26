@@ -841,16 +841,37 @@ def _select_planning_anchor(
     return anchor, index, jnp.where(memory_count > 0, score, 0.0)
 
 
+def _skip_zero_scale(scale: Array, value: Array) -> Array:
+    """Return ``scale * value``, or exact zero when ``scale`` is zero.
+
+    A zero blend weight means the term is not applied at all, so it must
+    contribute zero even when ``value`` is non-finite.  Taking the raw
+    product first turns ``0 * inf`` into ``NaN``.
+    """
+    return jnp.where(scale == 0.0, jnp.zeros_like(value), scale * value)
+
+
 def _update_planning_utility(
     memory_utilities: Array,
     index: Array,
     td_signal: Array,
     step_size: float,
 ) -> Array:
-    """Update learned search-control utility for a planned transition."""
+    """Update learned search-control utility for a planned transition.
+
+    Both blend weights are skipped at exactly zero.  ``step_size`` is a
+    validated unit-interval real, so ``0.0`` (freeze the utility) and
+    ``1.0`` (replace it outright) are both admissible, while
+    ``td_signal`` comes from an unclamped imagined rollout and can be
+    non-finite.  Without the skip, the ignored term's ``0 * inf`` wrote
+    ``NaN`` into the stored utility, and a ``NaN`` utility poisons the
+    ``learned`` strategy's ranking for the rest of the run.
+    """
     alpha = jnp.asarray(step_size, dtype=jnp.float32)
     old_utility = memory_utilities[index]
-    new_utility = (1.0 - alpha) * old_utility + alpha * jnp.abs(td_signal)
+    retained = _skip_zero_scale(1.0 - alpha, old_utility)
+    applied = _skip_zero_scale(alpha, jnp.abs(td_signal))
+    new_utility = retained + applied
     return memory_utilities.at[index].set(new_utility)
 
 
