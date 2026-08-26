@@ -44,6 +44,14 @@ if TYPE_CHECKING:
 
 _INT32_MAX = 2**31 - 1
 _INT32_MIN = -(2**31)
+# ``learn_from_trajectory`` hands caller-supplied step arrays straight to
+# ``jax.lax.scan`` with no bound tighter than ``_INT32_MAX``. Bounding only
+# by ``_INT32_MAX`` still lets a caller force JAX to trace/compile a scan of
+# up to ~2 billion steps (resource preflight only catches wide rows, not
+# long-but-narrow ones), hanging the process well before any step executes.
+# Matches the ceiling convention for sibling scan-driven array loops
+# (``streams.feature_discovery``, ``core.sarsa``, ``core.horde``).
+_GYMNASIUM_TRAJECTORY_MAX_STEPS = 10_000
 _ACTUAL_INT_TYPES = frozenset(
     {
         int,
@@ -499,6 +507,11 @@ def learn_from_trajectory(
         metrics have shape (num_steps, 3) with columns
         [squared_error, error, mean_step_size]; a learner constructed with
         a normalizer emits a fourth column, normalizer_mean_var.
+
+    Raises:
+        ValueError: If ``num_steps`` is outside
+            ``[1, _GYMNASIUM_TRAJECTORY_MAX_STEPS]`` or the arrays are otherwise
+            malformed for a scan.
     """
     if type(learner) is not LinearLearner and not isinstance(learner, LinearLearner):
         raise TypeError("learner must be an instance of LinearLearner")
@@ -528,8 +541,11 @@ def learn_from_trajectory(
         raise ValueError("observations must be a 2D array of shape (num_steps, feature_dim)")
     if tgt_ndim not in (1, 2):
         raise ValueError("targets must be a 1D or 2D array")
-    if not 1 <= num_steps <= _INT32_MAX:
-        raise ValueError("observations sequence length must be an integer in [1, 2147483647]")
+    if not 1 <= num_steps <= _GYMNASIUM_TRAJECTORY_MAX_STEPS:
+        raise ValueError(
+            "observations sequence length must be an integer in "
+            f"[1, {_GYMNASIUM_TRAJECTORY_MAX_STEPS}]"
+        )
     if target_steps != num_steps:
         raise ValueError("targets sequence length must match observations sequence length")
     if feature_dim is None or not 1 <= feature_dim <= _INT32_MAX:

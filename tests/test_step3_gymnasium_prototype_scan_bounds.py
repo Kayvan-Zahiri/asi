@@ -26,6 +26,7 @@ from alberta_framework.steps.step3 import (
     run_step3_scan,
 )
 from alberta_framework.streams.gymnasium import (
+    _GYMNASIUM_TRAJECTORY_MAX_STEPS,
     learn_from_trajectory,
     learn_from_trajectory_normalized,
 )
@@ -250,6 +251,53 @@ class TestGymnasiumTrajectoryScanValidation:
         final_state, metrics = learn_from_trajectory(learner, obs, targets)
         assert isinstance(final_state, LearnerState)
         assert metrics.shape == (8, 3)
+
+    def test_documented_trajectory_scan_ceiling(self) -> None:
+        assert _GYMNASIUM_TRAJECTORY_MAX_STEPS == 10_000
+
+    def test_rejects_overflow_sequence_length_before_scan(
+        self, learner, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        seen: list[int] = []
+
+        def spy(fn, init, xs, **kwargs):  # type: ignore[no-untyped-def]
+            first = xs[0] if isinstance(xs, tuple) else xs
+            seen.append(int(first.shape[0]))
+            raise AssertionError(f"jax.lax.scan must not run: T={first.shape[0]}")
+
+        monkeypatch.setattr(
+            "alberta_framework.streams.gymnasium.jax.lax.scan", spy
+        )
+        obs = jnp.zeros((_GYMNASIUM_TRAJECTORY_MAX_STEPS + 1, 3), dtype=jnp.float32)
+        targets = jnp.zeros((_GYMNASIUM_TRAJECTORY_MAX_STEPS + 1, 1), dtype=jnp.float32)
+        with pytest.raises(
+            ValueError,
+            match=r"observations sequence length must be an integer in \[1, 10000\]",
+        ):
+            learn_from_trajectory(learner, obs, targets)
+        assert seen == []
+
+    def test_rejects_origin_hang_class_sized_sequence_before_scan(
+        self, learner, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        seen: list[int] = []
+
+        def spy(fn, init, xs, **kwargs):  # type: ignore[no-untyped-def]
+            first = xs[0] if isinstance(xs, tuple) else xs
+            seen.append(int(first.shape[0]))
+            raise AssertionError(f"jax.lax.scan must not run: T={first.shape[0]}")
+
+        monkeypatch.setattr(
+            "alberta_framework.streams.gymnasium.jax.lax.scan", spy
+        )
+        obs = jnp.zeros((200_000, 1), dtype=jnp.float32)
+        targets = jnp.zeros((200_000, 1), dtype=jnp.float32)
+        with pytest.raises(
+            ValueError,
+            match=r"observations sequence length must be an integer in \[1, 10000\]",
+        ):
+            learn_from_trajectory(learner, obs, targets)
+        assert seen == []
 
     def test_learn_from_trajectory_normalized_alias(self, learner) -> None:
         obs = jnp.ones((8, 3), dtype=jnp.float32)
