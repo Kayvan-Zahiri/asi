@@ -948,7 +948,7 @@ def migrate_legacy_recurring_two_agent_state(
     world: RecurringTwoAgentWorld,
 ) -> RecurringTwoAgentState:
     """Migrate only an unsaturated pre-v2 environment lifetime."""
-    if isinstance(legacy_state, Mapping):
+    if type(legacy_state) is dict:
         fields = dict(legacy_state)
     elif dataclasses.is_dataclass(legacy_state) and not isinstance(legacy_state, type):
         fields = {
@@ -1022,7 +1022,7 @@ def load_recurring_two_agent_checkpoint(
     if schema != RECURRING_TWO_AGENT_CHECKPOINT_SCHEMA:
         raise ValueError("recurring two-agent checkpoint schema is unsupported")
     raw_config = metadata.get("world_config")
-    if not isinstance(raw_config, Mapping):
+    if type(raw_config) is not dict:
         raise ValueError("recurring two-agent checkpoint world_config is invalid")
     world = RecurringTwoAgentWorld.from_config(raw_config)
     template = world.init(jr.key(0))

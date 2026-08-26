@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -162,3 +163,48 @@ def test_recurring_world_from_config_rejects_invalid_initial_positions() -> None
         RecurringTwoAgentWorld.from_config({**valid, "initial_positions": [-0.5]})
     with pytest.raises(ValueError, match="initial_positions must have length 2"):
         RecurringTwoAgentWorld.from_config({**valid, "initial_positions": [-0.5, 0.0, 0.5]})
+
+
+def test_checkpoint_loader_rejects_mapping_subclass_world_config(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from alberta_framework.streams import recurring_multiagent as mod
+
+    class HostileDict(dict):
+        calls = 0
+
+        def __iter__(self):  # type: ignore[override]
+            type(self).calls += 1
+            raise AssertionError("HostileDict.__iter__ must not run")
+
+    HostileDict.calls = 0
+    monkeypatch.setattr(
+        mod,
+        "load_checkpoint_metadata",
+        lambda _path: {
+            "schema": mod.RECURRING_TWO_AGENT_CHECKPOINT_SCHEMA,
+            "world_config": HostileDict({"type": "RecurringTwoAgentWorld"}),
+            "memory_accounting": {},
+            "zero_sized_array_leaf_indices": [],
+        },
+    )
+    with pytest.raises(ValueError, match="world_config is invalid"):
+        mod.load_recurring_two_agent_checkpoint(tmp_path / "unused.ckpt")
+    assert HostileDict.calls == 0
+
+
+def test_migrate_legacy_rejects_mapping_subclass_without_iter_hooks() -> None:
+    from alberta_framework.streams import recurring_multiagent as mod
+
+    class HostileDict(dict):
+        calls = 0
+
+        def __iter__(self):  # type: ignore[override]
+            type(self).calls += 1
+            raise AssertionError("HostileDict.__iter__ must not run")
+
+    world = RecurringTwoAgentWorld()
+    HostileDict.calls = 0
+    with pytest.raises(TypeError, match="mapping or dataclass"):
+        mod.migrate_legacy_recurring_two_agent_state(HostileDict(), world=world)
+    assert HostileDict.calls == 0
