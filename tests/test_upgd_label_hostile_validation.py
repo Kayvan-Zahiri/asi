@@ -132,3 +132,42 @@ def test_duplicate_key_sanitized() -> None:
 def test_source_has_no_repr_leak() -> None:
     text = pathlib.Path("alberta_framework/benchmarks/upgd_label_emnist.py").read_text()
     assert "!r" not in text
+
+
+
+def test_load_plan_rejects_mapping_subclass_config_without_iter_hooks(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from alberta_framework.benchmarks import upgd_label_emnist as label
+
+    class HostileDict(dict):
+        calls = 0
+
+        def __iter__(self):  # type: ignore[override]
+            type(self).calls += 1
+            raise AssertionError("HostileDict.__iter__ must not run")
+
+    plan_path = tmp_path / "plan.json"
+    plan_path.write_text("{}", encoding="utf-8")
+
+    def _fake_strict(_path: pathlib.Path) -> dict:
+        return {
+            "schema": label.PLAN_SCHEMA,
+            "schema_version": 1,
+            "evidence_policy": label.NONPROMOTING_POLICY,
+            "plan_sha256": "0" * 64,
+            "plan": {
+                "benchmark": label.BENCHMARK,
+                "config": HostileDict({"n_tasks": 1}),
+                "learner_ids": ["adamw"],
+                "hyperparameters": {},
+                "seed_ids": [0],
+                "planned_shard_count": 1,
+            },
+        }
+
+    monkeypatch.setattr(label, "_strict_json_object", _fake_strict)
+    HostileDict.calls = 0
+    with pytest.raises(ValueError, match="plan config must be an object"):
+        label.load_plan(plan_path)
+    assert HostileDict.calls == 0
