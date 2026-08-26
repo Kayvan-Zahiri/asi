@@ -765,3 +765,37 @@ def test_independent_horde_loop_preflights_shapes_and_output_budget() -> None:
     _require_loop_output_resources(119_304_647, 1)
     with pytest.raises(ValueError, match="learning-loop outputs"):
         _require_loop_output_resources(119_304_648, 1)
+
+class TestZeroBoundScaleTraceScaling:
+    def test_zero_obgd_scale_does_not_multiply_inf_traces(self) -> None:
+        """A collapsed ObGD scale must not form 0*inf on eligibility traces."""
+        spec = create_horde_spec(_make_all_gamma0_spec(1))
+        horde = IndependentDemonHorde(
+            horde_spec=spec,
+            hidden_sizes=(2,),
+            sparsity=0.0,
+            step_size=1e30,
+            bounder=ObGDBounding(kappa=2.0),
+        )
+        state = horde.init(2, jr.key(0))
+        ds = state.demon_states[0]
+        inf_traces = tuple(
+            jnp.full(shape, jnp.inf, dtype=jnp.float32)
+            for shape in (
+                (2, 2),
+                (2,),
+                (1, 2),
+                (1,),
+            )
+        )
+        ds = ds.replace(traces=inf_traces)
+        state = state.replace(demon_states=(ds,))
+        obs = jnp.ones(2, dtype=jnp.float32)
+        next_obs = jnp.ones(2, dtype=jnp.float32)
+        raw = jnp.float32(0.0) * inf_traces[0]
+        assert not bool(jnp.all(jnp.isfinite(raw)))
+
+        result = horde.update(state, obs, jnp.asarray([1.0], dtype=jnp.float32), next_obs)
+        for trace in result.state.demon_states[0].traces:  # type: ignore[attr-defined]
+            assert bool(jnp.all(jnp.isfinite(trace)))
+

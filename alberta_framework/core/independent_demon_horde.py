@@ -52,6 +52,7 @@ from alberta_framework.core.horde import HordeUpdateResult
 from alberta_framework.core.initializers import sparse_init
 from alberta_framework.core.learners import (
     AnyOptimizer,
+    _skip_zero_scale,
     _update_from_gradient_with_diagnostics,
 )
 from alberta_framework.core.normalizers import Normalizer
@@ -796,7 +797,7 @@ class IndependentDemonHorde:
             )
             all_steps = list(bounded_steps)
             # Scale traces so future updates reflect the effective step
-            new_traces = [bound_scale * t for t in new_traces]
+            new_traces = [_skip_zero_scale(bound_scale, t) for t in new_traces]
 
         # 6. Apply: param += error * step
         new_weights: list[Array] = []
