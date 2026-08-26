@@ -1129,6 +1129,11 @@ def _init_forager_recurrent_state(
     )
 
 
+def _skip_zero_scale(scale: Array, value: Array) -> Array:
+    """Skip ``0 * inf`` so a closed GRU gate does not poison hidden state."""
+    return jnp.where(scale == 0.0, jnp.zeros_like(value), scale * value)
+
+
 def _augment_with_recurrent_features(
     features: Array,
     recurrent_state: ForagerRecurrentState,
@@ -1139,6 +1144,7 @@ def _augment_with_recurrent_features(
         return recurrent_state, features
 
     hidden = recurrent_state.hidden
+    safe_hidden = jnp.where(jnp.isfinite(hidden), hidden, jnp.zeros_like(hidden))
     input_terms = jnp.einsum(
         "ghi,i->gh",
         recurrent_state.input_kernel,
@@ -1146,21 +1152,21 @@ def _augment_with_recurrent_features(
     )
     update = jax.nn.sigmoid(
         input_terms[0]
-        + recurrent_state.recurrent_kernel[0] @ hidden
+        + recurrent_state.recurrent_kernel[0] @ safe_hidden
         + recurrent_state.bias[0]
     )
     reset = jax.nn.sigmoid(
         input_terms[1]
-        + recurrent_state.recurrent_kernel[1] @ hidden
+        + recurrent_state.recurrent_kernel[1] @ safe_hidden
         + recurrent_state.bias[1]
     )
     candidate = jnp.tanh(
         input_terms[2]
-        + recurrent_state.recurrent_kernel[2] @ (reset * hidden)
+        + recurrent_state.recurrent_kernel[2] @ _skip_zero_scale(reset, safe_hidden)
         + recurrent_state.bias[2]
     )
     next_hidden = jax.lax.stop_gradient(
-        (1.0 - update) * hidden + update * candidate
+        _skip_zero_scale(1.0 - update, hidden) + _skip_zero_scale(update, candidate)
     )
     next_state = recurrent_state._replace(hidden=next_hidden)
     return next_state, jnp.concatenate((features, next_hidden), axis=0)

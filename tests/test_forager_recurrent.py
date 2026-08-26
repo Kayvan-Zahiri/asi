@@ -20,6 +20,7 @@ from alberta_framework.benchmarks.forager import (
     ForagerBenchmarkConfig,
     ForagerEnvConfig,
     ForagerFeatureConfig,
+    ForagerRecurrentState,
     _augment_with_recurrent_features,
     _init_forager_recurrent_state,
     _recurrent_key,
@@ -193,6 +194,31 @@ def test_zero_width_recurrence_is_an_exact_feature_noop() -> None:
     chex.assert_trees_all_equal(next_state, state)
     assert next_state.hidden.shape == (0,)
     assert next_state.input_kernel.shape == (3, 0, features.shape[0])
+
+
+def test_saturated_update_gate_does_not_multiply_inf_hidden() -> None:
+    """Saturated update/reset gates must not turn poisoned hidden state into NaN."""
+    config = AlbertaForagerConfig(recurrent_hidden_size=2)
+    hidden_size = 2
+    input_dim = 4
+    state = ForagerRecurrentState(
+        input_kernel=jnp.zeros((3, hidden_size, input_dim), dtype=jnp.float32),
+        recurrent_kernel=jnp.zeros((3, hidden_size, hidden_size), dtype=jnp.float32),
+        bias=jnp.stack(
+            (
+                jnp.full((hidden_size,), 90.0, dtype=jnp.float32),
+                jnp.full((hidden_size,), -90.0, dtype=jnp.float32),
+                jnp.asarray((0.25, -0.25), dtype=jnp.float32),
+            )
+        ),
+        hidden=jnp.full((hidden_size,), jnp.inf, dtype=jnp.float32),
+    )
+    features = jnp.zeros((input_dim,), dtype=jnp.float32)
+    next_state, augmented = _augment_with_recurrent_features(features, state, config)
+
+    assert np.all(np.isfinite(next_state.hidden))
+    np.testing.assert_allclose(next_state.hidden, jnp.tanh(state.bias[2]), rtol=1.0e-6, atol=1.0e-6)
+    assert np.all(np.isfinite(augmented))
 
 
 def test_recurrent_host_scan_and_chunk_boundaries_match(
