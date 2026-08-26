@@ -870,7 +870,7 @@ def _artifact_digest(artifact: Mapping[str, object]) -> str | None:
 
     for key in ("scientific_digest", "content_digest"):
         record = artifact.get(key)
-        if not isinstance(record, Mapping):
+        if type(record) is not dict:
             continue
         value = record.get("sha256")
         if (
