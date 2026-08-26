@@ -189,7 +189,7 @@ def _canonical_hidden_sizes(
     observation_dim: int,
     n_actions: int,
 ) -> tuple[int, ...]:
-    if not isinstance(value, (tuple, list)):
+    if type(value) is not tuple and type(value) is not list:
         raise ValueError("hidden_sizes must be a bounded tuple or list")
     if len(value) > _MAX_HIDDEN_LAYERS:
         raise ValueError(f"hidden_sizes must contain at most {_MAX_HIDDEN_LAYERS} layers")
@@ -743,7 +743,7 @@ class AnalyticOracleReferenceConfig:
         except (TypeError, json.JSONDecodeError) as exc:
             raise ValueError("oracle environment config must be canonical JSON") from exc
         if (
-            not isinstance(decoded, dict)
+            type(decoded) is not dict
             or _canonical_json(decoded) != self.environment_config_json
         ):
             raise ValueError("oracle environment config must use canonical JSON")
@@ -846,7 +846,7 @@ class AnalyticOracleReferenceConfig:
     @property
     def environment_config(self) -> dict[str, Any]:
         decoded = json.loads(self.environment_config_json)
-        assert isinstance(decoded, dict)
+        assert type(decoded) is dict
         return decoded
 
     @property

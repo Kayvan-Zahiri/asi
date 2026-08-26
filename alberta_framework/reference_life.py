@@ -147,7 +147,7 @@ def _canonical_json(value: Mapping[str, Any]) -> str:
     except (TypeError, ValueError) as exc:
         raise ValueError("reference-life configuration must be canonical finite JSON") from exc
     decoded = json.loads(encoded)
-    if not isinstance(decoded, dict):
+    if type(decoded) is not dict:
         raise ValueError("reference-life configuration must be a JSON object")
     return encoded
 
@@ -307,7 +307,7 @@ class ReferenceEnvironmentManifest:
     @property
     def config(self) -> dict[str, Any]:
         value = json.loads(self._config_json)
-        assert isinstance(value, dict)
+        assert type(value) is dict
         return value
 
     def _manifest_payload(self) -> dict[str, Any]:
@@ -1552,7 +1552,7 @@ class ReferenceLifeConfig:
     @property
     def config(self) -> dict[str, Any]:
         value = json.loads(self._config_json)
-        assert isinstance(value, dict)
+        assert type(value) is dict
         return value
 
 
