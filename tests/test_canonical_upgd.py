@@ -1264,3 +1264,23 @@ def test_state_roundtrips_through_repository_checkpoint(tmp_path) -> None:
     loaded, metadata = load_checkpoint(template, tmp_path / "canonical_upgd")
     chex.assert_trees_all_close(loaded, updated)
     assert metadata == {}
+
+
+def test_saturated_protecting_gate_skips_overflowed_direction() -> None:
+    """gate=1 times an overflowed (g+xi) is 0*inf=NaN without a zero-scale skip."""
+    from alberta_framework.core.canonical_upgd import _skip_zero_scale
+
+    gate = jnp.asarray(1.0, dtype=jnp.float32)
+    overflowed = jnp.asarray(jnp.inf, dtype=jnp.float32)
+    raw = (overflowed + 0.0) * (1.0 - gate)
+    assert not bool(jnp.isfinite(raw))
+
+    fixed = _skip_zero_scale(1.0 - gate, overflowed + 0.0)
+    assert bool(jnp.isfinite(fixed))
+    chex.assert_trees_all_close(fixed, jnp.zeros_like(overflowed))
+
+    # Non-protecting: only the noise term is gated.
+    raw_noise = overflowed * (1.0 - gate)
+    assert not bool(jnp.isfinite(raw_noise))
+    fixed_noise = _skip_zero_scale(1.0 - gate, overflowed)
+    assert bool(jnp.isfinite(fixed_noise))
