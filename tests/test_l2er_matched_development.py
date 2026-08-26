@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import dataclasses
 import hashlib
+import math
 import os
 from copy import deepcopy
 from pathlib import Path
@@ -239,6 +240,20 @@ def test_three_seed_interval_uses_student_t_not_normal_critical_value() -> None:
     assert critical == 4.302652729749464
     assert isinstance(critical, float)
     assert critical.hex() == "0x1.135ea98e146bbp+2"
+
+
+@pytest.mark.parametrize(
+    "deltas",
+    [
+        (math.nan, 0.0, 0.0),
+        (math.inf, math.inf, math.inf),
+        (-math.inf, 0.0, 0.0),
+    ],
+)
+def test_outcome_rejects_nonfinite_interval_bounds(deltas: tuple[float, float, float]) -> None:
+    """IEEE lower/upper comparisons are always false for NaN, so fail closed."""
+    with pytest.raises(ValueError, match="must be finite"):
+        matched._outcome(deltas)
 
 
 @pytest.mark.parametrize("version", ("v1",))

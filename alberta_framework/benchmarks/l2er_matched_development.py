@@ -420,6 +420,11 @@ def _outcome(deltas: tuple[float, ...]) -> tuple[float, float, float, str]:
     stderr = float(values.std(ddof=1) / math.sqrt(len(values)))
     lower = mean - _T95_DF2 * stderr
     upper = mean + _T95_DF2 * stderr
+    # Non-finite bounds must fail closed: IEEE comparisons involving NaN are
+    # always false, so ``lower > 0.0`` / ``upper <= 0.0`` alone cannot reject
+    # ``nan``/``±inf`` and would otherwise report a false "inconclusive".
+    if not (math.isfinite(mean) and math.isfinite(lower) and math.isfinite(upper)):
+        raise ValueError("paired confidence interval bounds must be finite")
     outcome = "supported" if lower > 0.0 else "rejected" if upper <= 0.0 else "inconclusive"
     return mean, lower, upper, outcome
 
