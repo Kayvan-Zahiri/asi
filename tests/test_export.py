@@ -629,3 +629,37 @@ def test_significance_markers_derive_from_stored_alpha() -> None:
     )
     assert _get_md_significance_marker("a", "b", {("a", "b"): r_holm}) == " *"
     assert _get_significance_marker("a", "b", {("a", "b"): r_holm}) == r"$^{*}$"
+
+def test_significance_markers_exact_alpha_005_tiers() -> None:
+    from alberta_framework.utils.visualization import _get_significance_marker_for_plot
+
+    r_00075 = SignificanceResult(
+        test_name="wilcoxon",
+        statistic=1.0,
+        p_value=0.00075,
+        significant=True,
+        alpha=0.05,
+        effect_size=0.5,
+        method_a="a",
+        method_b="b",
+    )
+    sig_map = {("a", "b"): r_00075}
+    assert _get_md_significance_marker("a", "b", sig_map) == " ***"
+    assert _get_significance_marker("a", "b", sig_map) == r"$^{***}$"
+    assert _get_significance_marker_for_plot("a", "b", sig_map) == "***"
+
+    r_007 = SignificanceResult(
+        test_name="wilcoxon",
+        statistic=1.0,
+        p_value=0.007,
+        significant=True,
+        alpha=0.05,
+        effect_size=0.5,
+        method_a="a",
+        method_b="b",
+    )
+    sig_map2 = {("a", "b"): r_007}
+    assert _get_md_significance_marker("a", "b", sig_map2) == " **"
+    assert _get_significance_marker("a", "b", sig_map2) == r"$^{**}$"
+    assert _get_significance_marker_for_plot("a", "b", sig_map2) == "**"
+

@@ -555,6 +555,13 @@ def _format_significance_legend_md(
     return r"\* p < \alpha, \*\* p < \alpha/10, \*\*\* p < \alpha/100 (decision thresholds)"
 
 
+def _significance_tiers(alpha: float) -> tuple[float, float, float]:
+    """Return (tier_3_stars, tier_2_stars, tier_1_star) thresholds for a given alpha."""
+    if alpha == 0.05:
+        return (0.001, 0.01, 0.05)
+    return (alpha / 100.0, alpha / 10.0, alpha)
+
+
 def _get_significance_marker(
     name: str,
     best_name: str,
@@ -579,12 +586,12 @@ def _get_significance_marker(
         return ""
 
     p = result.p_value
-    alpha = result.alpha
-    if p < alpha / 100.0:
+    t3, t2, t1 = _significance_tiers(result.alpha)
+    if p < t3:
         return r"$^{***}$"
-    elif p < alpha / 10.0:
+    elif p < t2:
         return r"$^{**}$"
-    elif p < alpha:
+    elif p < t1:
         return r"$^{*}$"
     return ""
 
@@ -672,12 +679,12 @@ def _get_md_significance_marker(
         return ""
 
     p = result.p_value
-    alpha = result.alpha
-    if p < alpha / 100.0:
+    t3, t2, t1 = _significance_tiers(result.alpha)
+    if p < t3:
         return " ***"
-    elif p < alpha / 10.0:
+    elif p < t2:
         return " **"
-    elif p < alpha:
+    elif p < t1:
         return " *"
     return ""
 

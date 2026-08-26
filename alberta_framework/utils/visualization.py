@@ -669,11 +669,14 @@ def _get_significance_marker_for_plot(
         return ""
 
     p = result.p_value
-    alpha = result.alpha
-    if p < alpha / 100.0:
+    if result.alpha == 0.05:
+        t3, t2, t1 = 0.001, 0.01, 0.05
+    else:
+        t3, t2, t1 = result.alpha / 100.0, result.alpha / 10.0, result.alpha
+    if p < t3:
         return "***"
-    elif p < alpha / 10.0:
+    elif p < t2:
         return "**"
-    elif p < alpha:
+    elif p < t1:
         return "*"
     return ""
