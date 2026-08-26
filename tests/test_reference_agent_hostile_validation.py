@@ -93,3 +93,19 @@ def test_valid_array_value() -> None:
         semantic_id="a.b", dtype="float32", shape=(), payload=b"\x00\x00\x80\x3f"
     )
     assert v.dtype == "float32"
+
+
+def test_nested_tuple_rejects_list_subclass_without_iter_hooks() -> None:
+    from alberta_framework.reference_agent import _nested_tuple
+
+    class HostileList(list):
+        calls = 0
+
+        def __iter__(self):  # type: ignore[override]
+            type(self).calls += 1
+            raise AssertionError("HostileList.__iter__ must not run")
+
+    hostile = HostileList([1])
+    HostileList.calls = 0
+    assert _nested_tuple(hostile) is hostile
+    assert HostileList.calls == 0

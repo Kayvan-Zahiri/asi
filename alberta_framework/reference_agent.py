@@ -360,7 +360,7 @@ def _cast_representable(
 
 
 def _nested_tuple(value: Any) -> Any:
-    if isinstance(value, list):
+    if type(value) is list:
         return tuple(_nested_tuple(item) for item in value)
     return value
 
@@ -733,7 +733,7 @@ class AgentManifest:
         if not isinstance(self.capabilities, AgentCapabilities):
             raise ValueError("capabilities must be AgentCapabilities")
         config = _load_manifest_config_json(self._config_json)
-        if not isinstance(config, dict):
+        if type(config) is not dict:
             raise ValueError("manifest config must be a JSON object")
         if _canonical_json_bytes(config).decode("utf-8") != self._config_json:
             raise ValueError("manifest config must use canonical JSON encoding")
@@ -789,7 +789,7 @@ class AgentManifest:
     @property
     def config(self) -> dict[str, Any]:
         config = _load_manifest_config_json(self._config_json)
-        assert isinstance(config, dict)
+        assert type(config) is dict
         return config
 
     def make_decision(
