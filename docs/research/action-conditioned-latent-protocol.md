@@ -40,7 +40,7 @@ exploration schedule are matched. The roster is:
 4. a trained model behind a disabled decision interface;
 5. exact no-model mechanism-off control; and
 6. the repository's live SARSA control agent as a stronger non-world-model
-comparator.
+   comparator.
 
 The existing `SparseFTLWorldModel` is not yet a valid seventh arm. It predicts
 only the next observation, while this environment switches its reward matrix
