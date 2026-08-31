@@ -155,8 +155,15 @@ def forward_view_returns(
     _require_leading_length(
         "cumulants", cumulants, ndim=1, maximum=_NEXTING_MAX_STEPS
     )
-    gamma_s = jnp.asarray(gamma, dtype=cumulants.dtype)
-    init = jnp.asarray(terminal_value, dtype=cumulants.dtype)
+    promoted = jnp.result_type(
+        cumulants.dtype,
+        jnp.asarray(gamma).dtype,
+        jnp.asarray(terminal_value).dtype,
+    )
+    compute_dtype = promoted if jnp.issubdtype(promoted, jnp.floating) else jnp.float32
+    cumulants_cast = jnp.asarray(cumulants, dtype=compute_dtype)
+    gamma_s = jnp.asarray(gamma, dtype=compute_dtype)
+    init = jnp.asarray(terminal_value, dtype=compute_dtype)
 
     def step(carry: Array, c: Array) -> tuple[Array, Array]:
         # gamma=0 must not multiply an inf later return (0*inf).
@@ -164,7 +171,7 @@ def forward_view_returns(
         new_carry = c + bootstrap
         return new_carry, new_carry
 
-    _, returns_reversed = jax.lax.scan(step, init, cumulants[::-1])
+    _, returns_reversed = jax.lax.scan(step, init, cumulants_cast[::-1])
     return returns_reversed[::-1]
 
 
