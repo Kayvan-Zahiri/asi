@@ -52,6 +52,7 @@ from alberta_framework.core.update_safety import (
     select_transaction,
 )
 
+_FLOAT32_MIN_NORMAL: float = float.fromhex("0x1.0p-126")
 _INT32_MAX = 2**31 - 1
 _ACTUAL_INT_TYPES = frozenset(
     {
@@ -365,7 +366,9 @@ class ActionConditionedWorldModelConfig:
                 raise ValueError("observation_scale length must equal observation_dim")
             observation_scale = tuple(
                 _validated_config_float(
-                    f"observation_scale[{index}]", scale, positive=True
+                    f"observation_scale[{index}]",
+                    scale,
+                    lower=_FLOAT32_MIN_NORMAL,
                 )
                 for index, scale in enumerate(observation_scale)
             )
@@ -806,11 +809,16 @@ class ActionConditionedWorldModel:
         reward_arr = _float32_operand("reward", reward, ())
         discount_arr = _float32_operand("discount", discount, ())
         obs_scale = jnp.asarray(self._observation_scale, dtype=jnp.float32)
-        safe_scale = jnp.maximum(obs_scale, jnp.asarray(1e-6, dtype=jnp.float32))
-        normalized_delta = jnp.where(
+        delta_or_next = jnp.where(
             self._config.predict_delta,
-            (next_obs - obs) / safe_scale,
-            next_obs / safe_scale,
+            next_obs - obs,
+            next_obs,
+        )
+        scaled_delta = delta_or_next / obs_scale
+        normalized_delta = jnp.where(
+            jnp.isfinite(scaled_delta),
+            scaled_delta,
+            jnp.zeros_like(scaled_delta),
         )
         reward_target = jnp.reshape(
             reward_arr / self._config.reward_scale,

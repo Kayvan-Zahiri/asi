@@ -785,3 +785,49 @@ def test_latent_world_model_observation_scale_rejects_subnormal_scale() -> None:
             n_actions=2,
             observation_scale=(subnormal, 1.0),
         )
+
+
+def test_latent_world_model_observation_scale_overflow_fails_closed_in_update() -> None:
+    min_normal = float.fromhex("0x1.0p-126")
+    config = LatentWorldModelConfig(
+        observation_dim=2,
+        latent_dim=4,
+        n_actions=2,
+        observation_scale=(min_normal, min_normal),
+        encoder_learning=True,
+    )
+    model = LatentWorldModel(config)
+    state = model.init(jr.key(0))
+    # obs=5.0 with min_normal scale overflows float32 division (5.0 / min_normal = inf)
+    obs_overflow = jnp.asarray([5.0, 5.0], dtype=jnp.float32)
+    next_obs = jnp.asarray([2.0 * min_normal, -4.0 * min_normal], dtype=jnp.float32)
+
+    update_res = model.update(
+        state,
+        obs_overflow,
+        jnp.asarray(0, dtype=jnp.int32),
+        jnp.asarray(1.0, dtype=jnp.float32),
+        jnp.asarray(0.9, dtype=jnp.float32),
+        next_obs,
+    )
+    # Gated update must block when obs/scale is non-finite
+    assert not bool(update_res.update_applied)
+
+
+def test_latent_world_model_mixed_observation_scale_round_trip() -> None:
+    min_normal = float.fromhex("0x1.0p-126")
+    config = LatentWorldModelConfig(
+        observation_dim=2,
+        latent_dim=4,
+        n_actions=2,
+        observation_scale=(1.0, min_normal),
+    )
+    model = LatentWorldModel(config)
+    state = model.init(jr.key(0))
+    obs = jnp.asarray([1.0, 2.0 * min_normal], dtype=jnp.float32)
+    latent = model.encode(state, obs)
+    assert jnp.all(jnp.isfinite(latent))
+
+    # Serialization round-trip
+    restored = LatentWorldModelConfig.from_config(config.to_config())
+    assert restored.observation_scale == (1.0, min_normal)

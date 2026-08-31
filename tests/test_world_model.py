@@ -12,6 +12,8 @@ import numpy as np
 import pytest
 
 from alberta_framework.core.world_model import (
+    ActionConditionedWorldModel,
+    ActionConditionedWorldModelConfig,
     OneStepWorldModel,
     WorldModelConfig,
     run_world_model_learning_loop,
@@ -439,3 +441,28 @@ def test_world_model_config_rejects_hostile_float_subclass_without_hooks() -> No
     with pytest.raises(ValueError, match="finite real scalar"):
         WorldModelConfig(observation_dim=2, step_size=HostileFloat(0.1))
     assert not hook_ran
+
+
+def test_action_conditioned_world_model_observation_scale_preserves_scaling_below_1e6() -> None:
+    min_normal = float.fromhex("0x1.0p-126")
+    config = ActionConditionedWorldModelConfig(
+        observation_dim=2,
+        n_actions=2,
+        observation_scale=(min_normal, min_normal),
+        predict_delta=False,
+    )
+    model = ActionConditionedWorldModel(config)
+    obs = jnp.asarray([0.0, 0.0], dtype=jnp.float32)
+    next_obs = jnp.asarray([2.0 * min_normal, -4.0 * min_normal], dtype=jnp.float32)
+    targets = model.targets(obs, jnp.asarray(1.0), jnp.asarray(0.9), next_obs)
+    np.testing.assert_allclose(np.asarray(targets[:2]), [2.0, -4.0], rtol=1e-5, atol=1e-5)
+
+
+def test_action_conditioned_world_model_observation_scale_rejects_subnormal_scale() -> None:
+    subnormal = float(np.finfo(np.float32).smallest_subnormal)
+    with pytest.raises(ValueError, match="observation_scale"):
+        ActionConditionedWorldModelConfig(
+            observation_dim=2,
+            n_actions=2,
+            observation_scale=(subnormal, 1.0),
+        )

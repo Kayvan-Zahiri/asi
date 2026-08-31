@@ -593,7 +593,8 @@ class LatentWorldModel:
         obs = jnp.asarray(observation, dtype=jnp.float32).reshape((self._config.observation_dim,))
         scale = jnp.asarray(self._observation_scale, dtype=jnp.float32)
         scaled = obs / scale
-        return jnp.tanh(scaled @ encoder_matrix + encoder_bias)
+        scaled_safe = jnp.where(jnp.isfinite(scaled), scaled, jnp.zeros_like(scaled))
+        return jnp.tanh(scaled_safe @ encoder_matrix + encoder_bias)
 
     @functools.partial(jax.jit, static_argnums=(0,))
     def encode(
@@ -831,14 +832,19 @@ class LatentWorldModel:
         next_observation_arr = jnp.asarray(next_observation, dtype=jnp.float32).reshape(
             (self._config.observation_dim,)
         )
+        scale_arr = jnp.asarray(self._observation_scale, dtype=jnp.float32)
+        scaled_obs = observation_arr / scale_arr
+        scaled_next_obs = next_observation_arr / scale_arr
         inputs_valid = (
             jnp.all(jnp.isfinite(observation_arr))
+            & jnp.all(jnp.isfinite(scaled_obs))
             & action_valid
             & jnp.all(jnp.isfinite(reward_arr))
             & jnp.all(jnp.isfinite(discount_arr))
             & jnp.all(discount_arr >= 0.0)
             & jnp.all(discount_arr <= 1.0)
             & jnp.all(jnp.isfinite(next_observation_arr))
+            & jnp.all(jnp.isfinite(scaled_next_obs))
         )
         safe_observation = jnp.where(inputs_valid, observation_arr, jnp.zeros_like(observation_arr))
         safe_action = jnp.where(inputs_valid, action_arr, jnp.zeros_like(action_arr))
