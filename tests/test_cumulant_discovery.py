@@ -14,6 +14,7 @@ import pytest
 from alberta_framework.core.cumulant_discovery import (
     CumulantDiscovery,
     CumulantDiscoveryState,
+    _require_float32,
 )
 
 # =============================================================================
@@ -473,3 +474,8 @@ def test_cumulant_discovery_hostile_observation_failure_is_normalized() -> None:
     state = discovery.init(jr.key(0))
     with pytest.raises(ValueError, match="readable float32 vector"):
         discovery.cumulants(state, HostileObservation())  # type: ignore[arg-type]
+
+def test_require_float32_preserve_nonzero_builtin_float_underflow() -> None:
+    # Underflows in float32 for built-in float
+    with pytest.raises(ValueError, match="must remain nonzero once narrowed to float32"):
+        _require_float32("gamma", 1e-50, lower=0.0, upper=1.0, preserve_nonzero=True)
