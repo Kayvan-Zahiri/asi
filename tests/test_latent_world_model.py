@@ -749,3 +749,39 @@ def test_latent_world_model_init_rejects_nonfinite_encoder_draw() -> None:
 
     with pytest.raises(ValueError, match="encoder initialization"):
         model.init(jr.key(0))
+
+def test_observation_scale_normal_preserves_scale_free_latents() -> None:
+    # Probing scales across normal float32 range down to 1e-20
+    for scale in (1.0, 1e-6, 1e-9, 1e-20):
+        config = LatentWorldModelConfig(
+            observation_dim=2,
+            latent_dim=4,
+            n_actions=2,
+            observation_scale=(scale, scale),
+        )
+        model = LatentWorldModel(config)
+        state = model.init(jr.key(0))
+        obs = jnp.asarray([1.5 * scale, -0.75 * scale], dtype=jnp.float32)
+        latent = model.encode(state, obs)
+        ref_config = LatentWorldModelConfig(
+            observation_dim=2,
+            latent_dim=4,
+            n_actions=2,
+            observation_scale=(1.0, 1.0),
+        )
+        ref_model = LatentWorldModel(ref_config)
+        ref_state = ref_model.init(jr.key(0))
+        ref_obs = jnp.asarray([1.5, -0.75], dtype=jnp.float32)
+        ref_latent = ref_model.encode(ref_state, ref_obs)
+        chex.assert_trees_all_close(latent, ref_latent, atol=1e-6)
+
+def test_observation_scale_rejects_subnormal_scales() -> None:
+    # Subnormal scales have no finite float32 reciprocal and must be rejected
+    smallest_subnormal = float(np.finfo(np.float32).smallest_subnormal)
+    with pytest.raises(ValueError, match="observation_scale"):
+        LatentWorldModelConfig(
+            observation_dim=1,
+            latent_dim=2,
+            n_actions=2,
+            observation_scale=(smallest_subnormal,),
+        )
