@@ -564,3 +564,19 @@ def test_upgd_memory_preserves_legal_closed_endpoints() -> None:
     assert allocation_endpoint.target_allocation_rate == 1.0
     assert fixed_threshold.min_novelty_threshold == 0.5
     assert fixed_threshold.max_novelty_threshold == 0.5
+
+def test_normalize_simplex_guarantees_unit_sum_across_edge_cases() -> None:
+    from alberta_framework.core.upgd_memory import _normalize_simplex
+
+    for case in (
+        [0.0, 0.0, 0.0],
+        [-1.0, -2.0, -3.0],
+        [1e38, 1.0, 1.0],
+        [7.5e-13, 0.0, 0.0],
+        [1e-30, 0.0, 0.0],
+        [1.0, 2.0, 3.0],
+    ):
+        arr = jnp.asarray(case, dtype=jnp.float32)
+        norm = _normalize_simplex(arr)
+        chex.assert_trees_all_close(jnp.sum(norm), 1.0, atol=1e-6)
+        assert bool(jnp.all(norm >= 0.0))
