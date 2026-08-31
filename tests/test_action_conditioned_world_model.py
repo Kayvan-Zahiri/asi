@@ -955,3 +955,20 @@ def test_action_world_model_rolls_back_reduction_overflow() -> None:
     assert not bool(result.update_applied)
     assert float(result.observation_mse) == 0.0
     assert int(result.state.step_count) == 0
+
+def test_observation_scale_targets_round_trip_exact_below_1e6() -> None:
+    # A transition scaled to match observation_scale must reconstruct delta accurately
+    for scale in (1e-6, 1e-7, 1e-9, 1e-12, 1e-20, 1e-30):
+        config = ActionConditionedWorldModelConfig(
+            observation_dim=1,
+            n_actions=2,
+            hidden_sizes=(),
+            predict_delta=True,
+            observation_scale=(scale,),
+        )
+        model = ActionConditionedWorldModel(config)
+        obs = jnp.asarray([1.0 * scale], dtype=jnp.float32)
+        next_obs = jnp.asarray([3.0 * scale], dtype=jnp.float32)
+        targets = model.targets(obs, 0.0, 1.0, next_obs)
+        # Target normalized delta is (3.0 - 1.0) = 2.0
+        chex.assert_trees_all_close(targets[0], 2.0, atol=1e-5)
