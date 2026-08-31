@@ -632,3 +632,11 @@ class TestGVFSpecRemainingFields:
     def test_horde_spec_from_config_rejects_non_list_demons(self, invalid_demons):
         with pytest.raises(ValueError, match="HordeSpec demons must be an exact list"):
             HordeSpec.from_config({"demons": invalid_demons})
+
+def test_gvf_spec_terminal_reward_accepts_all_numpy_float_families() -> None:
+    base = dict(name="d", demon_type=DemonType.PREDICTION, gamma=0.0, lamda=0.0, cumulant_index=0)
+    for code in ("e", "f", "d", "g"):
+        dtype_type = np.dtype(code).type
+        val = dtype_type(1.5)
+        spec = GVFSpec(**base, terminal_reward=val)
+        assert spec.terminal_reward == 1.5
