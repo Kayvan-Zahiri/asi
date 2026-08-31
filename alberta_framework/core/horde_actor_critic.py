@@ -109,6 +109,14 @@ def _validated_actor_float(name: str, value: object, **bounds: Any) -> float:
     return validated_float32_scalar(name, value, **bounds)
 
 
+def _validated_actor_temperature(value: object) -> float:
+    temperature = _validated_actor_float("temperature", value, positive=True)
+    minimum = float(np.finfo(np.float32).tiny)
+    if temperature < minimum:
+        raise ValueError(f"temperature must be at least {minimum} in float32")
+    return temperature
+
+
 def _exact_config_payload(config: object, expected: frozenset[str]) -> dict[str, Any]:
     if type(config) is not dict:
         raise ValueError("config must be an exact built-in dict")
@@ -320,7 +328,7 @@ class HordeActorCriticConfig:
         actor_lamda = _validated_actor_float(
             "actor_lamda", self.actor_lamda, lower=0.0, upper=1.0
         )
-        temperature = _validated_actor_float("temperature", self.temperature, positive=True)
+        temperature = _validated_actor_temperature(self.temperature)
         actor_td_error_clip = (
             _validated_actor_float(
                 "actor_td_error_clip",
@@ -438,7 +446,7 @@ class QHordeActorCriticConfig:
         actor_lamda = _validated_actor_float(
             "actor_lamda", self.actor_lamda, lower=0.0, upper=1.0
         )
-        temperature = _validated_actor_float("temperature", self.temperature, positive=True)
+        temperature = _validated_actor_temperature(self.temperature)
         actor_td_error_clip = (
             _validated_actor_float(
                 "actor_td_error_clip",
@@ -1408,7 +1416,7 @@ class NonlinearHordeActorCriticConfig:
         actor_lamda = _validated_actor_float(
             "actor_lamda", self.actor_lamda, lower=0.0, upper=1.0
         )
-        temperature = _validated_actor_float("temperature", self.temperature, positive=True)
+        temperature = _validated_actor_temperature(self.temperature)
         actor_sparsity = _validated_actor_float(
             "actor_sparsity", self.actor_sparsity, lower=0.0, upper=1.0
         )
@@ -2169,7 +2177,7 @@ class NonlinearQHordeActorCriticConfig:
         actor_lamda = _validated_actor_float(
             "actor_lamda", self.actor_lamda, lower=0.0, upper=1.0
         )
-        temperature = _validated_actor_float("temperature", self.temperature, positive=True)
+        temperature = _validated_actor_temperature(self.temperature)
         actor_sparsity = _validated_actor_float(
             "actor_sparsity", self.actor_sparsity, lower=0.0, upper=1.0
         )
