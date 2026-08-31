@@ -21,6 +21,7 @@ so noise effects are unmistakable) and ``sparsity=0.5`` round-trips.
 """
 
 import chex
+import jax
 import jax.numpy as jnp
 import jax.random as jr
 import pytest
@@ -2219,3 +2220,20 @@ class TestLoops:
         stream = RandomWalkStream(feature_dim=4, drift_rate=0.0, noise_std=0.05)
         result = run_upgd_loop(learner, stream, num_steps=50, key=jr.key(0))
         chex.assert_shape(result.metrics, (50, 4))
+
+def test_upgd_gradient_alignment_is_scale_invariant() -> None:
+    g_base = (
+        jnp.array([1.0, -2.0, 0.5], dtype=jnp.float32),
+        jnp.array([0.25], dtype=jnp.float32),
+    )
+
+    for scale in (1e10, 1e5, 1.0, 1e-5, 1e-10, 1e-20, 1e-30):
+        g = tuple(x * jnp.float32(scale) for x in g_base)
+        align_pos = jax.jit(UPGDLearner._gradient_alignment)(g, g)
+        align_neg = jax.jit(UPGDLearner._gradient_alignment)(g, tuple(-x for x in g))
+        chex.assert_trees_all_close(align_pos, 1.0, atol=1e-5)
+        chex.assert_trees_all_close(align_neg, -1.0, atol=1e-5)
+
+    zero_g = tuple(jnp.zeros_like(x) for x in g_base)
+    align_zero = jax.jit(UPGDLearner._gradient_alignment)(zero_g, g_base)
+    chex.assert_trees_all_close(align_zero, 0.0, atol=1e-5)
