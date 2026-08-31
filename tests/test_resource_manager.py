@@ -859,3 +859,15 @@ def test_resource_manager_serialized_schemas_are_exact() -> None:
         invalid.update(mutation)
         with pytest.raises(ValueError, match=match):
             GeneratorMetaResourceManager.from_config(invalid)
+
+def test_masked_baseline_preserves_centering_below_1e12() -> None:
+    # When masked-in entries have mass < 1e-12, centering must remain a convex combination
+    manager = LearnedResourceManager(n_actions=3, n_contexts=1, exploration=0.0)
+    state = manager.init()
+    # Set a large log_weight gap so the other actions have mass < 1e-12 in global softmax
+    state = state.replace(log_weights=jnp.asarray([[40.0, 0.0, 0.0]], dtype=jnp.float32))
+    # Leading action is masked out by NaN loss; surviving actions have losses 1.0 and 3.0
+    result = manager.update(state, jnp.asarray([jnp.nan, 1.0, 3.0]), 0)
+    # The advantages for action 1 and 2 must center to +1.0 and -1.0
+    delta_w = result.state.log_weights[0] - state.log_weights[0]
+    chex.assert_trees_all_close(delta_w[1] - delta_w[2], 2.0 * manager._learning_rate, atol=1e-5)

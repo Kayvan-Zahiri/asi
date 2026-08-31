@@ -594,8 +594,13 @@ class LearnedResourceManager:
         adjusted = jnp.where(valid_actions, safe_losses + cost_terms, 0.0)
 
         weights = self._weights_jit(state, context)
-        finite_weight_sum = jnp.maximum(jnp.sum(jnp.where(valid_actions, weights, 0.0)), 1e-12)
-        masked_weights = jnp.where(valid_actions, weights / finite_weight_sum, 0.0)
+        finite_weight_sum = jnp.sum(jnp.where(valid_actions, weights, 0.0))
+        n_valid = jnp.maximum(jnp.sum(valid_actions.astype(jnp.float32)), 1.0)
+        uniform_weights = jnp.where(valid_actions, 1.0 / n_valid, 0.0)
+        safe_sum = jnp.where(finite_weight_sum > 0.0, finite_weight_sum, 1.0)
+        normalized = jnp.where(valid_actions, weights / safe_sum, 0.0)
+        has_finite_normalized = jnp.all(jnp.isfinite(normalized)) & (finite_weight_sum > 0.0)
+        masked_weights = jnp.where(has_finite_normalized, normalized, uniform_weights)
         baseline = jnp.sum(masked_weights * adjusted)
         advantages = jnp.where(valid_actions, baseline - adjusted, 0.0)
         advantages = jnp.clip(
@@ -1191,8 +1196,13 @@ class GeneratorMetaResourceManager:
         adjusted = jnp.where(finite, safe_rewards - cost_terms, 0.0)
 
         weights = self._weights_jit(state, context)
-        finite_weight_sum = jnp.maximum(jnp.sum(jnp.where(finite, weights, 0.0)), 1e-12)
-        masked_weights = jnp.where(finite, weights / finite_weight_sum, 0.0)
+        finite_weight_sum = jnp.sum(jnp.where(finite, weights, 0.0))
+        n_valid = jnp.maximum(jnp.sum(finite.astype(jnp.float32)), 1.0)
+        uniform_weights = jnp.where(finite, 1.0 / n_valid, 0.0)
+        safe_sum = jnp.where(finite_weight_sum > 0.0, finite_weight_sum, 1.0)
+        normalized = jnp.where(finite, weights / safe_sum, 0.0)
+        has_finite_normalized = jnp.all(jnp.isfinite(normalized)) & (finite_weight_sum > 0.0)
+        masked_weights = jnp.where(has_finite_normalized, normalized, uniform_weights)
         baseline = jnp.sum(masked_weights * adjusted)
         selection_input_valid = jnp.asarray(True, dtype=jnp.bool_)
         if self._update_rule == "exp3":
