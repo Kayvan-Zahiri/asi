@@ -303,3 +303,20 @@ def test_prototype_valid_construction() -> None:
     assert restored == cfg
     gru = GRUPerceptionConfig(observation_dim=4, hidden_dim=4)
     assert gru.augmented_dim() == 8
+
+def test_prototype_agent_config_caps_n_dreams_per_step() -> None:
+    from alberta_framework.core.prototype_agent import _MAX_DREAMS_PER_STEP
+
+    # Accepts up to _MAX_DREAMS_PER_STEP when world_model is present
+    cfg = _cfg(
+        world_model=ActionConditionedWorldModelConfig(observation_dim=4, n_actions=2),
+        n_dreams_per_step=_MAX_DREAMS_PER_STEP,
+    )
+    assert cfg.n_dreams_per_step == _MAX_DREAMS_PER_STEP
+
+    # Rejects values above _MAX_DREAMS_PER_STEP
+    with pytest.raises(ValueError, match="n_dreams_per_step"):
+        _cfg(
+            world_model=ActionConditionedWorldModelConfig(observation_dim=4, n_actions=2),
+            n_dreams_per_step=_MAX_DREAMS_PER_STEP + 1,
+        )
