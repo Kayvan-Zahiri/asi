@@ -2,6 +2,7 @@ import copy
 import json
 from pathlib import Path
 
+import chex
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -340,3 +341,15 @@ def test_geometry_runner_rejects_invalid_transactions(monkeypatch: pytest.Monkey
     )
     with pytest.raises(ValueError, match="transaction"):
         run_streaming_matrix_evaluation()
+
+def test_flad_noise_component_underflow_rescaling() -> None:
+    # Projection must remain accurate across small gradient scales down to 1e-30
+    delta = jnp.asarray([1.0, -2.0, 0.5, 3.0], dtype=jnp.float32)
+    grad = jnp.asarray([2.0, 1.0, -1.0, 0.5], dtype=jnp.float32)
+    ref_safe, ref_valid = flad_noise_component_transaction(delta, grad)
+
+    for scale in (1e-10, 1e-20, 1e-25, 1e-30):
+        scaled_grad = grad * jnp.asarray(scale, dtype=jnp.float32)
+        safe, valid = flad_noise_component_transaction(delta, scaled_grad)
+        assert bool(valid)
+        chex.assert_trees_all_close(safe, ref_safe, atol=1e-6)
