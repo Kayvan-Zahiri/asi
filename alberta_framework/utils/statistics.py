@@ -343,6 +343,8 @@ def compute_timeseries_statistics(
     n_seeds = metric_array.shape[0]
     if n_seeds == 0:
         raise ValueError("metric_array must contain at least one seed row")
+    if metric_array.ndim == 2 and metric_array.shape[1] == 0:
+        raise ValueError("metric_array must contain at least one time step")
     _require_finite_values(metric_array, name="metric_array")
     _validate_confidence_level(confidence_level)
     mean = np.mean(metric_array, axis=0)
