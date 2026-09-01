@@ -939,3 +939,43 @@ def test_stacked_horde_public_state_shape_rejected_before_dot() -> None:
     state = horde.init().replace(weights=jnp.zeros((1, 3), dtype=jnp.float32))
     with pytest.raises(ValueError, match="weights"):
         horde.predict(state, jnp.ones(2, dtype=jnp.float32))
+
+
+def test_stacked_horde_cardinality_bounds() -> None:
+    from alberta_framework.core.stacked_horde import _MAX_STACKED_HORDE_DEMONS, nexting_spec
+
+    assert _MAX_STACKED_HORDE_DEMONS == 4096
+
+    # Rejection of n_demons > 4096
+    with pytest.raises(ValueError, match="must be an integer in"):
+        StackedHordeConfig(
+            n_demons=4097,
+            feature_dim=2,
+            gammas=(0.9,) * 4097,
+            lamdas=(0.5,) * 4097,
+            cumulant_indices=(0,) * 4097,
+        )
+
+    # Acceptance of boundary case 4096
+    cfg = StackedHordeConfig(
+        n_demons=4096,
+        feature_dim=2,
+        gammas=(0.9,) * 4096,
+        lamdas=(0.5,) * 4096,
+        cumulant_indices=(0,) * 4096,
+    )
+    assert cfg.n_demons == 4096
+
+    # from_config rejects oversized sequences (> 4096)
+    cfg_dict = cfg.to_config()
+    cfg_dict["gammas"] = [0.9] * 4097
+    with pytest.raises(ValueError, match="must not exceed 4096 items"):
+        StackedHordeConfig.from_config(cfg_dict)
+
+    # nexting_spec rejects oversized products (> 4096)
+    with pytest.raises(ValueError, match="derived n_demons must be in"):
+        nexting_spec(
+            feature_dim=2,
+            cumulant_indices=tuple(range(100)),
+            gammas=tuple(np.linspace(0.0, 0.99, 50)),
+        )
