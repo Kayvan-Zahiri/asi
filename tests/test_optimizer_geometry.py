@@ -340,3 +340,14 @@ def test_geometry_runner_rejects_invalid_transactions(monkeypatch: pytest.Monkey
     )
     with pytest.raises(ValueError, match="transaction"):
         run_streaming_matrix_evaluation()
+
+
+@pytest.mark.parametrize("scale", [1.0, 1e-13, 1e-15, 1e-20, 1e-25])
+def test_spectral_matrix_sign_is_scale_invariant_for_small_matrices(scale: float) -> None:
+    m = jnp.array([[2.0, 1.0], [0.5, -1.0]], dtype=jnp.float32)
+    tiny = m * jnp.asarray(scale, dtype=jnp.float32)
+    sign, valid = spectral_matrix_sign_transaction(tiny, steps=5)
+    assert bool(valid)
+    expected_norm = float(jnp.linalg.norm(spectral_matrix_sign(m, steps=5)))
+    actual_norm = float(jnp.linalg.norm(sign))
+    assert abs(actual_norm - expected_norm) < 1e-3
