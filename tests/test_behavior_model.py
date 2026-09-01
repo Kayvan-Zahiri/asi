@@ -868,3 +868,10 @@ class TestBehaviorModelSequenceCeiling:
         result = run_behavior_model_from_arrays(model, state, observations, actions)
         chex.assert_shape(result.probabilities, (12, 3))
         assert int(result.state.step_count) == 12
+
+
+def test_floor_and_renormalize_probabilities_degenerate_simplex() -> None:
+    for probs in ([0.0, 0.0, 0.0], [1e38, 1.0, 1.0]):
+        out = floor_and_renormalize_probabilities(jnp.asarray(probs, jnp.float32))
+        np.testing.assert_allclose(float(jnp.sum(out)), 1.0, rtol=1e-5, atol=1e-5)
+        assert bool(jnp.all(out >= 1e-6))
