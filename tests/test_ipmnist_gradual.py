@@ -315,3 +315,10 @@ def test_gradual_pair_preflights_parameter_allocation_before_initialization() ->
             config=config,
             transition_steps=1,
         )
+
+
+@pytest.mark.parametrize("dtype_code", ("b", "B", "h", "H", "i", "I", "l", "L", "q", "Q"))
+def test_gradual_transition_config_accepts_all_numpy_integer_families(dtype_code: str) -> None:
+    val = np.dtype(dtype_code).type(10)
+    cfg = GradualTransitionConfig(mode="input_interpolation", transition_steps=val)
+    assert cfg.transition_steps == 10
