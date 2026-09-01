@@ -66,3 +66,28 @@ def test_protocol_is_nonpromoting() -> None:
     assert POLICY_ARCHIVE_PROTOCOL["paper_revision"] == "arXiv:2604.15414v1"
     assert POLICY_ARCHIVE_PROTOCOL["controls"] == ("one_model", "fixed_snapshot")
     assert POLICY_ARCHIVE_PROTOCOL["scientific_promotion_allowed"] is False
+
+
+def test_bounded_policy_archive_enforces_equal_latent_width_in_constructor() -> None:
+    e1 = PolicyEntry(identity="a", policy_bytes=b"x", latent=(0.0,), score=0.0)
+    e2 = PolicyEntry(identity="b", policy_bytes=b"y", latent=(3.0, 3.0), score=9.0)
+    with pytest.raises(ValueError, match="all latent descriptors must have equal width"):
+        BoundedPolicyArchive(byte_budget=4096, min_latent_distance=1.0, entries=(e1, e2))
+
+
+def test_control_modes_accept_arbitrary_latent_width_entries() -> None:
+    e1 = PolicyEntry(identity="a", policy_bytes=b"x", latent=(0.0,), score=0.0)
+    e2 = PolicyEntry(identity="b", policy_bytes=b"y", latent=(3.0, 3.0), score=9.0)
+
+    # fixed_snapshot returns self without checking latent width
+    archive_fixed = BoundedPolicyArchive(
+        byte_budget=4096, min_latent_distance=1.0, mode="fixed_snapshot", entries=(e1,)
+    )
+    assert archive_fixed.add(e2) is archive_fixed
+
+    # one_model replaces entry without checking latent width against previous
+    archive_one = BoundedPolicyArchive(
+        byte_budget=4096, min_latent_distance=1.0, mode="one_model", entries=(e1,)
+    )
+    next_one = archive_one.add(e2)
+    assert next_one.entries == (e2,)
