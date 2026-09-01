@@ -409,3 +409,12 @@ def test_run_step9_scan_accepts_a_small_in_bounds_sequence() -> None:
     cfg, agent, model, buffer, state, rewards, next_observations = _step9_scan_components(4)
     result = run_step9_scan(cfg, agent, model, buffer, state, rewards, next_observations)
     assert result.real_td_errors.shape == (4,)
+
+
+def test_step9_rejects_oversized_loop_budgets() -> None:
+    with pytest.raises(ValueError, match="planning_budget"):
+        Step9DreamingConfig(observation_dim=2, n_actions=2, planning_budget=10_001)
+    with pytest.raises(ValueError, match="dream_rollout_horizon"):
+        Step9DreamingConfig(observation_dim=2, n_actions=2, dream_rollout_horizon=10_001)
+    with pytest.raises(ValueError, match="dream_candidate_count"):
+        Step9DreamingConfig(observation_dim=2, n_actions=2, dream_candidate_count=10_001)

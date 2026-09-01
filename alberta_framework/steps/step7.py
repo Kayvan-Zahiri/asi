@@ -161,6 +161,8 @@ class Step7DynaConfig:
 
 
 _INT32_MAX = 2**31 - 1
+_STEP7_PLANNING_MAX_STEPS = 10_000
+_STEP7_ROLLOUT_MAX_DEPTH = 10_000
 _STEP7_CONFIG_FIELDS = frozenset(
     {
         "control",
@@ -279,13 +281,13 @@ def _validate_planning_config(config: Step7DynaConfig) -> None:
         "planning_steps",
         config.planning_steps,
         minimum=0,
-        maximum=_INT32_MAX,
+        maximum=_STEP7_PLANNING_MAX_STEPS,
     )
     planning_rollout_depth = _require_int(
         "planning_rollout_depth",
         config.planning_rollout_depth,
         minimum=1,
-        maximum=_INT32_MAX,
+        maximum=_STEP7_ROLLOUT_MAX_DEPTH,
     )
     planning_warmup_steps = _require_int(
         "planning_warmup_steps",

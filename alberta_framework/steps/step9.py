@@ -71,6 +71,9 @@ from alberta_framework.steps.step6 import (
 )
 
 _INT32_MAX = 2**31 - 1
+_STEP9_PLANNING_MAX_BUDGET = 10_000
+_STEP9_DREAM_MAX_ROLLOUT_HORIZON = 10_000
+_STEP9_DREAM_MAX_CANDIDATE_COUNT = 10_000
 _MAX_CONFIG_SEQUENCE_LENGTH = 4_096
 _MAX_DREAM_WORK_PER_REAL_STEP = 4_096
 # Matches the established ceiling for other scan-driven array-loop runners
@@ -426,20 +429,23 @@ def _validate_dreaming_config(config: Step9DreamingConfig) -> None:
         config.behavior_model_step_size,
     )
     planning_budget = _require_int(
-        "planning_budget", config.planning_budget, minimum=0, maximum=_INT32_MAX
+        "planning_budget",
+        config.planning_budget,
+        minimum=0,
+        maximum=_STEP9_PLANNING_MAX_BUDGET,
     )
     dream_rollout_horizon = _require_int(
         "dream_rollout_horizon",
         config.dream_rollout_horizon,
         minimum=1,
-        maximum=_INT32_MAX,
+        maximum=_STEP9_DREAM_MAX_ROLLOUT_HORIZON,
     )
     # Candidate selection publishes selected indices as signed int32 values.
     dream_candidate_count = _require_int(
         "dream_candidate_count",
         config.dream_candidate_count,
         minimum=1,
-        maximum=_INT32_MAX,
+        maximum=_STEP9_DREAM_MAX_CANDIDATE_COUNT,
     )
     dream_surprise_weight = _require_real(
         "dream_surprise_weight",

@@ -293,3 +293,11 @@ def test_smoke_preflights_all_live_arrays_before_allocation(
     monkeypatch.setattr(jr, "normal", unexpected_allocation)
     with pytest.raises(ValueError, match="smoke resources"):
         run_step7_smoke(steps=50_000_000)
+
+
+def test_step7_rejects_oversized_planning_and_rollout_steps() -> None:
+    kwargs = _valid_config_kwargs()
+    with pytest.raises(ValueError, match="planning_steps"):
+        Step7DynaConfig(**{**kwargs, "planning_steps": 10_001})
+    with pytest.raises(ValueError, match="planning_rollout_depth"):
+        Step7DynaConfig(**{**kwargs, "planning_rollout_depth": 10_001})
