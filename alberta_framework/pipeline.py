@@ -1573,10 +1573,18 @@ class AlbertaPipeline:
                 dtype=jnp.int32,
             )
             auxiliary_cumulants = horde_cumulants[aux_indices] if aux_indices.size else None
+            value_gamma = self._horde.horde_spec.gammas[value_index]
+            value_gamma_arr = jnp.asarray(value_gamma, dtype=jnp.float32)
+            control_discount = jnp.where(
+                terminated != 0.0,
+                jnp.zeros_like(value_gamma_arr),
+                value_gamma_arr,
+            )
             ac_result = ac.update(
                 ac_state,
                 reward,
                 features,
+                discount=control_discount,
                 auxiliary_cumulants=auxiliary_cumulants,
             )
             new_control_state: SARSAState | HordeActorCriticState = ac_result.state

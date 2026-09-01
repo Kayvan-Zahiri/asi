@@ -1196,3 +1196,20 @@ def test_associative_pipeline_narrows_only_statically_safe_integer_dtypes() -> N
 
 # silence the import lint warnings used in the test runner
 _ = jax
+
+
+def test_pipeline_horde_ac_honors_terminated_flag() -> None:
+    cfg = _small_horde_ac_config()
+    pipe = AlbertaPipeline(cfg)
+    state = pipe.init(jr.key(0), jnp.array([0.2, -0.1, 0.4], dtype=jnp.float32))
+    obs = jnp.array([0.1, 0.3, -0.2], dtype=jnp.float32)
+    reward = jnp.array(0.5, dtype=jnp.float32)
+    cumulants = jnp.array([0.5, -0.2], dtype=jnp.float32)
+
+    res_cont = pipe.update(state, obs, reward, jnp.array(0.0, dtype=jnp.float32), cumulants)
+    res_term = pipe.update(state, obs, reward, jnp.array(1.0, dtype=jnp.float32), cumulants)
+
+    # In terminal step, the value-head TD target must be reward alone (0.5)
+    np.testing.assert_allclose(float(res_term.horde_td_targets[0]), 0.5, atol=1e-5)
+    # Non-terminal bootstraps, so target differs from 0.5
+    assert not bool(jnp.isclose(res_cont.horde_td_targets[0], 0.5))
