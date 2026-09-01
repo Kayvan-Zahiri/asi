@@ -547,13 +547,22 @@ def _get_significance_marker(
         return ""
 
     p = result.p_value
-    if p < 0.001:
-        return r"$^{***}$"
-    elif p < 0.01:
-        return r"$^{**}$"
-    elif p < 0.05:
+    alpha = getattr(result, "alpha", 0.05)
+    if alpha == 0.05:
+        if p < 0.001:
+            return r"$^{***}$"
+        elif p < 0.01:
+            return r"$^{**}$"
+        elif p < 0.05:
+            return r"$^{*}$"
         return r"$^{*}$"
-    return ""
+    else:
+        if p < alpha / 100:
+            return r"$^{***}$"
+        elif p < alpha / 10:
+            return r"$^{**}$"
+        else:
+            return r"$^{*}$"
 
 
 def generate_markdown_table(
@@ -639,13 +648,22 @@ def _get_md_significance_marker(
         return ""
 
     p = result.p_value
-    if p < 0.001:
-        return " ***"
-    elif p < 0.01:
-        return " **"
-    elif p < 0.05:
+    alpha = getattr(result, "alpha", 0.05)
+    if alpha == 0.05:
+        if p < 0.001:
+            return " ***"
+        elif p < 0.01:
+            return " **"
+        elif p < 0.05:
+            return " *"
         return " *"
-    return ""
+    else:
+        if p < alpha / 100:
+            return " ***"
+        elif p < alpha / 10:
+            return " **"
+        else:
+            return " *"
 
 
 def generate_significance_table(

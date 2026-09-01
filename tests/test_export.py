@@ -581,3 +581,41 @@ def test_export_rejects_boolean_summary_statistics(
 
     with pytest.raises(ValueError, match="refusing to export boolean as numeric measurement"):
         generate_markdown_table(results)
+
+
+def test_significance_marker_derives_tiers_from_result_alpha() -> None:
+    from alberta_framework.utils.export import _get_md_significance_marker, _get_significance_marker
+    from alberta_framework.utils.statistics import SignificanceResult
+    from alberta_framework.utils.visualization import _get_significance_marker_for_plot
+
+    # Significant result with alpha=0.10, p=0.08
+    r_high_alpha = SignificanceResult(
+        test_name="wilcoxon",
+        statistic=1.0,
+        p_value=0.08,
+        significant=True,
+        alpha=0.10,
+        effect_size=0.5,
+        method_a="a",
+        method_b="b",
+    )
+    sig_map = {("b", "a"): r_high_alpha}
+    assert _get_md_significance_marker("b", "a", sig_map) == " *"
+    assert _get_significance_marker("b", "a", sig_map) == r"$^{*}$"
+    assert _get_significance_marker_for_plot("b", "a", sig_map) == "*"
+
+    # Significant result with Holm alpha=0.0025, p=0.002 -> p in [alpha/10, alpha] -> *
+    r_holm = SignificanceResult(
+        test_name="ttest",
+        statistic=5.0,
+        p_value=0.002,
+        significant=True,
+        alpha=0.0025,
+        effect_size=1.2,
+        method_a="a",
+        method_b="b",
+    )
+    sig_map_holm = {("b", "a"): r_holm}
+    assert _get_md_significance_marker("b", "a", sig_map_holm) == " *"
+    assert _get_significance_marker("b", "a", sig_map_holm) == r"$^{*}$"
+    assert _get_significance_marker_for_plot("b", "a", sig_map_holm) == "*"
