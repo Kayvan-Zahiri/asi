@@ -1357,3 +1357,15 @@ class TestAutoCurate:
             state = result.state
         # Fires at step_count 0, 5, 10 → exactly 3
         assert curations == 3
+
+
+
+def test_prototype_agent_config_rejects_oversized_dreams_per_step() -> None:
+    with pytest.raises(ValueError, match="n_dreams_per_step"):
+        PrototypeAgentConfig(oak=_oak_cfg(), n_dreams_per_step=10_001)
+
+    cfg = PrototypeAgentConfig(oak=_oak_cfg())
+    payload = cfg.to_config()
+    payload["n_dreams_per_step"] = 10_001
+    with pytest.raises(ValueError, match="n_dreams_per_step"):
+        PrototypeAgentConfig.from_config(payload)
