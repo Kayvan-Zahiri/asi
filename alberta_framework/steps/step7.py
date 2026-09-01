@@ -59,6 +59,7 @@ import jax.random as jr
 import numpy as np
 from jax import Array
 
+from alberta_framework._scan_resources import ScanBudget
 from alberta_framework._seed_validation import require_jax_seed
 from alberta_framework.core.average_reward import (
     DifferentialSARSAAgent,
@@ -161,6 +162,8 @@ class Step7DynaConfig:
 
 
 _INT32_MAX = 2**31 - 1
+_STEP7_PLANNING_BUDGET = ScanBudget("Step 7 planning", maximum_steps=10_000)
+_STEP7_ROLLOUT_BUDGET = ScanBudget("Step 7 planning rollout", maximum_steps=10_000)
 _STEP7_CONFIG_FIELDS = frozenset(
     {
         "control",
@@ -258,7 +261,9 @@ def _require_int(
             raise ValueError(f"{name} must be non-negative")
         raise ValueError(f"{name} must be >= {minimum}")
     if maximum is not None and number > maximum:
-        raise ValueError(f"{name} must be at most int32 max")
+        if maximum == _INT32_MAX:
+            raise ValueError(f"{name} must be at most int32 max")
+        raise ValueError(f"{name} must be <= {maximum}")
     return number
 
 
@@ -279,13 +284,13 @@ def _validate_planning_config(config: Step7DynaConfig) -> None:
         "planning_steps",
         config.planning_steps,
         minimum=0,
-        maximum=_INT32_MAX,
+        maximum=_STEP7_PLANNING_BUDGET.maximum_steps,
     )
     planning_rollout_depth = _require_int(
         "planning_rollout_depth",
         config.planning_rollout_depth,
         minimum=1,
-        maximum=_INT32_MAX,
+        maximum=_STEP7_ROLLOUT_BUDGET.maximum_steps,
     )
     planning_warmup_steps = _require_int(
         "planning_warmup_steps",

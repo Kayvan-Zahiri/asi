@@ -409,3 +409,23 @@ def test_run_step9_scan_accepts_a_small_in_bounds_sequence() -> None:
     cfg, agent, model, buffer, state, rewards, next_observations = _step9_scan_components(4)
     result = run_step9_scan(cfg, agent, model, buffer, state, rewards, next_observations)
     assert result.real_td_errors.shape == (4,)
+
+
+def test_step9_dreaming_scan_budget_bounds() -> None:
+    from alberta_framework.steps.step9 import Step9DreamingConfig
+
+    with pytest.raises(ValueError, match=r"planning_budget must be <= 10000"):
+        Step9DreamingConfig(planning_budget=10_001)
+
+    with pytest.raises(ValueError, match=r"dream_rollout_horizon must be <= 10000"):
+        Step9DreamingConfig(dream_rollout_horizon=10_001)
+
+    with pytest.raises(ValueError, match=r"dream_candidate_count must be <= 10000"):
+        Step9DreamingConfig(dream_candidate_count=10_001)
+
+    # Acceptance of boundary values (when planning_budget=0, dream work is 0 <= 4096)
+    cfg1 = Step9DreamingConfig(planning_budget=0, dream_rollout_horizon=10_000)
+    assert cfg1.dream_rollout_horizon == 10_000
+
+    cfg2 = Step9DreamingConfig(planning_budget=0, dream_candidate_count=10_000)
+    assert cfg2.dream_candidate_count == 10_000
