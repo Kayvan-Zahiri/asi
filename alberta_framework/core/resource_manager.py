@@ -594,8 +594,14 @@ class LearnedResourceManager:
         adjusted = jnp.where(valid_actions, safe_losses + cost_terms, 0.0)
 
         weights = self._weights_jit(state, context)
-        finite_weight_sum = jnp.maximum(jnp.sum(jnp.where(valid_actions, weights, 0.0)), 1e-12)
-        masked_weights = jnp.where(valid_actions, weights / finite_weight_sum, 0.0)
+        valid_mass = jnp.sum(jnp.where(valid_actions, weights, 0.0))
+        valid_count = jnp.maximum(jnp.sum(valid_actions.astype(jnp.float32)), 1.0)
+        has_mass = jnp.logical_and(jnp.isfinite(valid_mass), valid_mass > 0.0)
+        masked_weights = jnp.where(
+            valid_actions,
+            jnp.where(has_mass, weights / jnp.where(has_mass, valid_mass, 1.0), 1.0 / valid_count),
+            0.0,
+        )
         baseline = jnp.sum(masked_weights * adjusted)
         advantages = jnp.where(valid_actions, baseline - adjusted, 0.0)
         advantages = jnp.clip(
@@ -1191,8 +1197,14 @@ class GeneratorMetaResourceManager:
         adjusted = jnp.where(finite, safe_rewards - cost_terms, 0.0)
 
         weights = self._weights_jit(state, context)
-        finite_weight_sum = jnp.maximum(jnp.sum(jnp.where(finite, weights, 0.0)), 1e-12)
-        masked_weights = jnp.where(finite, weights / finite_weight_sum, 0.0)
+        valid_mass = jnp.sum(jnp.where(finite, weights, 0.0))
+        valid_count = jnp.maximum(jnp.sum(finite.astype(jnp.float32)), 1.0)
+        has_mass = jnp.logical_and(jnp.isfinite(valid_mass), valid_mass > 0.0)
+        masked_weights = jnp.where(
+            finite,
+            jnp.where(has_mass, weights / jnp.where(has_mass, valid_mass, 1.0), 1.0 / valid_count),
+            0.0,
+        )
         baseline = jnp.sum(masked_weights * adjusted)
         selection_input_valid = jnp.asarray(True, dtype=jnp.bool_)
         if self._update_rule == "exp3":

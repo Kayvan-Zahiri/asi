@@ -859,3 +859,20 @@ def test_resource_manager_serialized_schemas_are_exact() -> None:
         invalid.update(mutation)
         with pytest.raises(ValueError, match=match):
             GeneratorMetaResourceManager.from_config(invalid)
+
+
+def test_learned_resource_manager_preserves_centering_with_tiny_surviving_mass() -> None:
+    """Surviving actions with total mass < 1e-12 should preserve exact centering."""
+    rm = LearnedResourceManager(n_actions=3, n_contexts=1, exploration=0.0)
+    state = rm.init()
+    # Put a large preference gap on action 0 so actions 1 and 2 have tiny remaining mass (< 1e-12)
+    state = state.replace(log_weights=jnp.array([[40.0, 0.0, 0.0]], dtype=jnp.float32))
+    # Action 0 is masked out by NaN loss; surviving actions 1 and 2 have losses 1.0 and 3.0
+    upd = rm.update(state, jnp.array([float("nan"), 1.0, 3.0], dtype=jnp.float32), 0)
+    assert bool(upd.update_applied)
+    # The baseline must be (1.0 + 3.0) / 2 = 2.0, giving advantages [0, +1.0, -1.0]
+    # In log_weights, new_context_logits should increase action 1 and decrease action 2
+    new_logits = upd.state.log_weights[0]
+    assert float(new_logits[1] - new_logits[2]) > 0.0
+    chex.assert_trees_all_close(upd.advantages[1], jnp.array(1.0, dtype=jnp.float32), atol=1e-5)
+    chex.assert_trees_all_close(upd.advantages[2], jnp.array(-1.0, dtype=jnp.float32), atol=1e-5)
