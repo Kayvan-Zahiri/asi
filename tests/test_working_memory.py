@@ -756,3 +756,19 @@ def test_zero_decay_does_not_multiply_inf_traces() -> None:
     )
     assert bool(result.update_applied)
     chex.assert_trees_all_close(result.state.observation_traces, obs[None, :])
+
+
+def test_working_memory_rejects_oversized_decay_rates() -> None:
+    with pytest.raises(ValueError, match="decay rates"):
+        WorkingMemoryConfig(
+            observation_dim=2,
+            observation_decay_rates=(0.5,) * 4097,
+        )
+
+
+def test_working_memory_from_config_rejects_oversized_decay_rates() -> None:
+    cfg = WorkingMemoryConfig(observation_dim=2)
+    payload = cfg.to_config()
+    payload["observation_decay_rates"] = [0.5] * 4097
+    with pytest.raises(ValueError, match="decay rates"):
+        WorkingMemoryConfig.from_config(payload)

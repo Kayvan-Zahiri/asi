@@ -127,6 +127,10 @@ class WorkingMemoryConfig:
                     payload[key] = tuple(value)
                 elif type(value) is not tuple:
                     raise ValueError(f"{key} must be an actual list or tuple")
+                if len(payload[key]) > _MAX_WORKING_MEMORY_DECAY_RATES:
+                    raise ValueError(
+                        f"{key} must contain at most {_MAX_WORKING_MEMORY_DECAY_RATES} decay rates"
+                    )
                 if any(type(item) is not float for item in payload[key]):
                     raise ValueError(f"serialized {key} values must be JSON numbers")
         for key in ("observation_dim", "action_dim", "reward_dim"):
@@ -284,9 +288,16 @@ def _require_array(
         raise TypeError(f"{name} has an invalid dtype")
 
 
+_MAX_WORKING_MEMORY_CONFIGURATION_ITEMS = 1 << 12
+_MAX_WORKING_MEMORY_DECAY_RATES = _MAX_WORKING_MEMORY_CONFIGURATION_ITEMS
+
 def _validate_decay_rates(name: str, rates: object) -> tuple[float, ...]:
     if type(rates) is not tuple:
         raise ValueError(f"{name} must be an actual tuple")
+    if len(rates) > _MAX_WORKING_MEMORY_DECAY_RATES:
+        raise ValueError(
+            f"{name} must contain at most {_MAX_WORKING_MEMORY_DECAY_RATES} decay rates"
+        )
     return tuple(
         validated_float32_scalar(
             f"{name}[{index}]",
