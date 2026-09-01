@@ -340,3 +340,12 @@ def test_geometry_runner_rejects_invalid_transactions(monkeypatch: pytest.Monkey
     )
     with pytest.raises(ValueError, match="transaction"):
         run_streaming_matrix_evaluation()
+
+
+def test_spectral_matrix_sign_scale_invariance_underflow() -> None:
+    m = jnp.array([[2.0, 1.0], [0.5, -1.0]], dtype=jnp.float32)
+    ref_sign = spectral_matrix_sign(m)
+    for scale in (1e-13, 1e-15, 1e-20, 1e-25):
+        tiny = m * jnp.asarray(scale, dtype=jnp.float32)
+        scaled_sign = spectral_matrix_sign(tiny)
+        np.testing.assert_allclose(scaled_sign, ref_sign, atol=1e-4, rtol=1e-4)
