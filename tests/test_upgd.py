@@ -2219,3 +2219,20 @@ class TestLoops:
         stream = RandomWalkStream(feature_dim=4, drift_rate=0.0, noise_std=0.05)
         result = run_upgd_loop(learner, stream, num_steps=50, key=jr.key(0))
         chex.assert_shape(result.metrics, (50, 4))
+
+
+def test_gradient_alignment_scale_invariance_underflow_overflow() -> None:
+    g1 = (
+        jnp.array([1.0, -2.0, 3.0], dtype=jnp.float32),
+        jnp.array([[0.5, -1.0]], dtype=jnp.float32),
+    )
+    for exponent in (10, 8, 4, 0, -4, -8, -10, -20):
+        scale = jnp.asarray(10.0**exponent, dtype=jnp.float32)
+        scaled_g1 = tuple(x * scale for x in g1)
+        # Identical gradients should have alignment +1.0
+        align = UPGDLearner._gradient_alignment(scaled_g1, scaled_g1)
+        assert bool(jnp.isclose(align, 1.0, atol=1e-5))
+        # Opposing gradients should have alignment -1.0
+        neg_g1 = tuple(-x for x in scaled_g1)
+        opp_align = UPGDLearner._gradient_alignment(scaled_g1, neg_g1)
+        assert bool(jnp.isclose(opp_align, -1.0, atol=1e-5))

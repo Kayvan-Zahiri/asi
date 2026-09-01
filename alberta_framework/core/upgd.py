@@ -1985,10 +1985,20 @@ class UPGDLearner:
     @staticmethod
     def _tuple_norm(xs: tuple[Array, ...]) -> Array:
         """L2 norm over a static tuple of arrays."""
+        max_abs = jnp.array(0.0, dtype=jnp.float32)
+        for x in xs:
+            max_abs = jnp.maximum(max_abs, jnp.max(jnp.abs(x)))
+        _, exponent = jnp.frexp(max_abs)
         total = jnp.array(0.0, dtype=jnp.float32)
         for x in xs:
-            total = total + jnp.sum(jnp.square(x))
-        return jnp.sqrt(total + 1e-12)
+            scaled_x = jnp.ldexp(x, -exponent)
+            total = total + jnp.sum(jnp.square(scaled_x))
+        scaled_norm = jnp.sqrt(total)
+        return jnp.where(
+            max_abs > 0.0,
+            jnp.ldexp(scaled_norm, exponent),
+            jnp.array(0.0, dtype=jnp.float32),
+        )
 
     @staticmethod
     def _gradient_alignment(
@@ -1996,13 +2006,31 @@ class UPGDLearner:
         current: tuple[Array, ...],
     ) -> Array:
         """Cosine alignment of two gradient tuples, zero for empty gradients."""
-        previous_norm = UPGDLearner._tuple_norm(previous)
-        current_norm = UPGDLearner._tuple_norm(current)
-        return jnp.where(
-            (previous_norm > 1e-6) & (current_norm > 1e-6),
-            UPGDLearner._tuple_dot(previous, current) / (previous_norm * current_norm + 1e-12),
-            jnp.array(0.0, dtype=jnp.float32),
-        )
+        prev_max = jnp.array(0.0, dtype=jnp.float32)
+        curr_max = jnp.array(0.0, dtype=jnp.float32)
+        for p, c in zip(previous, current):
+            prev_max = jnp.maximum(prev_max, jnp.max(jnp.abs(p)))
+            curr_max = jnp.maximum(curr_max, jnp.max(jnp.abs(c)))
+        _, p_exp = jnp.frexp(prev_max)
+        _, c_exp = jnp.frexp(curr_max)
+
+        dot = jnp.array(0.0, dtype=jnp.float32)
+        p_sq = jnp.array(0.0, dtype=jnp.float32)
+        c_sq = jnp.array(0.0, dtype=jnp.float32)
+        for p, c in zip(previous, current):
+            p_scaled = jnp.ldexp(p, -p_exp)
+            c_scaled = jnp.ldexp(c, -c_exp)
+            dot = dot + jnp.sum(p_scaled * c_scaled)
+            p_sq = p_sq + jnp.sum(jnp.square(p_scaled))
+            c_sq = c_sq + jnp.sum(jnp.square(c_scaled))
+
+        p_norm = jnp.sqrt(p_sq)
+        c_norm = jnp.sqrt(c_sq)
+        active = (prev_max > 0.0) & (curr_max > 0.0) & (p_norm > 0.0) & (c_norm > 0.0)
+        denom = jnp.where(active, p_norm * c_norm, jnp.ones_like(p_norm))
+        cos = dot / denom
+        valid = active & jnp.isfinite(cos)
+        return jnp.where(valid, jnp.clip(cos, -1.0, 1.0), jnp.array(0.0, dtype=jnp.float32))
 
     @functools.partial(jax.jit, static_argnums=(0,))
     def predict(self, state: UPGDState, observation: Array) -> Array:
