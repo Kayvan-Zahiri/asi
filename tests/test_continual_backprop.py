@@ -37,9 +37,7 @@ class TestInitCbpStateShapes:
     """init_cbp_state should produce zero utility/age arrays matching the trunk."""
 
     def test_init_cbp_state_shapes(self):
-        learner = MultiHeadMLPLearner(
-            n_heads=3, hidden_sizes=(32, 16), sparsity=0.0
-        )
+        learner = MultiHeadMLPLearner(n_heads=3, hidden_sizes=(32, 16), sparsity=0.0)
         mlp_state = learner.init(feature_dim=8, key=jr.key(0))
         cbp_state = init_cbp_state(mlp_state, (32, 16), key=jr.key(1))
 
@@ -57,18 +55,14 @@ class TestInitCbpStateShapes:
             assert int(jnp.sum(a)) == 0
 
     def test_init_cbp_state_linear_baseline(self):
-        learner = MultiHeadMLPLearner(
-            n_heads=2, hidden_sizes=(), sparsity=0.0
-        )
+        learner = MultiHeadMLPLearner(n_heads=2, hidden_sizes=(), sparsity=0.0)
         mlp_state = learner.init(feature_dim=5, key=jr.key(0))
         cbp_state = init_cbp_state(mlp_state, (), key=jr.key(1))
         assert len(cbp_state.utilities) == 0
         assert len(cbp_state.ages) == 0
 
     def test_init_cbp_state_mismatch_raises(self):
-        learner = MultiHeadMLPLearner(
-            n_heads=2, hidden_sizes=(8,), sparsity=0.0
-        )
+        learner = MultiHeadMLPLearner(n_heads=2, hidden_sizes=(8,), sparsity=0.0)
         mlp_state = learner.init(feature_dim=4, key=jr.key(0))
         try:
             init_cbp_state(mlp_state, (8, 4), key=jr.key(1))
@@ -284,9 +278,7 @@ class TestReplacement:
 
     def test_replacement_re_initializes_low_utility_unit(self):
         """Force a replacement and verify the unit's incoming weights changed."""
-        learner = MultiHeadMLPLearner(
-            n_heads=1, hidden_sizes=(4,), sparsity=0.0
-        )
+        learner = MultiHeadMLPLearner(n_heads=1, hidden_sizes=(4,), sparsity=0.0)
         mlp_state = learner.init(feature_dim=3, key=jr.key(42))
         cbp_state = init_cbp_state(mlp_state, (4,), key=jr.key(7))
 
@@ -331,14 +323,10 @@ class TestReplacement:
         )
         # Outgoing column 2 in the head weight matrix should be zero.
         head_w = new_mlp_state.head_params.weights[0]
-        chex.assert_trees_all_close(
-            head_w[:, 2], jnp.zeros_like(head_w[:, 2])
-        )
+        chex.assert_trees_all_close(head_w[:, 2], jnp.zeros_like(head_w[:, 2]))
 
     def test_age_resets_on_replacement(self):
-        learner = MultiHeadMLPLearner(
-            n_heads=1, hidden_sizes=(4,), sparsity=0.0
-        )
+        learner = MultiHeadMLPLearner(n_heads=1, hidden_sizes=(4,), sparsity=0.0)
         mlp_state = learner.init(feature_dim=3, key=jr.key(42))
         cbp_state = init_cbp_state(mlp_state, (4,), key=jr.key(7))
 
@@ -355,9 +343,7 @@ class TestReplacement:
             maturity_threshold=100,
             enabled=True,
         )
-        _, new_cbp = maybe_replace_units(
-            mlp_state, cbp_state, config, sparsity=0.0
-        )
+        _, new_cbp = maybe_replace_units(mlp_state, cbp_state, config, sparsity=0.0)
         # Unit 2 had lowest utility, so its age should be reset to 0.
         assert int(new_cbp.ages[0][2]) == 0
         # Other units retain their age.
@@ -369,9 +355,7 @@ class TestReplacement:
 
     def test_maturity_threshold_protects_young_units(self):
         """No unit above maturity_threshold => no replacement happens."""
-        learner = MultiHeadMLPLearner(
-            n_heads=1, hidden_sizes=(4,), sparsity=0.0
-        )
+        learner = MultiHeadMLPLearner(n_heads=1, hidden_sizes=(4,), sparsity=0.0)
         mlp_state = learner.init(feature_dim=3, key=jr.key(42))
         cbp_state = init_cbp_state(mlp_state, (4,), key=jr.key(7))
 
@@ -391,9 +375,7 @@ class TestReplacement:
             enabled=True,
         )
 
-        new_mlp_state, new_cbp = maybe_replace_units(
-            mlp_state, cbp_state, config, sparsity=0.0
-        )
+        new_mlp_state, new_cbp = maybe_replace_units(mlp_state, cbp_state, config, sparsity=0.0)
         # All weights must be unchanged.
         chex.assert_trees_all_close(
             mlp_state.trunk_params.weights[0],
@@ -401,10 +383,7 @@ class TestReplacement:
         )
         # Ages and utilities must be unchanged.
         chex.assert_trees_all_close(cbp_state.ages[0], new_cbp.ages[0])
-        chex.assert_trees_all_close(
-            cbp_state.utilities[0], new_cbp.utilities[0]
-        )
-
+        chex.assert_trees_all_close(cbp_state.utilities[0], new_cbp.utilities[0])
 
     def _replacement_trace(
         self, *, n_units: int, rate: float, maturity: int, steps: int
@@ -443,7 +422,6 @@ class TestReplacement:
         )
         assert sum(replaced) == 20
         assert final_accumulator <= 1.0
-
 
     def test_wrapper_replacements_made_is_the_gated_decision(self):
         """replacements_made must not be re-inferred from the old rate * hidden_size formula."""
@@ -532,9 +510,7 @@ class TestDisabledReturnsUnchanged:
             plain_result = plain_learner.update(plain_running, obs, tgt)
 
             # Predictions and trunk weights should match exactly.
-            chex.assert_trees_all_close(
-                cbp_result.predictions, plain_result.predictions, atol=1e-6
-            )
+            chex.assert_trees_all_close(cbp_result.predictions, plain_result.predictions, atol=1e-6)
             chex.assert_trees_all_close(
                 cbp_result.state.mlp_state.trunk_params.weights[0],
                 plain_result.state.trunk_params.weights[0],
@@ -575,9 +551,7 @@ class TestJitCompatibility:
 
         jit_out = step(cbp_state, acts, grads)
 
-        chex.assert_trees_all_close(
-            eager_out.utilities[0], jit_out.utilities[0]
-        )
+        chex.assert_trees_all_close(eager_out.utilities[0], jit_out.utilities[0])
         chex.assert_trees_all_close(eager_out.ages[0], jit_out.ages[0])
 
     def test_full_update_jit_compatible(self):
@@ -988,3 +962,20 @@ class TestCBPWrapperConstructorIdentities:
         payload[field] = value
         with pytest.raises(ValueError, match="serialized"):
             CBPMultiHeadMLPLearner.from_config(payload)
+
+
+def test_select_replacement_index_uses_bias_corrected_utility() -> None:
+    """Young unit with high steady-state utility should not be replaced over old weak unit."""
+    # Unit 0: constant 1.0 contribution for 100 steps -> raw EMA ~0.634, corrected = 1.0
+    # Unit 1: constant 0.9 contribution for 700 steps -> raw EMA ~0.900, corrected = 0.9
+    utility = jnp.array([0.633967, 0.899209], dtype=jnp.float32)
+    age = jnp.array([100, 700], dtype=jnp.int32)
+    selected, has_candidate = _select_replacement_index(
+        utility=utility,
+        age=age,
+        maturity_threshold=100,
+        decay_rate=0.99,
+    )
+    assert bool(has_candidate)
+    # Unit 1 is the weaker unit (0.9 < 1.0), so unit 1 should be selected for replacement
+    assert int(selected) == 1
