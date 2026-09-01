@@ -1368,9 +1368,11 @@ def build_forager_matched_open_protocol(
     iteration order is ignored; protocol order comes only from frozen constants.
     """
     _validate_runtime(runtime)
-    if type(candidate_qualifications) is not dict:
+    if type(candidate_qualifications) is not dict and not isinstance(
+        candidate_qualifications, MappingProxyType
+    ):
         raise ForagerMatchedOpenProtocolBuildError(
-            "candidate_qualifications must be a mapping"
+            "candidate_qualifications must be an exact dict or mapping proxy"
         )
     actual_ids = set(candidate_qualifications)
     expected_ids = set(MATCHED_CURRENT_CANDIDATE_IDS)

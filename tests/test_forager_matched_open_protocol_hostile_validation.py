@@ -91,7 +91,7 @@ def test_build_rejects_hostile_candidate_qualifications_mapping_subclass() -> No
     HostileDict.calls = 0
     with pytest.raises(
         ForagerMatchedOpenProtocolBuildError,
-        match="candidate_qualifications must be a mapping",
+        match="candidate_qualifications must be an exact dict or mapping proxy",
     ):
         build_forager_matched_open_protocol(
             runtime=_runtime(),
@@ -196,3 +196,19 @@ def test_candidate_spec_rejects_cross_field_and_provenance_drift(
 ) -> None:
     with pytest.raises(ForagerMatchedOpenProtocolBuildError):
         replace(_legal_spec(), **updates)
+
+def test_build_accepts_mapping_proxy_type() -> None:
+    from types import MappingProxyType
+
+    from alberta_framework.benchmarks.forager_matched_open_protocol import (
+        build_forager_matched_open_protocol,
+    )
+    from tests.test_forager_matched_open_protocol import _qualifications, _runtime
+
+    runtime = _runtime()
+    quals = _qualifications()
+    protocol = build_forager_matched_open_protocol(
+        runtime=runtime,
+        candidate_qualifications=MappingProxyType(dict(quals)),
+    )
+    assert protocol.stage == "open_tuning"
