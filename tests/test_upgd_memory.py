@@ -564,3 +564,20 @@ def test_upgd_memory_preserves_legal_closed_endpoints() -> None:
     assert allocation_endpoint.target_allocation_rate == 1.0
     assert fixed_threshold.min_novelty_threshold == 0.5
     assert fixed_threshold.max_novelty_threshold == 0.5
+
+
+def test_normalize_simplex_returns_valid_simplex_on_degenerate_inputs() -> None:
+    import numpy as np
+
+    from alberta_framework.core.upgd_memory import _normalize_simplex
+
+    for p in (
+        [0.0, 0.0, 0.0],
+        [-1.0, -2.0, -3.0],
+        [1e38, 1.0, 1.0],
+        [7.5e-13, 0.0, 0.0],
+        [1e-30, 0.0, 0.0],
+    ):
+        out = _normalize_simplex(jnp.asarray(p, dtype=jnp.float32))
+        np.testing.assert_allclose(float(jnp.sum(out)), 1.0, atol=1e-6)
+        assert bool(jnp.all(out >= 0.0))
