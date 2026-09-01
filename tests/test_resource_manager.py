@@ -859,3 +859,16 @@ def test_resource_manager_serialized_schemas_are_exact() -> None:
         invalid.update(mutation)
         with pytest.raises(ValueError, match=match):
             GeneratorMetaResourceManager.from_config(invalid)
+
+
+def test_masked_baseline_preserves_centering_with_large_preference_gap() -> None:
+    # 3 actions, action 0 is NaN (masked out), survivor losses are 1.0 and 3.0.
+    # Leader gap is 40 nats on action 0 so remaining mass is < 1e-12.
+    rm = LearnedResourceManager(n_actions=3, n_contexts=1, exploration=0.0)
+    state = rm.init()
+    state = state.replace(log_weights=jnp.array([[40.0, 0.0, 0.0]], dtype=jnp.float32))
+    result = rm.update(state, jnp.array([jnp.nan, 1.0, 3.0], dtype=jnp.float32), 0)
+    # Remaining 2 actions have equal weights -> baseline is 2.0 -> centered advantages +1 and -1
+    assert bool(result.update_applied)
+    # Action 1 advantage is positive, Action 2 advantage is negative
+    assert float(result.state.log_weights[0, 1]) > float(result.state.log_weights[0, 2])
