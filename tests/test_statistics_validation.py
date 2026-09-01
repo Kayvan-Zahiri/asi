@@ -44,6 +44,7 @@ from alberta_framework.utils.statistics import (
     compute_timeseries_statistics,
     holm_correction,
     mann_whitney_comparison,
+    paired_cohens_d,
     pairwise_comparisons,
     ttest_comparison,
     wilcoxon_comparison,
@@ -668,7 +669,7 @@ class TestIdenticalWilcoxonRejection:
         assert result.test_name == "Wilcoxon signed-rank"
         assert result.statistic == pytest.approx(0.0)
         assert result.p_value < 1.0
-        assert result.effect_size == cohens_d([1.0, 2.0, 3.0], [0.5, 1.5, 2.5])
+        assert result.effect_size == paired_cohens_d([1.0, 2.0, 3.0], [0.5, 1.5, 2.5])
 
 
 class TestOneSampleRejection:
@@ -1179,3 +1180,23 @@ class TestPairwiseComparisons:
     def test_common_final_window_requires_positive_integer(self, window: object) -> None:
         with pytest.raises(ValueError, match="window must be a positive integer"):
             common_final_window({"learner": 10}, window, "squared_error")
+
+
+def test_paired_ttest_and_wilcoxon_use_paired_cohens_d_z() -> None:
+    from alberta_framework.utils.statistics import (
+        paired_cohens_d,
+        ttest_comparison,
+        wilcoxon_comparison,
+    )
+
+    a = np.array([101.0, 202.0, 303.0, 404.0])
+    b = np.array([100.0, 200.0, 300.0, 400.0])
+
+    expected_dz = float(np.mean(a - b) / np.std(a - b, ddof=1))
+    assert abs(paired_cohens_d(a, b) - expected_dz) < 1e-6
+
+    res_ttest = ttest_comparison(a, b, paired=True)
+    np.testing.assert_allclose(res_ttest.effect_size, expected_dz, rtol=1e-5)
+
+    res_wilcoxon = wilcoxon_comparison(a, b)
+    np.testing.assert_allclose(res_wilcoxon.effect_size, expected_dz, rtol=1e-5)
