@@ -1357,3 +1357,18 @@ class TestAutoCurate:
             state = result.state
         # Fires at step_count 0, 5, 10 → exactly 3
         assert curations == 3
+
+
+def test_prototype_agent_n_dreams_per_step_bounds() -> None:
+    from alberta_framework.core.prototype_agent import PrototypeAgentConfig
+
+    with pytest.raises(ValueError, match=r"n_dreams_per_step"):
+        PrototypeAgentConfig(oak=_oak_cfg(), world_model=_wm_cfg(), n_dreams_per_step=10_001)
+
+    cfg = PrototypeAgentConfig(oak=_oak_cfg(), world_model=_wm_cfg(), n_dreams_per_step=10_000)
+    assert cfg.n_dreams_per_step == 10_000
+
+    cfg_dict = cfg.to_config()
+    cfg_dict["n_dreams_per_step"] = 10_001
+    with pytest.raises(ValueError, match=r"n_dreams_per_step"):
+        PrototypeAgentConfig.from_config(cfg_dict)
