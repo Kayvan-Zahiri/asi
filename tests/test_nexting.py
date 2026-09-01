@@ -617,3 +617,16 @@ class TestRunningRMSE:
         assert float(running[-1, 0]) < 0.01
         # Mid-series transition: some error
         assert float(running[19, 0]) > 0.5
+
+
+def test_forward_view_returns_promotes_integer_and_boolean_cumulants_to_float() -> None:
+    c_int = jnp.array([1, 0, 0, 0, 1], dtype=jnp.int32)
+    returns_int = forward_view_returns(c_int, 0.9)
+    expected = jnp.array([1.6561, 0.729, 0.81, 0.9, 1.0], dtype=jnp.float32)
+    np.testing.assert_allclose(np.asarray(returns_int), np.asarray(expected), rtol=1e-5)
+    assert jnp.issubdtype(returns_int.dtype, jnp.floating)
+
+    c_bool = jnp.array([True, False, False, False, True], dtype=jnp.bool_)
+    returns_bool = forward_view_returns(c_bool, 0.9)
+    np.testing.assert_allclose(np.asarray(returns_bool), np.asarray(expected), rtol=1e-5)
+    assert jnp.issubdtype(returns_bool.dtype, jnp.floating)
