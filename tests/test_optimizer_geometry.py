@@ -340,3 +340,13 @@ def test_geometry_runner_rejects_invalid_transactions(monkeypatch: pytest.Monkey
     )
     with pytest.raises(ValueError, match="transaction"):
         run_streaming_matrix_evaluation()
+
+
+def test_spectral_matrix_sign_fails_closed_on_all_subnormal_float32_matrix() -> None:
+    # A matrix of non-zero float32 subnormals whose float32 norm flushes to zero
+    m = np.array([[2.0, 1.0], [0.5, -1.0]], dtype=np.float32) * np.float32(1e-40)
+    subnormal_jax = jnp.asarray(m)
+    sign, valid = spectral_matrix_sign_transaction(subnormal_jax, steps=5)
+    # Must fail closed with valid=False rather than certifying an exact zero matrix as valid
+    assert not bool(valid)
+    np.testing.assert_array_equal(np.asarray(sign), np.zeros_like(m))
