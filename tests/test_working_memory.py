@@ -756,3 +756,31 @@ def test_zero_decay_does_not_multiply_inf_traces() -> None:
     )
     assert bool(result.update_applied)
     chex.assert_trees_all_close(result.state.observation_traces, obs[None, :])
+
+
+def test_working_memory_cardinality_bounds() -> None:
+    from alberta_framework.core.working_memory import _MAX_WORKING_MEMORY_DECAY_RATES
+
+    assert _MAX_WORKING_MEMORY_DECAY_RATES == 4096
+
+    # Rejection of decay rates > 4096
+    with pytest.raises(ValueError, match="must contain at most 4096 decay rates"):
+        WorkingMemoryConfig(
+            observation_dim=1,
+            observation_decay_rates=(0.5,) * 4097,
+        )
+
+    # Acceptance of boundary case 4096
+    cfg = WorkingMemoryConfig(
+        observation_dim=1,
+        observation_decay_rates=(0.5,) * 4096,
+        action_decay_rates=(),
+        reward_decay_rates=(),
+    )
+    assert len(cfg.observation_decay_rates) == 4096
+
+    # from_config rejects oversized sequences (> 4096)
+    cfg_dict = cfg.to_config()
+    cfg_dict["observation_decay_rates"] = [0.5] * 4097
+    with pytest.raises(ValueError, match="must not exceed 4096 items"):
+        WorkingMemoryConfig.from_config(cfg_dict)
