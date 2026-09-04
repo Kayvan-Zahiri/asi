@@ -479,6 +479,26 @@ class TestRunningRMSE:
         # All windows should contain the same constant error
         np.testing.assert_allclose(np.asarray(running), 2.0, atol=1e-6)
 
+    def test_running_rmse_survives_a_high_error_phase_before_a_settled_phase(self) -> None:
+        """A trailing window must not inherit cancellation from an earlier large-error phase.
+
+        A global float32 prefix sum loses every squared error that is smaller than the
+        prefix's ulp, so once 2,000 unit errors have accumulated a settled phase of
+        1e-4 errors reads as exactly zero RMSE. The window's own errors are all 1e-4,
+        so every complete settled window must report 1e-4.
+        """
+        n_steps, window = 4000, 100
+        for settled in (1e-3, 1e-4, 1e-5):
+            errors = np.full((n_steps, 1), settled, dtype=np.float32)
+            errors[:2000] = 1.0
+            running = np.asarray(
+                per_horizon_running_rmse(
+                    jnp.asarray(errors), jnp.zeros((n_steps, 1), jnp.float32), window_size=window
+                )
+            )
+            settled_windows = running[2000 + window :, 0]
+            np.testing.assert_allclose(settled_windows, settled, rtol=1e-3, atol=0.0)
+
     @pytest.mark.parametrize(
         "window_size",
         [
