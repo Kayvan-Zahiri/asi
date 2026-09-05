@@ -6532,3 +6532,42 @@ class TestNBEnsemble:
             assert np.all(np.isfinite(np.asarray(result.per_task_loss))), name
             plas = np.asarray(result.per_task_plasticity)
             assert np.all((plas >= 0.0) & (plas <= 1.0)), name
+
+class TestPlasticityCounterSaturation:
+    """Per-unit plasticity counters must saturate via the declared helper.
+
+    ``state.silence*`` and ``state.age*``/``cbp.age*`` are ``int32`` lifetime
+    counters that reset to ``0`` on firing/replacement but grow
+    monotonically otherwise. A plain ``+ 1`` wraps ``2147483647 -> -2147483648``;
+    the canonical ``_saturating_int32_counter_increment`` caps at ``2147483647``.
+    """
+
+    def test_plasticity_counters_saturate(self):
+        import jax.numpy as jnp
+
+        from alberta_framework.core.normalizers import (
+            _saturating_int32_counter_increment,
+        )
+
+        int_max = jnp.array(2_147_483_647, dtype=jnp.int32)
+        assert int(_saturating_int32_counter_increment(int_max)) == 2_147_483_647
+        assert int(int_max + jnp.array(1, dtype=jnp.int32)) == -2_147_483_648
+        # silence path: where(fired,0, inc(silence))
+        fired = jnp.array(False)
+        silence = jnp.array(2_147_483_647, dtype=jnp.int32)
+        plain = jnp.where(fired, 0, silence + jnp.array(1, dtype=jnp.int32))
+        safe = jnp.where(fired, 0, _saturating_int32_counter_increment(silence))
+        assert int(plain) == -2_147_483_648
+        assert int(safe) == 2_147_483_647
+
+    def test_helper_is_reused_by_name(self):
+        text = Path("alberta_framework/benchmarks/ipmnist_screening.py").read_text()
+        assert (
+            "from alberta_framework.core.normalizers import _saturating_int32_counter_increment"
+            in text
+        )
+        # per-unit sites must use helper
+        assert "state.silence1 + 1" not in text
+        assert "state.silence2 + 1" not in text
+        assert "state.age1 + 1" not in text
+        assert "cbp.age1 + 1" not in text

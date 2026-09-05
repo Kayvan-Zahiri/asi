@@ -220,6 +220,7 @@ from alberta_framework.benchmarks.upgd_ipmnist import (
 )
 from alberta_framework.core.adamo import AdamO, AdamOConfig, isometry_gradient
 from alberta_framework.core.baseline_optimizers import Adam
+from alberta_framework.core.normalizers import _saturating_int32_counter_increment
 from alberta_framework.core.update_safety import (
     floating_tree_is_finite,
     select_transaction,
@@ -3239,8 +3240,8 @@ def _cbp_update(
     decay = hp["cbp_decay_rate"]
     util1 = decay * cbp.util1 + (1.0 - decay) * jnp.abs(a1 * da1)
     util2 = decay * cbp.util2 + (1.0 - decay) * jnp.abs(a2 * da2)
-    age1 = cbp.age1 + 1
-    age2 = cbp.age2 + 1
+    age1 = _saturating_int32_counter_increment(cbp.age1)
+    age2 = _saturating_int32_counter_increment(cbp.age2)
     key1, key2 = jr.split(key)
     maturity = int(hp["cbp_maturity_threshold"])
     rate = hp["cbp_replacement_rate"]
@@ -6004,12 +6005,16 @@ def _make_snr_ema_norm_learner(
         }
         fired1 = a1 > 0.0
         fired2 = a2 > 0.0
-        silence1 = jnp.where(fired1, 0, state.silence1 + 1)
-        silence2 = jnp.where(fired2, 0, state.silence2 + 1)
+        silence1 = jnp.where(
+            fired1, 0, _saturating_int32_counter_increment(state.silence1)
+        )
+        silence2 = jnp.where(
+            fired2, 0, _saturating_int32_counter_increment(state.silence2)
+        )
         rate1 = rate_decay * state.rate1 + (1.0 - rate_decay) * fired1.astype(jnp.float32)
         rate2 = rate_decay * state.rate2 + (1.0 - rate_decay) * fired2.astype(jnp.float32)
-        age1 = state.age1 + 1
-        age2 = state.age2 + 1
+        age1 = _saturating_int32_counter_increment(state.age1)
+        age2 = _saturating_int32_counter_increment(state.age2)
         key1, key2 = jr.split(key)
         new_params, silence1, rate1, age1, _ = snr_maybe_reset_layer(
             new_params, silence1, rate1, age1, _CBP_LAYERS[0], key1, hp
