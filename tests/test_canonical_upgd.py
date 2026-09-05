@@ -1284,3 +1284,17 @@ def test_saturated_protecting_gate_skips_overflowed_direction() -> None:
     assert not bool(jnp.isfinite(raw_noise))
     fixed_noise = _skip_zero_scale(1.0 - gate, overflowed)
     assert bool(jnp.isfinite(fixed_noise))
+
+
+def test_saturated_gate_accepts_finite_inputs_with_overflowing_direction() -> None:
+    """A protected coordinate need not form the sum of two finite huge inputs."""
+    params = jnp.array([1e-20, 1e-20], dtype=jnp.float32)
+    gradients = jnp.array([3e38, 1.0], dtype=jnp.float32)
+    noise = jnp.array([3e38, 0.0], dtype=jnp.float32)
+    optimizer = CanonicalUPGD(CanonicalUPGDConfig(utility_decay=0.0, step_size=1e-5))
+    result = optimizer.update(optimizer.init(params), params, gradients, jr.key(1), noise=noise)
+    assert bool(result.metrics["update_applied"])
+    assert float(result.scaled_utility[0]) == 1.0
+    assert float(result.params[0]) == float(params[0])
+    assert float(result.params[1]) == pytest.approx(-5e-6)
+    chex.assert_tree_all_finite(result.params)
