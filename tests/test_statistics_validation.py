@@ -400,6 +400,14 @@ class TestTimeseriesStatistics:
             ):
                 compute_timeseries_statistics(np.empty((0, 3)))
 
+    def test_zero_step_matrix_rejected_without_warnings(self) -> None:
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            with pytest.raises(
+                ValueError, match=r"^metric_array must contain at least one time step$"
+            ):
+                compute_timeseries_statistics(np.empty((3, 0)))
+
     def test_nonfinite_seed_rejected_without_warnings(self) -> None:
         arr = np.array([[1.0, 2.0], [np.nan, 3.0]], dtype=np.float64)
         with warnings.catch_warnings():
