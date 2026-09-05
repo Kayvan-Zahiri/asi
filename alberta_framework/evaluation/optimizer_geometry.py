@@ -159,7 +159,9 @@ def spectral_matrix_sign_transaction(matrix: Array, *, steps: int = 5) -> tuple[
 
     The pinned paper defines ``f(X) = 3/2 X - 1/2 XX^T X``. Frobenius
     normalization places every singular value in its convergence interval and
-    preserves an exact zero for a zero matrix.
+    preserves an exact zero for a zero matrix. The normalization divides an
+    exactly power-of-two rescaled copy by its own norm so the divisor stays
+    representable at every input magnitude.
     """
     value = _trusted_array(matrix, name="matrix")
     if (
@@ -173,7 +175,22 @@ def spectral_matrix_sign_transaction(matrix: Array, *, steps: int = 5) -> tuple[
         raise ValueError("matrix must be non-empty and steps a positive integer")
     norm = jnp.linalg.norm(value)
     valid = jnp.all(jnp.isfinite(value)) & jnp.isfinite(norm)
-    x = value / jnp.maximum(norm, jnp.asarray(1e-12, dtype=value.dtype))
+    # `norm` remains the caller-visible overflow signal, but it cannot be the
+    # divisor: its squares underflow to zero for float32 entries near 1e-20, and
+    # a true norm under a fixed magnitude floor would divide by the floor, which
+    # leaves every singular value below the NS5 convergence interval and launders
+    # a nonzero matrix into a numerically zero sign. Rescaling by an exact power
+    # of two keeps the divisor representable without changing any quotient that
+    # was already correct, and an exact zero is preserved by the zero test.
+    _, exponent = jnp.frexp(jnp.max(jnp.abs(value)))
+    rescaled = jnp.ldexp(value, -exponent)
+    rescaled_norm = jnp.linalg.norm(rescaled)
+    positive = rescaled_norm > 0
+    x = jnp.where(
+        positive,
+        rescaled / jnp.where(positive, rescaled_norm, jnp.ones_like(rescaled_norm)),
+        jnp.zeros_like(rescaled),
+    )
     if x.shape[0] > x.shape[1]:
         x = x.T
         transposed = True
