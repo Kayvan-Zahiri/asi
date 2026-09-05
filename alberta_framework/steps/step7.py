@@ -956,14 +956,19 @@ def _apply_planning_importance_correction(
         DifferentialSARSAState,
         planned_state.replace(  # type: ignore[attr-defined]
             q_weights=old_state.q_weights
-            + rho * (planned_state.q_weights - old_state.q_weights),
-            q_bias=old_state.q_bias + rho * (planned_state.q_bias - old_state.q_bias),
+            + _skip_zero_scale(rho, planned_state.q_weights - old_state.q_weights),
+            q_bias=old_state.q_bias
+            + _skip_zero_scale(rho, planned_state.q_bias - old_state.q_bias),
             q_trace_weights=old_state.q_trace_weights
-            + rho * (planned_state.q_trace_weights - old_state.q_trace_weights),
+            + _skip_zero_scale(
+                rho, planned_state.q_trace_weights - old_state.q_trace_weights
+            ),
             q_trace_bias=old_state.q_trace_bias
-            + rho * (planned_state.q_trace_bias - old_state.q_trace_bias),
+            + _skip_zero_scale(rho, planned_state.q_trace_bias - old_state.q_trace_bias),
             average_reward=old_state.average_reward
-            + rho * (planned_state.average_reward - old_state.average_reward),
+            + _skip_zero_scale(
+                rho, planned_state.average_reward - old_state.average_reward
+            ),
         ),
     )
 
