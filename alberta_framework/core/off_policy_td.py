@@ -863,22 +863,10 @@ class ETDLinearLearner:
             & jnp.isfinite(interest_s)
         )
         previous_checked = state.replace(  # type: ignore[attr-defined]
-            eligibility_traces=_zero_if_unused(
-                jnp.where((trace_decay == 0.0) | (rho_s == 0.0), 0.0, 1.0),
-                state.eligibility_traces,
-            ),
-            bias_eligibility_trace=_zero_if_unused(
-                jnp.where((trace_decay == 0.0) | (rho_s == 0.0), 0.0, 1.0),
-                state.bias_eligibility_trace,
-            ),
-            follow_on_trace=_zero_if_unused(
-                jnp.where((gamma_s == 0.0) | (state.previous_rho == 0.0), 0.0, 1.0),
-                state.follow_on_trace,
-            ),
-            previous_rho=_zero_if_unused(
-                jnp.where((gamma_s == 0.0) | (state.previous_rho == 0.0), 0.0, 1.0),
-                state.previous_rho,
-            ),
+            eligibility_traces=_zero_if_unused(trace_decay, state.eligibility_traces),
+            bias_eligibility_trace=_zero_if_unused(trace_decay, state.bias_eligibility_trace),
+            follow_on_trace=_zero_if_unused(gamma_s, state.follow_on_trace),
+            previous_rho=_zero_if_unused(gamma_s, state.previous_rho),
         )
         squared_td = td_error**2
         mean_e = jnp.mean(jnp.abs(proposed_state.eligibility_traces))

@@ -1026,8 +1026,8 @@ class TestZeroGammaDoesNotMultiplyInfBootstrap:
         assert bool(jnp.isfinite(result.state.follow_on_trace))
         chex.assert_tree_all_finite(result.state.eligibility_traces)
 
-    def test_etd_zero_previous_rho_does_not_multiply_inf_follow_on(self) -> None:
-        """previous_rho=0 times leftover inf F is 0*inf = NaN without a skip."""
+    def test_etd_zero_previous_rho_preserves_invalid_history_rejection(self) -> None:
+        """Zero previous ratio must not broaden adoption of corrupt prior state."""
         learner = ETDLinearLearner(step_size=0.1, trace_decay=0.4)
         state = learner.init(2).replace(  # type: ignore[attr-defined]
             follow_on_trace=jnp.asarray(jnp.inf, dtype=jnp.float32),
@@ -1044,9 +1044,8 @@ class TestZeroGammaDoesNotMultiplyInfBootstrap:
             jnp.array(0.9, dtype=jnp.float32),
             jnp.array(1.0, dtype=jnp.float32),
         )
-        assert bool(result.update_applied)
-        assert bool(jnp.isfinite(result.state.follow_on_trace))
-        chex.assert_tree_all_finite(result.state.weights)
+        assert not bool(result.update_applied)
+        chex.assert_trees_all_equal(result.state, state)
 
     def test_gradient_td_does_not_multiply_inf_traces(self) -> None:
         """gamma*lam=0 drops leftover GTD traces; 0 * inf must not freeze."""
@@ -1291,3 +1290,20 @@ def test_gradient_scan_preflights_host_shapes_and_aggregate_resources() -> None:
             Oversized((steps,)),  # type: ignore[arg-type]
             Oversized((steps,)),  # type: ignore[arg-type]
         )
+
+
+@pytest.mark.parametrize("learner_type", [ETDLinearLearner, GradientTDLinearLearner])
+def test_zero_current_ratio_skips_overflowed_finite_eligibility_core(learner_type) -> None:
+    learner = learner_type(step_size=0.1, trace_decay=1.0)
+    state = learner.init(2)
+    state = state.replace(eligibility_traces=jnp.full_like(state.eligibility_traces, 3e38))
+    chex.assert_tree_all_finite(state)
+    result = learner.update(
+        state, jnp.full(2, 3e38, dtype=jnp.float32), jnp.asarray(1.0),
+        jnp.zeros(2, dtype=jnp.float32), jnp.asarray(1.0), jnp.asarray(0.0),
+    )
+    assert bool(result.update_applied)
+    chex.assert_tree_all_finite(result.state)
+    chex.assert_trees_all_equal(
+        result.state.eligibility_traces, jnp.zeros_like(state.eligibility_traces)
+    )
