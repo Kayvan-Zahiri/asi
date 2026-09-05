@@ -636,7 +636,7 @@ def lean_upgd_w_update(
     beta_arr = jnp.asarray(beta, dtype=jnp.float32)
     utility = {
         name: _skip_zero_scale(beta_arr, state.utility[name])
-        + (1.0 - beta_arr) * (-grads[name] * params[name])
+        + (1.0 - beta) * (-grads[name] * params[name])
         for name in params
     }
     global_max = jnp.max(
