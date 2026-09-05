@@ -648,3 +648,24 @@ def test_upgd_memory_preserves_legal_closed_endpoints() -> None:
     assert allocation_endpoint.target_allocation_rate == 1.0
     assert fixed_threshold.min_novelty_threshold == 0.5
     assert fixed_threshold.max_novelty_threshold == 0.5
+
+
+def test_public_prediction_ignores_overflow_in_fully_gated_finite_head() -> None:
+    config = UPGDMemoryConfig(
+        feature_dim=2, n_heads=2, hidden_sizes=(), slots_per_class=2,
+        readout_mode="linear_mse", confidence_logit_scale=0.0,
+        reliability_logit_scale=0.0, initial_memory_logit=90.0,
+        target_trace_blend_scale=0.0,
+    )
+    learner = UPGDMemoryLearner(config)
+    initial = learner.init(jr.key(1))
+    heads = initial.upgd_state.head_params.replace(
+        weights=tuple(jnp.full_like(w, 3e38) for w in initial.upgd_state.head_params.weights)
+    )
+    state = initial.replace(
+        upgd_state=initial.upgd_state.replace(head_params=heads),
+        memory_state=initial.memory_state.replace(counts=jnp.ones_like(initial.memory_state.counts)),
+    )
+    chex.assert_tree_all_finite(heads)
+    prediction = learner.predict(state, jnp.array([2.0, 2.0], dtype=jnp.float32))
+    chex.assert_trees_all_close(prediction, jnp.array([0.5, 0.5], dtype=jnp.float32))
