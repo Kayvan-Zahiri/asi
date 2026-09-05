@@ -300,3 +300,18 @@ def test_mechanism_zero_feature_step_is_exact_zero_under_infinite_grad() -> None
     update_scale = jnp.asarray(1.0, dtype=jnp.float32)
     step = mod._skip_zero_scale(0.0 * 1e-2, update_scale * feature_gradient)
     np.testing.assert_array_equal(step, jnp.zeros_like(feature_gradient))
+
+
+def test_disabled_replay_ignores_overflow_from_finite_stored_examples() -> None:
+    from alberta_framework.benchmarks.replay_frozen_ipmnist import replay_hyperparameters
+
+    params = init_mlp_params(jr.key(4), _config())
+    params = {**params, "w1": jnp.full_like(params["w1"], 2.0)}
+    init, step = make_replay_context_learner(replay_hyperparameters(replay_update=0.0, context=0.0))
+    state = init(params)
+    state = state.replace(
+        examples=jnp.full_like(state.examples, 3e38),
+        count=jnp.asarray(1, dtype=jnp.int32),
+    )
+    _, result, _ = step(params, state, jnp.zeros(4), jnp.asarray(0), jr.key(5))
+    assert int(result.update_count) == 1
