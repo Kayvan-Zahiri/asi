@@ -1262,14 +1262,16 @@ class Autostep(Optimizer[AutostepState]):
             state.step_sizes,
         )
 
-        # Eq. 6-7: M = max(Σ α_i*z_i², 1); α_i /= M
+        # Clip step-sizes for numerical safety
+        new_step_sizes = jnp.clip(new_step_sizes, 1e-8, 1.0)
+
+        # Eq. 6-7: M = max(Σ α_i*z_i², 1); α_i /= M. Normalization is the
+        # last operation on α so the overshoot bound Σ α_i*z_i² <= 1 holds
+        # at update time (Algorithm 5 lines 8-10).
         effective_terms = new_step_sizes * z_sq
         effective_step = jnp.sum(effective_terms)
         m_factor = jnp.maximum(effective_step, 1.0)
         new_step_sizes = new_step_sizes / m_factor
-
-        # Clip step-sizes for numerical safety
-        new_step_sizes = jnp.clip(new_step_sizes, 1e-8, 1.0)
 
         # Compute step: α_i * z_i (error applied externally)
         step = new_step_sizes * z
@@ -1403,17 +1405,19 @@ class Autostep(Optimizer[AutostepState]):
             state.bias_step_size,
         )
 
+        # Clip step-sizes for numerical safety
+        new_step_sizes = jnp.clip(new_step_sizes, 1e-8, 1.0)
+        new_bias_step_size = jnp.clip(new_bias_step_size, 1e-8, 1.0)
+
         # Eq. 6-7: Overshoot prevention (joint over weights + bias)
-        # M = max(Σ α_i*x_i² + α_bias*1², 1)
+        # M = max(Σ α_i*x_i² + α_bias*1², 1). Normalization is the last
+        # operation on α so the overshoot bound holds at update time
+        # (Algorithm 5 lines 8-10).
         effective_terms = new_step_sizes * x_sq
         effective_step = jnp.sum(effective_terms) + new_bias_step_size
         m_factor = jnp.maximum(effective_step, 1.0)
         new_step_sizes = new_step_sizes / m_factor
         new_bias_step_size = new_bias_step_size / m_factor
-
-        # Clip step-sizes for numerical safety
-        new_step_sizes = jnp.clip(new_step_sizes, 1e-8, 1.0)
-        new_bias_step_size = jnp.clip(new_bias_step_size, 1e-8, 1.0)
 
         # Weight update with NEW alpha: α_i * δ * x_i
         weight_delta = new_step_sizes * error_scalar * x
