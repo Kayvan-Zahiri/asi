@@ -1802,6 +1802,26 @@ def test_nonlinear_horde_actor_critic_configs_accept_and_canonicalizes_numpy_int
 
 
 @pytest.mark.parametrize(
+    "config_type",
+    [
+        HordeActorCriticConfig,
+        QHordeActorCriticConfig,
+        NonlinearHordeActorCriticConfig,
+        NonlinearQHordeActorCriticConfig,
+    ],
+)
+def test_actor_configs_reject_subnormal_float32_temperature(config_type: type) -> None:
+    """An accepted softmax temperature must remain a usable XLA divisor."""
+    subnormal = float(np.nextafter(np.float32(0), np.float32(1)))
+
+    with pytest.raises(ValueError, match="temperature must be at least"):
+        config_type(n_actions=2, temperature=subnormal)
+
+    smallest_normal = float(np.finfo(np.float32).tiny)
+    assert config_type(n_actions=2, temperature=smallest_normal).temperature == smallest_normal
+
+
+@pytest.mark.parametrize(
     "config",
     [
         HordeActorCriticConfig(n_actions=2),
