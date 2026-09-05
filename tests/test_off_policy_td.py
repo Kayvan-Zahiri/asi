@@ -23,9 +23,11 @@ from alberta_framework.core.off_policy_td import (
 )
 from alberta_framework.core.optimizers import LMS
 
-# =============================================================================
+# ======================================================================
+
 # Init / sanity
-# =============================================================================
+# ======================================================================
+
 
 
 class TestInit:
@@ -219,9 +221,11 @@ def test_gradient_td_scan_rejects_only_invalid_gamma_rows_atomically() -> None:
     assert bool(jnp.all(result.metrics[1] == 0))
 
 
-# =============================================================================
+# ======================================================================
+
 # rho=1 reduces to on-policy TD
-# =============================================================================
+# ======================================================================
+
 
 
 class TestOnPolicyEquivalence:
@@ -263,9 +267,11 @@ class TestOnPolicyEquivalence:
         chex.assert_trees_all_close(state.bias, b_ref, atol=1e-5)
 
 
-# =============================================================================
+# ======================================================================
+
 # Per-decision importance sampling
-# =============================================================================
+# ======================================================================
+
 
 
 class TestPerDecisionImportanceSampling:
@@ -347,9 +353,11 @@ class TestPerDecisionImportanceSampling:
         chex.assert_trees_all_close(state.bias, jnp.float32(0.67824), atol=1e-6)
 
 
-# =============================================================================
+# ======================================================================
+
 # ETD(lambda)
-# =============================================================================
+# ======================================================================
+
 
 
 class TestETDLambda:
@@ -497,9 +505,11 @@ class TestETDLambda:
         assert float(jnp.max(jnp.abs(state.weights))) < 5.0
 
 
-# =============================================================================
+# ======================================================================
+
 # Gradient-TD / TDC
-# =============================================================================
+# ======================================================================
+
 
 
 class TestGradientTD:
@@ -580,9 +590,11 @@ class TestGradientTD:
         chex.assert_tree_all_finite(result.state)
 
 
-# =============================================================================
+# ======================================================================
+
 # rho clipping
-# =============================================================================
+# ======================================================================
+
 
 
 class TestImportanceRatioClip:
@@ -628,9 +640,11 @@ class TestImportanceRatioClip:
         assert float(result.rho_clipped) == pytest.approx(7.0)
 
 
-# =============================================================================
+# ======================================================================
+
 # Off-policy convergence on a small chain
-# =============================================================================
+# ======================================================================
+
 
 
 class TestOffPolicyConvergence:
@@ -755,9 +769,11 @@ class TestOffPolicyConvergence:
         chex.assert_tree_all_finite(state.eligibility_traces)
 
 
-# =============================================================================
+# ======================================================================
+
 # JIT / scan
-# =============================================================================
+# ======================================================================
+
 
 
 class TestJit:
@@ -780,9 +796,11 @@ class TestJit:
         assert isinstance(result, OffPolicyTDUpdateResult)
 
 
-# =============================================================================
+# ======================================================================
+
 # Config roundtrip
-# =============================================================================
+# ======================================================================
+
 
 
 class TestConfig:
@@ -796,9 +814,11 @@ class TestConfig:
         assert restored.retrace_clip == 2.5
 
 
-# =============================================================================
+# ======================================================================
+
 # Baird-style: don't diverge with bounded clipping
-# =============================================================================
+# ======================================================================
+
 
 
 class TestBairdStyle:
@@ -981,11 +1001,12 @@ class TestZeroGammaDoesNotMultiplyInfBootstrap:
         chex.assert_tree_all_finite(result.state.weights)
 
     def test_off_policy_td_does_not_multiply_inf_traces(self) -> None:
-        """gamma*lam=0 drops leftover traces; 0 * inf must not freeze."""
+        """previous_gamma*lam=0 drops leftover traces; 0 * inf must not freeze."""
         learner = OffPolicyTDLinearLearner(step_size=0.1, trace_decay=0.9)
         state = learner.init(2).replace(  # type: ignore[attr-defined]
             eligibility_traces=jnp.full(2, jnp.inf, dtype=jnp.float32),
             bias_eligibility_trace=jnp.asarray(jnp.inf, dtype=jnp.float32),
+            previous_gamma=jnp.asarray(0.0, dtype=jnp.float32),
         )
         raw = jnp.asarray(0.0, dtype=jnp.float32) * jnp.asarray(jnp.inf, dtype=jnp.float32)
         assert not bool(jnp.isfinite(raw))
@@ -1048,10 +1069,16 @@ class TestZeroGammaDoesNotMultiplyInfBootstrap:
         chex.assert_trees_all_equal(result.state, state)
 
     def test_gradient_td_does_not_multiply_inf_traces(self) -> None:
-        """gamma*lam=0 drops leftover GTD traces; 0 * inf must not freeze."""
+        """previous_gamma*lam=0 drops leftover GTD traces; 0 * inf must not freeze.
+
+        The current transition's gamma is nonzero, so both the trace reset
+        and the acceptance guard must key on the prior transition's discount
+        (the episode-boundary state), not on the current call's.
+        """
         learner = GradientTDLinearLearner(step_size=0.1, trace_decay=0.9)
         state = learner.init(2).replace(  # type: ignore[attr-defined]
             eligibility_traces=jnp.full(3, jnp.inf, dtype=jnp.float32),
+            previous_gamma=jnp.asarray(0.0, dtype=jnp.float32),
         )
         raw = jnp.asarray(0.0, dtype=jnp.float32) * jnp.asarray(jnp.inf, dtype=jnp.float32)
         assert not bool(jnp.isfinite(raw))
@@ -1060,12 +1087,13 @@ class TestZeroGammaDoesNotMultiplyInfBootstrap:
             state,
             jnp.array([0.5, -0.25], dtype=jnp.float32),
             jnp.array(1.0, dtype=jnp.float32),
-            jnp.array([jnp.inf, 0.0], dtype=jnp.float32),
-            jnp.array(0.0, dtype=jnp.float32),
+            jnp.array([0.25, 0.5], dtype=jnp.float32),
+            jnp.array(0.9, dtype=jnp.float32),
             jnp.array(1.0, dtype=jnp.float32),
         )
         assert bool(result.update_applied)
         chex.assert_tree_all_finite(result.state.eligibility_traces)
+        chex.assert_trees_all_close(result.state.previous_gamma, jnp.asarray(0.9))
 
 
 @pytest.mark.parametrize(
@@ -1296,6 +1324,8 @@ def test_gradient_scan_preflights_host_shapes_and_aggregate_resources() -> None:
 def test_zero_current_ratio_skips_overflowed_finite_eligibility_core(learner_type) -> None:
     learner = learner_type(step_size=0.1, trace_decay=1.0)
     state = learner.init(2)
+    if learner_type is GradientTDLinearLearner:
+        state = state.replace(previous_gamma=jnp.asarray(1.0, dtype=jnp.float32))
     state = state.replace(eligibility_traces=jnp.full_like(state.eligibility_traces, 3e38))
     chex.assert_tree_all_finite(state)
     result = learner.update(
@@ -1307,3 +1337,68 @@ def test_zero_current_ratio_skips_overflowed_finite_eligibility_core(learner_typ
     chex.assert_trees_all_equal(
         result.state.eligibility_traces, jnp.zeros_like(state.eligibility_traces)
     )
+
+
+class TestTraceDiscountUsesPriorTransition:
+    """The trace decays by gamma_t (into S_t), the TD error by gamma_{t+1}.
+
+    Sutton & Barto 2nd ed., eqs. 12.23/12.25: z_t = rho_t(gamma_t lambda_t
+    z_{t-1} + phi_t) while delta_t bootstraps with gamma_{t+1}. Decaying the
+    trace by the current call's discount wipes the accumulated trace exactly
+    on the terminal step, before the terminal reward is credited.
+    """
+
+    def test_off_policy_terminal_reward_credits_the_carried_trace(self) -> None:
+        learner = OffPolicyTDLinearLearner(step_size=0.1, trace_decay=1.0)
+        state = learner.init(2)
+        phi_a = jnp.array([1.0, 0.0], dtype=jnp.float32)
+        phi_b = jnp.array([0.0, 1.0], dtype=jnp.float32)
+        one = jnp.array(1.0, dtype=jnp.float32)
+
+        first = learner.update(
+            state, phi_a, jnp.array(0.0, dtype=jnp.float32), phi_b,
+            jnp.array(0.9, dtype=jnp.float32), one,
+        )
+        assert bool(first.update_applied)
+        chex.assert_trees_all_close(first.state.previous_gamma, jnp.asarray(0.9))
+
+        last = learner.update(
+            first.state, phi_b, one, jnp.zeros(2, dtype=jnp.float32),
+            jnp.array(0.0, dtype=jnp.float32), one,
+        )
+        assert bool(last.update_applied)
+        chex.assert_trees_all_close(
+            last.state.weights, jnp.array([0.09, 0.1], dtype=jnp.float32), atol=1e-6
+        )
+
+        post = learner.update(
+            last.state, phi_a, jnp.array(0.0, dtype=jnp.float32), phi_b,
+            jnp.array(0.9, dtype=jnp.float32), one,
+        )
+        chex.assert_trees_all_close(
+            post.state.eligibility_traces, phi_a, atol=1e-6
+        )
+
+    def test_gradient_td_terminal_reward_credits_the_carried_trace(self) -> None:
+        learner = GradientTDLinearLearner(step_size=0.1, trace_decay=1.0)
+        state = learner.init(2)
+        phi_a = jnp.array([1.0, 0.0], dtype=jnp.float32)
+        phi_b = jnp.array([0.0, 1.0], dtype=jnp.float32)
+        one = jnp.array(1.0, dtype=jnp.float32)
+
+        first = learner.update(
+            state, phi_a, jnp.array(0.0, dtype=jnp.float32), phi_b,
+            jnp.array(0.9, dtype=jnp.float32), one,
+        )
+        assert bool(first.update_applied)
+
+        last = learner.update(
+            first.state, phi_b, one, jnp.zeros(2, dtype=jnp.float32),
+            jnp.array(0.0, dtype=jnp.float32), one,
+        )
+        assert bool(last.update_applied)
+        chex.assert_trees_all_close(
+            last.state.weights,
+            jnp.array([0.09, 0.1, 0.19], dtype=jnp.float32),
+            atol=1e-6,
+        )
