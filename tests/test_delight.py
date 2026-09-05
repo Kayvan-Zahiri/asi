@@ -2177,3 +2177,15 @@ def test_delight_stratification_rejects_non_boolean_rare_masks(rare_mask: Array)
         stratify_delight_outcomes(result, rare_mask)
     with pytest.raises(ValueError, match="rare_mask must have boolean dtype"):
         jax.jit(stratify_delight_outcomes)(result, rare_mask)
+
+
+def test_policy_loss_at_log_probability_zero_keeps_gradient() -> None:
+    def loss(log_probability: jax.Array) -> jax.Array:
+        return discrete_delightful_policy_gradient(
+            log_probability,
+            jnp.asarray([2.0], dtype=jnp.float32),
+            config=DelightfulPolicyGradientConfig(mode="ordinary_pg"),
+        ).actor_loss
+
+    gradient = jax.grad(loss)(jnp.asarray([0.0], dtype=jnp.float32))
+    assert float(gradient[0]) == pytest.approx(-2.0)

@@ -40,9 +40,9 @@ from alberta_framework.core._float32_scalars import validated_float32_scalar_wit
 
 
 def _skip_zero_product(left: Array, right: Array) -> Array:
-    """Return 0 when either factor is 0 so IEEE ``0 * inf`` cannot form."""
+    """Return 0 for zero coefficients without suppressing value derivatives."""
     return jnp.where(
-        (left == 0.0) | (right == 0.0),
+        left == 0.0,
         jnp.zeros_like(left),
         left * right,
     )
