@@ -158,7 +158,7 @@ def test_sparse_init_accepts_valid_init_types() -> None:
 
 
 def test_sparse_init_preflight_without_allocation(monkeypatch: pytest.MonkeyPatch) -> None:
-    class AllocationReached(Exception):
+    class AllocationReachedError(Exception):
         pass
 
     requested_shapes: list[tuple[int, int]] = []
@@ -168,7 +168,7 @@ def test_sparse_init_preflight_without_allocation(monkeypatch: pytest.MonkeyPatc
     ) -> NoReturn:
         requested_shapes.append(shape)
         assert kwargs["dtype"] == jnp.float32
-        raise AllocationReached
+        raise AllocationReachedError
 
     # Test the byte boundary without constructing a roughly 2 GiB matrix and
     # its initialization intermediates. Real small-shape initialization stays
@@ -184,6 +184,6 @@ def test_sparse_init_preflight_without_allocation(monkeypatch: pytest.MonkeyPatc
     # The exact last representable element count passes validation and reaches
     # the allocator with the requested shape, while one more was rejected.
     last_fit_shape = (1, max_elements)
-    with pytest.raises(AllocationReached):
+    with pytest.raises(AllocationReachedError):
         sparse_init(key, last_fit_shape)
     assert requested_shapes == [last_fit_shape]
