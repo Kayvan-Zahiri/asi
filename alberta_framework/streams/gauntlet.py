@@ -80,7 +80,7 @@ _INT32_MAX = 2**31 - 1
 _UINT32_MAX = 2**32 - 1
 
 
-def _skip_zero_scale(scale: Array, value: Array) -> Array:
+def _skip_zero_scale(scale: Array | float, value: Array) -> Array:
     """Skip ``0 * inf`` so a closed context gate does not poison features."""
     return jnp.where(scale == 0.0, jnp.zeros_like(value), scale * value)
 
