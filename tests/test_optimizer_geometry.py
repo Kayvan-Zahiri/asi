@@ -420,3 +420,26 @@ def test_geometry_runner_rejects_invalid_transactions(monkeypatch: pytest.Monkey
     )
     with pytest.raises(ValueError, match="transaction"):
         run_streaming_matrix_evaluation()
+
+
+def test_flad_noise_component_scale_freedom() -> None:
+    delta = np.array([1.0, -2.0, 0.5, 3.0], dtype=np.float32)
+    grad = np.array([2.0, 1.0, -1.0, 0.5], dtype=np.float32)
+
+    # Reference projection in float64
+    d_f64 = np.asarray(delta, dtype=np.float64)
+    g_f64 = np.asarray(grad, dtype=np.float64)
+    ref = d_f64 - g_f64 * (float(g_f64 @ d_f64) / float(g_f64 @ g_f64))
+
+    for scale in (1.0, 1e-10, 1e-20, 1e-30):
+        scaled_grad = jnp.asarray(grad * np.float32(scale))
+        safe, valid = jax.jit(flad_noise_component_transaction)(jnp.asarray(delta), scaled_grad)
+        assert bool(valid)
+        np.testing.assert_allclose(np.asarray(safe, dtype=np.float64), ref, rtol=1e-5, atol=1e-5)
+
+    # Zero gradient returns delta bit-identically
+    safe_zero, valid_zero = jax.jit(flad_noise_component_transaction)(
+        jnp.asarray(delta), jnp.zeros_like(scaled_grad)
+    )
+    assert bool(valid_zero)
+    np.testing.assert_array_equal(safe_zero, jnp.asarray(delta))
