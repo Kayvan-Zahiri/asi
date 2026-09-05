@@ -1834,7 +1834,15 @@ class NonlinearHordeActorCriticAgent:
             actor_td_error_normalizer = _skip_zero_scale(decay, actor_td_error_normalizer) + (
                 1.0 - decay
             ) * jnp.abs(actor_td_error)
-            actor_td_error = actor_td_error / jnp.maximum(actor_td_error_normalizer, 1e-3)
+            # Divide by the EMA itself. Because the EMA always contains the
+            # (1 - decay) * |td| term, |td / EMA| <= 1 / (1 - decay), so no
+            # stability floor is needed; a fixed positive floor would silently
+            # substitute its own scale whenever the recent magnitude drops
+            # below it and distort the normalized magnitude there.
+            normalizer_denominator = jnp.where(
+                actor_td_error_normalizer > 0.0, actor_td_error_normalizer, 1.0
+            )
+            actor_td_error = actor_td_error / normalizer_denominator
 
         # Policy gradient via jax.grad through the full MLP forward pass
         actor_params = (
