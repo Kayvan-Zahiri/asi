@@ -860,7 +860,9 @@ class IDBD(Optimizer[IDBDState]):
         Operation order (meta-update first, then new alpha for trace):
 
         1. Compute h_decay based on mode: ``z^2`` or ``(error * z)^2``
-        2. Meta-update with OLD traces: ``log_alpha += beta * z * h``
+        2. Meta-update with OLD traces: ``log_alpha += beta * g * h``
+           where ``g = -error * z`` (loss gradient direction; ``z``
+           itself when ``error`` is None)
         3. Clip log step-sizes to ``[-10.0, 2.0]``
         4. New step-sizes: ``alpha = exp(log_alpha)``
         5. Step: ``alpha * z`` (error applied externally by caller)
@@ -876,7 +878,8 @@ class IDBD(Optimizer[IDBDState]):
             gradient: Pre-computed prediction gradient / eligibility trace
                 (same shape as state arrays)
             error: Optional prediction error scalar. When provided,
-                used for h_decay (loss_grads mode) and h-trace sign.
+                used for the meta-update and h-trace loss-gradient
+                direction, and for h_decay in loss_grads mode.
 
         Returns:
             ``(step, new_state)`` where step has the same shape as gradient
@@ -891,9 +894,13 @@ class IDBD(Optimizer[IDBDState]):
             # prediction_grads mode, or loss_grads without error
             h_decay = z**2
 
-        # 2. Meta-update with OLD traces (Meyer: prediction_grads * h, no error).
+        # 2. Meta-update with OLD traces (Meyer: loss grad * h; the loss
+        # gradient is -error * z here, z itself on the error=None trunk path).
         # Skip 0 * inf when meta-learning is disabled.
-        meta_gradient = z * state.traces
+        if error is not None:
+            meta_gradient = -jnp.squeeze(error) * z * state.traces
+        else:
+            meta_gradient = z * state.traces
         meta_delta = _skip_zero_scale(beta, meta_gradient)
 
         # 3. Clip log step-sizes; a non-finite meta-gradient (inf z against a
