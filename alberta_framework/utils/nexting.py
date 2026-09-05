@@ -318,14 +318,25 @@ def _finite_rmse_jvp(
 
 
 def _sliding_sum(values: Array, window_size: int) -> Array:
-    prefix = jnp.cumsum(
-        jnp.concatenate(
-            [jnp.zeros((1, values.shape[1]), dtype=values.dtype), values],
-            axis=0,
-        ),
-        axis=0,
+    """Sum each trailing window directly, without a global prefix sum.
+
+    Differencing a global cumulative sum cancels catastrophically: once the
+    prefix has grown past the magnitude of later terms, those terms fall below
+    its floating-point ulp and the window difference collapses to zero. A
+    per-window reduction only ever adds the window's own terms.
+    """
+    # A concrete zero lets JAX lower this to its windowed sum, which carries
+    # forward- and reverse-mode rules; a traced init value would fall back to
+    # the generic reducer, which has no transpose rule.
+    summed: Array = jax.lax.reduce_window(
+        values,
+        np.zeros((), dtype=values.dtype),
+        jax.lax.add,
+        window_dimensions=(window_size, 1),
+        window_strides=(1, 1),
+        padding="VALID",
     )
-    return prefix[window_size:] - prefix[:-window_size]
+    return summed
 
 
 def _scaled_running_rmse_terms(
