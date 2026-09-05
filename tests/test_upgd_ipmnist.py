@@ -1398,3 +1398,18 @@ def test_ipmnist_run_result_rejects_hostile_scalar_and_seed_containers() -> None
         _legal_ipmnist_run_result(seeds=())
     with pytest.raises(ValueError, match="unique"):
         _legal_ipmnist_run_result(seeds=(0, 0))
+
+
+def test_zero_decay_recovers_utility_overflow_from_finite_updates() -> None:
+    params = {"w": jnp.array([2.0, 1.0], dtype=jnp.float32)}
+    state = LeanUPGDState(utility={"w": jnp.zeros(2)}, step=jnp.asarray(0, dtype=jnp.int32))
+    noise = {"w": jnp.zeros(2)}
+    hp = {"utility_decay": 0.0, "step_size": 0.01, "weight_decay": 0.0, "noise_std": 0.0}
+    params, state = lean_upgd_w_update(
+        params, state, {"w": jnp.array([3e38, 1.0], dtype=jnp.float32)}, noise, hp
+    )
+    assert bool(jnp.all(jnp.isfinite(params["w"])))
+    assert bool(jnp.isneginf(state.utility["w"][0]))
+    params, state = lean_upgd_w_update(params, state, {"w": jnp.ones(2)}, noise, hp)
+    assert bool(jnp.all(jnp.isfinite(params["w"])))
+    assert bool(jnp.all(jnp.isfinite(state.utility["w"])))
